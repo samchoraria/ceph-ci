@@ -2268,6 +2268,7 @@ private:
   void prepare_write_info(map<string,bufferlist> *km);
 
 public:
+  static int _simplify_past_intervals(map<epoch_t,pg_interval_t> &pi);
   static int _prepare_write_info(map<string,bufferlist> *km,
     epoch_t epoch,
     pg_info_t &info, coll_t coll,
