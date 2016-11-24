@@ -2130,6 +2130,7 @@ private:
   void write_info(ObjectStore::Transaction& t);
 
 public:
+  static int _simplify_past_intervals(map<epoch_t,pg_interval_t> &pi);
   static int _write_info(ObjectStore::Transaction& t, epoch_t epoch,
     pg_info_t &info, coll_t coll,
     map<epoch_t,pg_interval_t> &past_intervals,
