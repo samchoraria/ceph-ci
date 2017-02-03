@@ -2251,9 +2251,10 @@ void RGWObjVersionTracker::generate_new_write_ver(CephContext *cct)
 
 int RGWPutObjProcessor::complete(string& etag, real_time *mtime, real_time set_mtime,
                                  map<string, bufferlist>& attrs, real_time delete_at,
-                                 const char *if_match, const char *if_nomatch, const string *user_data)
+                                 const char *if_match, const char *if_nomatch, const string *user_data,
+                                 rgw_zone_set *zones_trace)
 {
-  int r = do_complete(etag, mtime, set_mtime, attrs, delete_at, if_match, if_nomatch, user_data);
+  int r = do_complete(etag, mtime, set_mtime, attrs, delete_at, if_match, if_nomatch, user_data, zones_trace);
   if (r < 0)
     return r;
 
@@ -2602,7 +2603,8 @@ int RGWPutObjProcessor_Atomic::complete_writing_data()
 int RGWPutObjProcessor_Atomic::do_complete(string& etag, real_time *mtime, real_time set_mtime,
                                            map<string, bufferlist>& attrs, real_time delete_at,
                                            const char *if_match,
-                                           const char *if_nomatch, const string *user_data) {
+                                           const char *if_nomatch, const string *user_data,
+                                           rgw_zone_set *zones_trace) {
   int r = complete_writing_data();
   if (r < 0)
     return r;
@@ -2628,6 +2630,7 @@ int RGWPutObjProcessor_Atomic::do_complete(string& etag, real_time *mtime, real_
   obj_op.meta.olh_epoch = olh_epoch;
   obj_op.meta.delete_at = delete_at;
   obj_op.meta.user_data = user_data;
+  obj_op.meta.zones_trace = zones_trace;
 
   r = obj_op.write_meta(obj_len, attrs);
   if (r < 0) {
@@ -6665,6 +6668,7 @@ int RGWRados::Object::Write::write_meta(uint64_t size,
 
   RGWRados::Bucket bop(store, bucket_info);
   RGWRados::Bucket::UpdateIndex index_op(&bop, obj, state);
+  index_op.set_zones_trace(meta.zones_trace);
 
   if (versioned_op) {
     index_op.set_bilog_flags(RGW_BILOG_FLAG_VERSIONED_OP);
@@ -6705,7 +6709,7 @@ int RGWRados::Object::Write::write_meta(uint64_t size,
   state = NULL;
 
   if (versioned_op) {
-    r = store->set_olh(target->get_ctx(), target->get_bucket_info(), obj, false, NULL, *meta.olh_epoch, real_time(), false);
+    r = store->set_olh(target->get_ctx(), target->get_bucket_info(), obj, false, NULL, *meta.olh_epoch, real_time(), false, meta.zones_trace);
     if (r < 0) {
       return r;
     }
@@ -6998,8 +7002,9 @@ public:
     processor->set_extra_data_len(len);
   }
 
-  int complete(string& etag, real_time *mtime, real_time set_mtime, map<string, bufferlist>& attrs, real_time delete_at) {
-    return processor->complete(etag, mtime, set_mtime, attrs, delete_at);
+  int complete(string& etag, real_time *mtime, real_time set_mtime, map<string, bufferlist>& attrs, real_time delete_at, rgw_zone_set *zones_trace) {
+    return processor->complete(etag, mtime, set_mtime, attrs, delete_at,
+                               nullptr, nullptr, nullptr, zones_trace);
   }
 
   bool is_canceled() {
@@ -7164,7 +7169,8 @@ int RGWRados::fetch_remote_obj(RGWObjectCtx& obj_ctx,
                string *petag,
                struct rgw_err *err,
                void (*progress_cb)(off_t, void *),
-               void *progress_data)
+               void *progress_data,
+               rgw_zone_set *zones_trace)
 {
   /* source is in a different zonegroup, copy from there */
 
@@ -7326,7 +7332,7 @@ int RGWRados::fetch_remote_obj(RGWObjectCtx& obj_ctx,
 
 #define MAX_COMPLETE_RETRY 100
   for (i = 0; i < MAX_COMPLETE_RETRY; i++) {
-    ret = cb.complete(etag, mtime, set_mtime, attrs, delete_at);
+    ret = cb.complete(etag, mtime, set_mtime, attrs, delete_at, zones_trace);
     if (ret < 0) {
       goto set_err_state;
     }
@@ -7373,7 +7379,7 @@ set_err_state:
     if (olh_epoch && *olh_epoch > 0) {
       constexpr bool log_data_change = true;
       ret = set_olh(obj_ctx, dest_bucket_info, dest_obj, false, nullptr,
-                    *olh_epoch, real_time(), false, log_data_change);
+                    *olh_epoch, real_time(), false, zones_trace, log_data_change);
     } else {
       // we already have the latest copy
       ret = 0;
@@ -8278,7 +8284,7 @@ int RGWRados::Object::Delete::delete_obj()
         meta.mtime = params.mtime;
       }
 
-      int r = store->set_olh(target->get_ctx(), target->get_bucket_info(), marker, true, &meta, params.olh_epoch, params.unmod_since, params.high_precision_time);
+      int r = store->set_olh(target->get_ctx(), target->get_bucket_info(), marker, true, &meta, params.olh_epoch, params.unmod_since, params.high_precision_time, params.zones_trace);
       if (r < 0) {
         return r;
       }
@@ -8290,7 +8296,7 @@ int RGWRados::Object::Delete::delete_obj()
         return r;
       }
       result.delete_marker = dirent.is_delete_marker();
-      r = store->unlink_obj_instance(target->get_ctx(), target->get_bucket_info(), obj, params.olh_epoch);
+      r = store->unlink_obj_instance(target->get_ctx(), target->get_bucket_info(), obj, params.olh_epoch, params.zones_trace);
       if (r < 0) {
         return r;
       }
@@ -8380,6 +8386,7 @@ int RGWRados::Object::Delete::delete_obj()
   RGWRados::Bucket bop(store, bucket_info);
   RGWRados::Bucket::UpdateIndex index_op(&bop, obj, state);
 
+  index_op.set_zones_trace(params.zones_trace);
   index_op.set_bilog_flags(params.bilog_flags);
 
   r = index_op.prepare(CLS_RGW_OP_DEL);
@@ -8436,7 +8443,8 @@ int RGWRados::delete_obj(RGWObjectCtx& obj_ctx,
                          const rgw_obj& obj,
                          int versioning_status,
                          uint16_t bilog_flags,
-                         const real_time& expiration_time)
+                         const real_time& expiration_time,
+                         rgw_zone_set *zones_trace)
 {
   RGWRados::Object del_target(this, bucket_info, obj_ctx, obj);
   RGWRados::Object::Delete del_op(&del_target);
@@ -8445,6 +8453,7 @@ int RGWRados::delete_obj(RGWObjectCtx& obj_ctx,
   del_op.params.versioning_status = versioning_status;
   del_op.params.bilog_flags = bilog_flags;
   del_op.params.expiration_time = expiration_time;
+  del_op.params.zones_trace = zones_trace;
 
   return del_op.delete_obj();
 }
@@ -9418,7 +9427,7 @@ int RGWRados::Bucket::UpdateIndex::prepare(RGWModifyOp op)
       append_rand_alpha(store->ctx(), optag, optag, 32);
     }
   }
-  ret = store->cls_obj_prepare_op(*bs, op, optag, obj, bilog_flags);
+  ret = store->cls_obj_prepare_op(*bs, op, optag, obj, bilog_flags, zones_trace);
 
   return ret;
 }
@@ -9457,7 +9466,7 @@ int RGWRados::Bucket::UpdateIndex::complete(int64_t poolid, uint64_t epoch, uint
   ent.owner_display_name = owner.get_display_name();
   ent.content_type = content_type;
 
-  ret = store->cls_obj_complete_add(*bs, optag, poolid, epoch, ent, category, remove_objs, bilog_flags);
+  ret = store->cls_obj_complete_add(*bs, optag, poolid, epoch, ent, category, remove_objs, bilog_flags, zones_trace);
 
   int r = store->data_log->add_entry(bs->bucket, bs->shard_id);
   if (r < 0) {
@@ -9482,7 +9491,7 @@ int RGWRados::Bucket::UpdateIndex::complete_del(int64_t poolid, uint64_t epoch,
     return ret;
   }
 
-  ret = store->cls_obj_complete_del(*bs, optag, poolid, epoch, obj, removed_mtime, remove_objs, bilog_flags);
+  ret = store->cls_obj_complete_del(*bs, optag, poolid, epoch, obj, removed_mtime, remove_objs, bilog_flags, zones_trace);
 
   int r = store->data_log->add_entry(bs->bucket, bs->shard_id);
   if (r < 0) {
@@ -9506,7 +9515,7 @@ int RGWRados::Bucket::UpdateIndex::cancel()
     return ret;
   }
 
-  ret = store->cls_obj_complete_cancel(*bs, optag, obj, bilog_flags);
+  ret = store->cls_obj_complete_cancel(*bs, optag, obj, bilog_flags, zones_trace);
 
   /*
    * need to update data log anyhow, so that whoever follows needs to update its internal markers
@@ -10320,7 +10329,7 @@ int RGWRados::bucket_index_link_olh(RGWObjState& olh_state, rgw_obj& obj_instanc
                                     struct rgw_bucket_dir_entry_meta *meta,
                                     uint64_t olh_epoch,
                                     real_time unmod_since, bool high_precision_time,
-                                    bool log_data_change)
+                                    rgw_zone_set *_zones_trace, bool log_data_change)
 {
   rgw_rados_ref ref;
   rgw_bucket bucket;
@@ -10335,11 +10344,19 @@ int RGWRados::bucket_index_link_olh(RGWObjState& olh_state, rgw_obj& obj_instanc
     ldout(cct, 5) << "bs.init() returned ret=" << ret << dendl;
     return ret;
   }
+  
+  rgw_zone_set zones_trace;
+  if (_zones_trace) {
+    zones_trace = *_zones_trace;
+  }
+  else {
+    zones_trace.insert(get_zone().id);
+  }
 
   cls_rgw_obj_key key(obj_instance.get_index_key_name(), obj_instance.get_instance());
   ret = cls_rgw_bucket_link_olh(bs.index_ctx, bs.bucket_obj, key, olh_state.olh_tag, delete_marker, op_tag, meta, olh_epoch,
                                 unmod_since, high_precision_time,
-                                get_zone().log_data);
+                                get_zone().log_data, zones_trace);
   if (ret < 0) {
     return ret;
   }
@@ -10357,7 +10374,7 @@ void RGWRados::bucket_index_guard_olh_op(RGWObjState& olh_state, ObjectOperation
   op.cmpxattr(RGW_ATTR_OLH_ID_TAG, CEPH_OSD_CMPXATTR_OP_EQ, olh_state.olh_tag);
 }
 
-int RGWRados::bucket_index_unlink_instance(rgw_obj& obj_instance, const string& op_tag, const string& olh_tag, uint64_t olh_epoch)
+int RGWRados::bucket_index_unlink_instance(rgw_obj& obj_instance, const string& op_tag, const string& olh_tag, uint64_t olh_epoch, rgw_zone_set *_zones_trace)
 {
   rgw_rados_ref ref;
   rgw_bucket bucket;
@@ -10372,9 +10389,15 @@ int RGWRados::bucket_index_unlink_instance(rgw_obj& obj_instance, const string& 
     ldout(cct, 5) << "bs.init() returned ret=" << ret << dendl;
     return ret;
   }
+  
+  rgw_zone_set zones_trace;
+  if (_zones_trace) {
+    zones_trace = *_zones_trace;
+  }
+  zones_trace.insert(get_zone().id);
 
   cls_rgw_obj_key key(obj_instance.get_index_key_name(), obj_instance.get_instance());
-  ret = cls_rgw_bucket_unlink_instance(bs.index_ctx, bs.bucket_obj, key, op_tag, olh_tag, olh_epoch, get_zone().log_data);
+  ret = cls_rgw_bucket_unlink_instance(bs.index_ctx, bs.bucket_obj, key, op_tag, olh_tag, olh_epoch, get_zone().log_data, zones_trace);
   if (ret < 0) {
     return ret;
   }
@@ -10475,7 +10498,7 @@ int RGWRados::bucket_index_clear_olh(RGWObjState& state, rgw_obj& obj_instance)
 
 int RGWRados::apply_olh_log(RGWObjectCtx& obj_ctx, RGWObjState& state, RGWBucketInfo& bucket_info, rgw_obj& obj,
                             bufferlist& olh_tag, map<uint64_t, vector<rgw_bucket_olh_log_entry> >& log,
-                            uint64_t *plast_ver)
+                            uint64_t *plast_ver, rgw_zone_set* zones_trace)
 {
   if (log.empty()) {
     return 0;
@@ -10551,7 +10574,7 @@ int RGWRados::apply_olh_log(RGWObjectCtx& obj_ctx, RGWObjState& state, RGWBucket
        liter != remove_instances.end(); ++liter) {
     cls_rgw_obj_key& key = *liter;
     rgw_obj obj_instance(bucket, key);
-    int ret = delete_obj(obj_ctx, bucket_info, obj_instance, 0, RGW_BILOG_FLAG_VERSIONED_OP);
+    int ret = delete_obj(obj_ctx, bucket_info, obj_instance, 0, RGW_BILOG_FLAG_VERSIONED_OP, ceph::real_time(), zones_trace);
     if (ret < 0 && ret != -ENOENT) {
       ldout(cct, 0) << "ERROR: delete_obj() returned " << ret << " obj_instance=" << obj_instance << dendl;
       return ret;
@@ -10603,7 +10626,7 @@ int RGWRados::apply_olh_log(RGWObjectCtx& obj_ctx, RGWObjState& state, RGWBucket
 /*
  * read olh log and apply it
  */
-int RGWRados::update_olh(RGWObjectCtx& obj_ctx, RGWObjState *state, RGWBucketInfo& bucket_info, rgw_obj& obj)
+int RGWRados::update_olh(RGWObjectCtx& obj_ctx, RGWObjState *state, RGWBucketInfo& bucket_info, rgw_obj& obj, rgw_zone_set *zones_trace)
 {
   map<uint64_t, vector<rgw_bucket_olh_log_entry> > log;
   bool is_truncated;
@@ -10614,7 +10637,7 @@ int RGWRados::update_olh(RGWObjectCtx& obj_ctx, RGWObjState *state, RGWBucketInf
     if (ret < 0) {
       return ret;
     }
-    ret = apply_olh_log(obj_ctx, *state, bucket_info, obj, state->olh_tag, log, &ver_marker);
+    ret = apply_olh_log(obj_ctx, *state, bucket_info, obj, state->olh_tag, log, &ver_marker, zones_trace);
     if (ret < 0) {
       return ret;
     }
@@ -10625,7 +10648,7 @@ int RGWRados::update_olh(RGWObjectCtx& obj_ctx, RGWObjState *state, RGWBucketInf
 
 int RGWRados::set_olh(RGWObjectCtx& obj_ctx, RGWBucketInfo& bucket_info, rgw_obj& target_obj, bool delete_marker, rgw_bucket_dir_entry_meta *meta,
                       uint64_t olh_epoch, real_time unmod_since, bool high_precision_time,
-                      bool log_data_change)
+                      rgw_zone_set *zones_trace, bool log_data_change)
 {
   string op_tag;
 
@@ -10636,7 +10659,7 @@ int RGWRados::set_olh(RGWObjectCtx& obj_ctx, RGWBucketInfo& bucket_info, rgw_obj
 
   int ret = 0;
   int i;
-
+  
 #define MAX_ECANCELED_RETRY 100
   for (i = 0; i < MAX_ECANCELED_RETRY; i++) {
     if (ret == -ECANCELED) {
@@ -10656,7 +10679,7 @@ int RGWRados::set_olh(RGWObjectCtx& obj_ctx, RGWBucketInfo& bucket_info, rgw_obj
       }
       return ret;
     }
-    ret = bucket_index_link_olh(*state, target_obj, delete_marker, op_tag, meta, olh_epoch, unmod_since, high_precision_time, log_data_change);
+    ret = bucket_index_link_olh(*state, target_obj, delete_marker, op_tag, meta, olh_epoch, unmod_since, high_precision_time, zones_trace, log_data_change);
     if (ret < 0) {
       ldout(cct, 20) << "bucket_index_link_olh() target_obj=" << target_obj << " delete_marker=" << (int)delete_marker << " returned " << ret << dendl;
       if (ret == -ECANCELED) {
@@ -10685,7 +10708,7 @@ int RGWRados::set_olh(RGWObjectCtx& obj_ctx, RGWBucketInfo& bucket_info, rgw_obj
 }
 
 int RGWRados::unlink_obj_instance(RGWObjectCtx& obj_ctx, RGWBucketInfo& bucket_info, rgw_obj& target_obj,
-                                  uint64_t olh_epoch)
+                                  uint64_t olh_epoch, rgw_zone_set *zones_trace)
 {
   string op_tag;
 
@@ -10717,7 +10740,7 @@ int RGWRados::unlink_obj_instance(RGWObjectCtx& obj_ctx, RGWBucketInfo& bucket_i
 
     string olh_tag(state->olh_tag.c_str(), state->olh_tag.length());
 
-    ret = bucket_index_unlink_instance(target_obj, op_tag, olh_tag, olh_epoch);
+    ret = bucket_index_unlink_instance(target_obj, op_tag, olh_tag, olh_epoch, zones_trace);
     if (ret < 0) {
       ldout(cct, 20) << "bucket_index_link_olh() target_obj=" << target_obj << " returned " << ret << dendl;
       if (ret == -ECANCELED) {
@@ -10733,7 +10756,7 @@ int RGWRados::unlink_obj_instance(RGWObjectCtx& obj_ctx, RGWBucketInfo& bucket_i
     return -EIO;
   }
 
-  ret = update_olh(obj_ctx, state, bucket_info, olh_obj);
+  ret = update_olh(obj_ctx, state, bucket_info, olh_obj, zones_trace);
   if (ret == -ECANCELED) { /* already did what we needed, no need to retry, raced with another user */
     return 0;
   }
@@ -12107,11 +12130,19 @@ int RGWRados::cls_rgw_init_index(librados::IoCtx& index_ctx, librados::ObjectWri
 }
 
 int RGWRados::cls_obj_prepare_op(BucketShard& bs, RGWModifyOp op, string& tag,
-                                 rgw_obj& obj, uint16_t bilog_flags)
+                                 rgw_obj& obj, uint16_t bilog_flags, rgw_zone_set *_zones_trace)
 {
+  rgw_zone_set zones_trace;
+  if (_zones_trace) {
+    zones_trace = *_zones_trace;
+  }
+  else {
+    zones_trace.insert(get_zone().id);
+  }
+  
   ObjectWriteOperation o;
   cls_rgw_obj_key key(obj.get_index_key_name(), obj.get_instance());
-  cls_rgw_bucket_prepare_op(o, op, tag, key, obj.get_loc(), get_zone().log_data, bilog_flags);
+  cls_rgw_bucket_prepare_op(o, op, tag, key, obj.get_loc(), get_zone().log_data, bilog_flags, zones_trace);
   int r = bs.index_ctx.operate(bs.bucket_obj, &o);
   return r;
 }
@@ -12119,7 +12150,7 @@ int RGWRados::cls_obj_prepare_op(BucketShard& bs, RGWModifyOp op, string& tag,
 int RGWRados::cls_obj_complete_op(BucketShard& bs, RGWModifyOp op, string& tag,
                                   int64_t pool, uint64_t epoch,
                                   RGWObjEnt& ent, RGWObjCategory category,
-				  list<rgw_obj_key> *remove_objs, uint16_t bilog_flags)
+				  list<rgw_obj_key> *remove_objs, uint16_t bilog_flags, rgw_zone_set *_zones_trace)
 {
   list<cls_rgw_obj_key> *pro = NULL;
   list<cls_rgw_obj_key> ro;
@@ -12145,12 +12176,20 @@ int RGWRados::cls_obj_complete_op(BucketShard& bs, RGWModifyOp op, string& tag,
   dir_meta.category = category;
   dir_meta.user_data = ent.user_data;
 
+  rgw_zone_set zones_trace;
+  if (_zones_trace) {
+    zones_trace = *_zones_trace;
+  }
+  else {
+    zones_trace.insert(get_zone().id);
+  }
+  
   rgw_bucket_entry_ver ver;
   ver.pool = pool;
   ver.epoch = epoch;
   cls_rgw_obj_key key(ent.key.name, ent.key.instance);
   cls_rgw_bucket_complete_op(o, op, tag, ver, key, dir_meta, pro,
-                             get_zone().log_data, bilog_flags);
+                             get_zone().log_data, bilog_flags, zones_trace);
 
   AioCompletion *c = librados::Rados::aio_create_completion(NULL, NULL, NULL);
   int ret = bs.index_ctx.aio_operate(bs.bucket_obj, c, &o);
@@ -12161,9 +12200,9 @@ int RGWRados::cls_obj_complete_op(BucketShard& bs, RGWModifyOp op, string& tag,
 int RGWRados::cls_obj_complete_add(BucketShard& bs, string& tag,
                                    int64_t pool, uint64_t epoch,
                                    RGWObjEnt& ent, RGWObjCategory category,
-                                   list<rgw_obj_key> *remove_objs, uint16_t bilog_flags)
+                                   list<rgw_obj_key> *remove_objs, uint16_t bilog_flags, rgw_zone_set *zones_trace)
 {
-  return cls_obj_complete_op(bs, CLS_RGW_OP_ADD, tag, pool, epoch, ent, category, remove_objs, bilog_flags);
+  return cls_obj_complete_op(bs, CLS_RGW_OP_ADD, tag, pool, epoch, ent, category, remove_objs, bilog_flags, zones_trace);
 }
 
 int RGWRados::cls_obj_complete_del(BucketShard& bs, string& tag,
@@ -12171,19 +12210,20 @@ int RGWRados::cls_obj_complete_del(BucketShard& bs, string& tag,
                                    rgw_obj& obj,
                                    real_time& removed_mtime,
                                    list<rgw_obj_key> *remove_objs,
-                                   uint16_t bilog_flags)
+                                   uint16_t bilog_flags,
+                                   rgw_zone_set *zones_trace)
 {
   RGWObjEnt ent;
   ent.mtime = removed_mtime;
   obj.get_index_key(&ent.key);
-  return cls_obj_complete_op(bs, CLS_RGW_OP_DEL, tag, pool, epoch, ent, RGW_OBJ_CATEGORY_NONE, remove_objs, bilog_flags);
+  return cls_obj_complete_op(bs, CLS_RGW_OP_DEL, tag, pool, epoch, ent, RGW_OBJ_CATEGORY_NONE, remove_objs, bilog_flags, zones_trace);
 }
 
-int RGWRados::cls_obj_complete_cancel(BucketShard& bs, string& tag, rgw_obj& obj, uint16_t bilog_flags)
+int RGWRados::cls_obj_complete_cancel(BucketShard& bs, string& tag, rgw_obj& obj, uint16_t bilog_flags, rgw_zone_set *zones_trace)
 {
   RGWObjEnt ent;
   obj.get_index_key(&ent.key);
-  return cls_obj_complete_op(bs, CLS_RGW_OP_CANCEL, tag, -1 /* pool id */, 0, ent, RGW_OBJ_CATEGORY_NONE, NULL, bilog_flags);
+  return cls_obj_complete_op(bs, CLS_RGW_OP_CANCEL, tag, -1 /* pool id */, 0, ent, RGW_OBJ_CATEGORY_NONE, NULL, bilog_flags, zones_trace);
 }
 
 int RGWRados::cls_obj_set_bucket_tag_timeout(rgw_bucket& bucket, uint64_t timeout)

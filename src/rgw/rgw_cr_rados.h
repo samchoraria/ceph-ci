@@ -730,6 +730,7 @@ class RGWAsyncFetchRemoteObj : public RGWAsyncRadosRequest {
   real_time src_mtime;
 
   bool copy_if_newer;
+  rgw_zone_set *zones_trace;
 
 protected:
   int _send_request();
@@ -739,12 +740,12 @@ public:
                          RGWBucketInfo& _bucket_info,
                          const rgw_obj_key& _key,
                          boost::optional<uint64_t> _versioned_epoch,
-                         bool _if_newer) : RGWAsyncRadosRequest(caller, cn), store(_store),
+                         bool _if_newer, rgw_zone_set *_zones_trace) : RGWAsyncRadosRequest(caller, cn), store(_store),
                                                       source_zone(_source_zone),
                                                       bucket_info(_bucket_info),
                                                       key(_key),
                                                       versioned_epoch(_versioned_epoch),
-                                                      copy_if_newer(_if_newer) {}
+                                                      copy_if_newer(_if_newer), zones_trace(_zones_trace) {}
 };
 
 class RGWFetchRemoteObjCR : public RGWSimpleCoroutine {
@@ -763,6 +764,7 @@ class RGWFetchRemoteObjCR : public RGWSimpleCoroutine {
   bool copy_if_newer;
 
   RGWAsyncFetchRemoteObj *req;
+  rgw_zone_set *zones_trace;
 
 public:
   RGWFetchRemoteObjCR(RGWAsyncRadosProcessor *_async_rados, RGWRados *_store,
@@ -770,13 +772,13 @@ public:
                       RGWBucketInfo& _bucket_info,
                       const rgw_obj_key& _key,
                       boost::optional<uint64_t> _versioned_epoch,
-                      bool _if_newer) : RGWSimpleCoroutine(_store->ctx()), cct(_store->ctx()),
+                      bool _if_newer, rgw_zone_set *_zones_trace) : RGWSimpleCoroutine(_store->ctx()), cct(_store->ctx()),
                                        async_rados(_async_rados), store(_store),
                                        source_zone(_source_zone),
                                        bucket_info(_bucket_info),
                                        key(_key),
                                        versioned_epoch(_versioned_epoch),
-                                       copy_if_newer(_if_newer), req(NULL) {}
+                                       copy_if_newer(_if_newer), req(NULL), zones_trace(_zones_trace) {}
 
 
   ~RGWFetchRemoteObjCR() {
@@ -792,7 +794,7 @@ public:
 
   int send_request() {
     req = new RGWAsyncFetchRemoteObj(this, stack->create_completion_notifier(), store, source_zone, bucket_info,
-                                     key, versioned_epoch, copy_if_newer);
+                                     key, versioned_epoch, copy_if_newer, zones_trace);
     async_rados->queue(req);
     return 0;
   }
@@ -817,6 +819,7 @@ class RGWAsyncRemoveObj : public RGWAsyncRadosRequest {
 
   bool del_if_older;
   ceph::real_time timestamp;
+  rgw_zone_set *zones_trace;
 
 protected:
   int _send_request();
@@ -831,7 +834,8 @@ public:
                          uint64_t _versioned_epoch,
                          bool _delete_marker,
                          bool _if_older,
-                         real_time& _timestamp) : RGWAsyncRadosRequest(caller, cn), store(_store),
+                         real_time& _timestamp,
+                         rgw_zone_set* _zones_trace) : RGWAsyncRadosRequest(caller, cn), store(_store),
                                                       source_zone(_source_zone),
                                                       bucket_info(_bucket_info),
                                                       key(_key),
@@ -840,7 +844,7 @@ public:
                                                       versioned(_versioned),
                                                       versioned_epoch(_versioned_epoch),
                                                       del_if_older(_if_older),
-                                                      timestamp(_timestamp) {
+                                                      timestamp(_timestamp), zones_trace(_zones_trace) {
     if (_delete_marker) {
       marker_version_id = key.instance;
     }
@@ -866,6 +870,8 @@ class RGWRemoveObjCR : public RGWSimpleCoroutine {
   real_time timestamp;
 
   RGWAsyncRemoveObj *req;
+  
+  rgw_zone_set *zones_trace;
 
 public:
   RGWRemoveObjCR(RGWAsyncRadosProcessor *_async_rados, RGWRados *_store,
@@ -877,14 +883,15 @@ public:
                       string *_owner,
                       string *_owner_display_name,
                       bool _delete_marker,
-                      real_time *_timestamp) : RGWSimpleCoroutine(_store->ctx()), cct(_store->ctx()),
+                      real_time *_timestamp,
+                      rgw_zone_set *_zones_trace) : RGWSimpleCoroutine(_store->ctx()), cct(_store->ctx()),
                                        async_rados(_async_rados), store(_store),
                                        source_zone(_source_zone),
                                        bucket_info(_bucket_info),
                                        key(_key),
                                        versioned(_versioned),
                                        versioned_epoch(_versioned_epoch),
-                                       delete_marker(_delete_marker), req(NULL) {
+                                       delete_marker(_delete_marker), req(NULL), zones_trace(_zones_trace) {
     del_if_older = (_timestamp != NULL);
     if (_timestamp) {
       timestamp = *_timestamp;
@@ -912,7 +919,7 @@ public:
   int send_request() {
     req = new RGWAsyncRemoveObj(this, stack->create_completion_notifier(), store, source_zone, bucket_info,
                                 key, owner, owner_display_name, versioned, versioned_epoch,
-                                delete_marker, del_if_older, timestamp);
+                                delete_marker, del_if_older, timestamp, zones_trace);
     async_rados->queue(req);
     return 0;
   }

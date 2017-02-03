@@ -2364,7 +2364,8 @@ protected:
   int prepare(RGWRados *store, string *oid_rand);
   int do_complete(string& etag, real_time *mtime, real_time set_mtime,
                   map<string, bufferlist>& attrs, real_time delete_at,
-                  const char *if_match = NULL, const char *if_nomatch = NULL, const string *user_data = nullptr);
+                  const char *if_match = NULL, const char *if_nomatch = NULL, const string *user_data = nullptr,
+                  rgw_zone_set *zones_trace = nullptr);
 
 public:
   bool immutable_head() { return true; }
@@ -2438,7 +2439,7 @@ static bool is_v2_upload_id(const string& upload_id)
 
 int RGWPutObjProcessor_Multipart::do_complete(string& etag, real_time *mtime, real_time set_mtime,
                                               map<string, bufferlist>& attrs, real_time delete_at,
-                                              const char *if_match, const char *if_nomatch, const string *user_data)
+                                              const char *if_match, const char *if_nomatch, const string *user_data, rgw_zone_set *zones_trace)
 {
   complete_writing_data();
 
@@ -2450,6 +2451,7 @@ int RGWPutObjProcessor_Multipart::do_complete(string& etag, real_time *mtime, re
   head_obj_op.meta.mtime = mtime;
   head_obj_op.meta.owner = s->owner.get_id();
   head_obj_op.meta.delete_at = delete_at;
+  head_obj_op.meta.zones_trace = zones_trace;
 
   int r = head_obj_op.write_meta(s->obj_size, attrs);
   if (r < 0)
