@@ -1624,7 +1624,6 @@ private:
     : public ShardedThreadPool::ShardedWQ<pair<spg_t,PGQueueable>>
   {
     struct ShardData {
-      Mutex sdata_lock;
       Cond sdata_cond;
 
       Mutex sdata_op_ordering_lock;   ///< protects all members below
@@ -1669,8 +1668,7 @@ private:
 	string lock_name, string ordering_lock,
 	uint64_t max_tok_per_prio, uint64_t min_cost, CephContext *cct,
 	io_queue opqueue)
-	: sdata_lock(lock_name.c_str(), false, true, false, cct),
-	  sdata_op_ordering_lock(ordering_lock.c_str(), false, true,
+	: sdata_op_ordering_lock(ordering_lock.c_str(), false, true,
 				 false, cct) {
 	if (opqueue == io_queue::weightedpriority) {
 	  pqueue = std::unique_ptr
@@ -1750,9 +1748,9 @@ private:
       for(uint32_t i = 0; i < num_shards; i++) {
 	ShardData* sdata = shard_list[i];
 	assert (NULL != sdata); 
-	sdata->sdata_lock.Lock();
+	sdata->sdata_op_ordering_lock.Lock();
 	sdata->sdata_cond.Signal();
-	sdata->sdata_lock.Unlock();
+	sdata->sdata_op_ordering_lock.Unlock();
       }
     }
 
