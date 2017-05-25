@@ -655,7 +655,8 @@ namespace rgw {
     buffer::list ux_key, ux_attrs;
     string obj_name{rgw_fh->relative_object_name()};
 
-    if (rgw_fh->is_dir()) {
+    if (rgw_fh->is_dir() &&
+	(likely(! rgw_fh->is_bucket()))) {
       obj_name += "/";
     }
 
