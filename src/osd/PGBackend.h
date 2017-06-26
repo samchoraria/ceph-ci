@@ -69,6 +69,7 @@ struct inconsistent_obj_wrapper;
        const hobject_t &oid,
        const ObjectRecoveryInfo &recovery_info,
        ObjectContextRef obc,
+       bool is_delete,
        ObjectStore::Transaction *t
        ) = 0;
 
@@ -78,7 +79,8 @@ struct inconsistent_obj_wrapper;
       */
      virtual void on_global_recover(
        const hobject_t &oid,
-       const object_stat_sum_t &stat_diff
+       const object_stat_sum_t &stat_diff,
+       bool is_delete
        ) = 0;
 
      /**
@@ -96,9 +98,10 @@ struct inconsistent_obj_wrapper;
        const hobject_t oid) = 0;
 
      virtual void failed_push(const list<pg_shard_t> &from, const hobject_t &soid) = 0;
-     
      virtual void cancel_pull(const hobject_t &soid) = 0;
-
+     virtual void remove_missing_object(const hobject_t &oid,
+					eversion_t v,
+					Context *on_complete) = 0;
      /**
       * Bless a context
       *
@@ -262,6 +265,7 @@ struct inconsistent_obj_wrapper;
     */
    struct RecoveryHandle {
      bool cache_dont_need;
+     map<pg_shard_t, vector<pair<hobject_t, eversion_t> > > deletes;
 
      RecoveryHandle(): cache_dont_need(false) {}
      virtual ~RecoveryHandle() {}
@@ -275,6 +279,11 @@ struct inconsistent_obj_wrapper;
      RecoveryHandle *h,     ///< [in] op to finish
      int priority           ///< [in] msg priority
      ) = 0;
+
+   void recover_delete_object(const hobject_t &oid, eversion_t v,
+			      RecoveryHandle *h);
+   void send_recovery_deletes(int prio,
+			      const map<pg_shard_t, vector<pair<hobject_t, eversion_t> > > &deletes);
 
    /**
     * recover_object
@@ -313,9 +322,12 @@ struct inconsistent_obj_wrapper;
    virtual bool can_handle_while_inactive(OpRequestRef op) = 0;
 
    /// gives PGBackend a crack at an incoming message
-   virtual bool handle_message(
+   bool handle_message(
      OpRequestRef op ///< [in] message received
-     ) = 0; ///< @return true if the message was handled
+     ); ///< @return true if the message was handled
+
+   /// the variant of handle_message that is overridden by child classes
+   virtual bool _handle_message(OpRequestRef op) = 0;
 
    virtual void check_recovery_sources(const OSDMapRef osdmap) = 0;
 
@@ -505,6 +517,13 @@ struct inconsistent_obj_wrapper;
      const hobject_t &hoid,
      const ObjectModDesc &desc,
      ObjectStore::Transaction *t);
+
+ protected:
+
+   void handle_recovery_delete(OpRequestRef op);
+   void handle_recovery_delete_reply(OpRequestRef op);
+
+ public:
 
    /// Reapply old attributes
    void rollback_setattrs(
