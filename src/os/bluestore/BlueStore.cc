@@ -4480,7 +4480,7 @@ bool BlueStore::test_mount_in_use()
   return ret;
 }
 
-int BlueStore::_open_db(bool create)
+int BlueStore::_open_db(bool create, bool to_repair_db)
 {
   int r;
   assert(!db);
@@ -4740,6 +4740,8 @@ int BlueStore::_open_db(bool create)
   if (kv_backend == "rocksdb")
     options = cct->_conf->bluestore_rocksdb_options;
   db->init(options);
+  if (to_repair_db)
+    return 0;
   if (create) {
     if (cct->_conf->get_val<bool>("bluestore_rocksdb_cf")) {
       r = db->create_and_open(err, cfs);
@@ -5331,7 +5333,7 @@ void BlueStore::set_cache_shards(unsigned num)
   }
 }
 
-int BlueStore::_mount(bool kv_only)
+int BlueStore::_mount(bool kv_only, bool open_db)
 {
   dout(1) << __func__ << " path " << path << dendl;
 
@@ -5381,7 +5383,7 @@ int BlueStore::_mount(bool kv_only)
   if (r < 0)
     goto out_fsid;
 
-  r = _open_db(false);
+  r = _open_db(false, !open_db);
   if (r < 0)
     goto out_bdev;
 
