@@ -326,10 +326,8 @@ int RocksDBStore::create_and_open(ostream &out,
   return do_open(out, true, &cfs);
 }
 
-int RocksDBStore::do_open(ostream &out, bool create_if_missing,
-			  const vector<ColumnFamily>* cfs)
+int RocksDBStore::load_rocksdb_options(bool create_if_missing, rocksdb::Options& opt)
 {
-  rocksdb::Options opt;
   rocksdb::Status status;
 
   if (options_str.length()) {
@@ -444,6 +442,20 @@ int RocksDBStore::do_open(ostream &out, bool create_if_missing,
 	   << dendl;
 
   opt.merge_operator.reset(new MergeOperatorRouter(*this));
+
+  return 0;
+}
+
+int RocksDBStore::do_open(ostream &out, bool create_if_missing,
+			  const vector<ColumnFamily>* cfs)
+{
+  rocksdb::Options opt;
+  int r = load_rocksdb_options(create_if_missing, opt);
+  if (r) {
+    dout(1) << __func__ << " load rocksdb options failed" << dendl;
+    return r;
+  }
+  rocksdb::Status status;
   if (create_if_missing) {
     status = rocksdb::DB::Open(opt, path, &db);
     if (!status.ok()) {
@@ -540,9 +552,9 @@ int RocksDBStore::do_open(ostream &out, bool create_if_missing,
 	}
       }
     }
-  }
+    }
+
   assert(default_cf != nullptr);
-  
   PerfCountersBuilder plb(g_ceph_context, "rocksdb", l_rocksdb_first, l_rocksdb_last);
   plb.add_u64_counter(l_rocksdb_gets, "get", "Gets");
   plb.add_u64_counter(l_rocksdb_txns, "submit_transaction", "Submit transactions");
@@ -620,6 +632,24 @@ void RocksDBStore::close()
 
   if (logger)
     cct->get_perfcounters_collection()->remove(logger);
+}
+
+int RocksDBStore::repair(std::ostream &out)
+{
+  rocksdb::Options opt;
+  int r = load_rocksdb_options(false, opt);
+  if (r) {
+    dout(1) << __func__ << " load rocksdb options failed" << dendl;
+    out << "load rocksdb options failed" << std::endl;
+    return r;
+  }
+  rocksdb::Status status = rocksdb::RepairDB(path, opt);
+  if (status.ok()) {
+      return 0;
+  } else {
+     out << "repair rocksdb failed : " << status.ToString() << std::endl;
+     return 1;
+  }
 }
 
 void RocksDBStore::split_stats(const std::string &s, char delim, std::vector<std::string> &elems) {
