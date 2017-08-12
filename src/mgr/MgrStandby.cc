@@ -12,6 +12,7 @@
  */
 
 #include <Python.h>
+#include <arpa/inet.h>
 
 #include "common/errno.h"
 #include "common/signal.h"
@@ -160,8 +161,31 @@ void MgrStandby::send_beacon()
   auto addr = available ? active_mgr->get_server_addr() : entity_addr_t();
   dout(10) << "sending beacon as gid " << monc.get_global_id()
 	   << " modules " << modules << dendl;
-
+  
+  const char *host_ip = NULL;
+  char addr_buf[INET6_ADDRSTRLEN]; 
   map<string,string> metadata;
+  auto addr_standby = monc.get_my_addr();
+
+  switch(addr_standby.get_family()) {
+  case AF_INET:
+    host_ip = inet_ntop(AF_INET, &addr_standby.in4_addr().sin_addr, addr_buf,
+                        INET_ADDRSTRLEN);
+    break;
+  case AF_INET6:
+    host_ip = inet_ntop(AF_INET6, &addr_standby.in6_addr().sin6_addr, addr_buf,
+                        INET6_ADDRSTRLEN);
+    break;
+  default:
+    break;
+  };
+  if (NULL == host_ip) {
+    metadata["addr"] = "";
+    dout(4) << "Did not get the ip_addr of Standby" << dendl;
+  } else {
+    metadata["addr"] = host_ip;
+  } 
+  
   collect_sys_info(&metadata, g_ceph_context);
 
   MMgrBeacon *m = new MMgrBeacon(monc.get_fsid(),
