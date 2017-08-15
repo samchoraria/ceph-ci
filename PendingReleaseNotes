@@ -126,3 +126,7 @@ method. See http://docs.ceph.com/docs/luminous/mgr/restful for details.
   your cluster then your configuration should be adjusted in order to
   avoid reverting to the default value.
 
+* The Ceph LZ4 compression plugin is now built by default if the required
+  version of the LZ4 library is available. LZ4 is not enabled in the official
+  Ceph releases due to some distros shipping with a very old releases of the
+  LZ4 library which does not have the required LZ4 streaming function.
