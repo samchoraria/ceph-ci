@@ -9,6 +9,7 @@
 #include "include/str_list.h"
 #include "rgw_lc.h"
 #include "rgw_xml.h"
+#include "rgw_tag_s3.h"
 
 class LCID_S3 : public XMLObj
 {
@@ -33,16 +34,30 @@ class LCFilter_S3 : public LCFilter, public XMLObj
   string& to_str() { return data; }
   void to_xml(ostream& out){
     out << "<Filter>";
-      if (!prefix.empty())
-        out << "<Prefix>" << prefix << "<Prefix>";
+    if (has_prefix())
+      out << "<Prefix>" << prefix << "<Prefix>";
+    if (has_tags()){
+      for (const auto&kv : obj_tags.get_tags()){
+        out << "<Tag>";
+        out << "<Key>" << kv.first << "</Key>";
+        out << "<Value>" << kv.second << "</Value>";
+        out << "</Tag>";
+      }
+    }
     out << "</Filter>";
   }
   void dump_xml(Formatter *f) const {
     f->open_object_section("Filter");
     if (!prefix.empty())
       encode_xml("Prefix", prefix, f);
+    if (has_tags()){
+      const auto& tagset_s3 = static_cast<const RGWObjTagSet_S3 &>(obj_tags);
+      tagset_s3.dump_xml(f);
+    }
+
     f->close_section(); // Filter
   }
+  bool xml_end(const char *el) override;
 };
 
 class LCStatus_S3 : public XMLObj
