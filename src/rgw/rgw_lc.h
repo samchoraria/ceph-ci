@@ -18,6 +18,7 @@
 #include "rgw_rados.h"
 #include "rgw_multi.h"
 #include "cls/rgw/cls_rgw_types.h"
+#include "rgw_tag.h"
 
 #include <atomic>
 
@@ -95,8 +96,10 @@ class LCFilter
 {
  protected:
   std::string prefix;
-  // TODO add support for tagging
+  RGWObjTags obj_tags;
+
  public:
+
   const std::string& get_prefix() const{
     return prefix;
   }
@@ -109,22 +112,34 @@ class LCFilter
     prefix = std::move(_prefix);
   }
 
+  void emplace_tag(std::string&& key, std::string&& val) {
+    obj_tags.emplace_tag(std::move(key), std::move(val));
+  }
+
   bool empty() const {
-    return prefix.empty();
+    return has_prefix() || has_tags();
   }
 
   bool has_prefix() const {
     return !prefix.empty();
   }
 
+  bool has_tags() const {
+    return obj_tags.count() > 0;
+  }
+
   void encode(bufferlist& bl) const {
-    ENCODE_START(1, 1, bl);
+    ENCODE_START(2, 1, bl);
     ::encode(prefix, bl);
+    ::encode(obj_tags, bl);
     ENCODE_FINISH(bl);
   }
   void decode(bufferlist::iterator& bl) {
-    DECODE_START(1, bl);
+    DECODE_START(2, bl);
     ::decode(prefix, bl);
+    if (struct_v >= 2) {
+      ::decode(obj_tags, bl);
+    }
     DECODE_FINISH(bl);
   }
 };
