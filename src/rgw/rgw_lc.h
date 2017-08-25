@@ -104,20 +104,18 @@ class LCFilter
     return prefix;
   }
 
-  void set_prefix(const string& _prefix){
-    prefix = _prefix;
-  }
-
-  void set_prefix(std::string&& _prefix){
-    prefix = std::move(_prefix);
-  }
-
-  void emplace_tag(std::string&& key, std::string&& val) {
-    obj_tags.emplace_tag(std::move(key), std::move(val));
-  }
-
   bool empty() const {
-    return has_prefix() || has_tags();
+    return !(has_prefix() || has_tags());
+  }
+
+  // Determine if we need AND tag when creating xml
+  bool has_multi_condition() const {
+    if (obj_tags.count() > 1)
+      return true;
+    else if (has_prefix() && has_tags())
+      return true;
+
+    return false;
   }
 
   bool has_prefix() const {
