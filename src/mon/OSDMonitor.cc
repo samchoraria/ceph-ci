@@ -234,27 +234,22 @@ void OSDMonitor::create_initial()
   newmap.set_flag(CEPH_OSDMAP_SORTBITWISE);
 
   // new cluster should require latest by default
-  if (g_conf->mon_debug_no_require_luminous) {
-    newmap.require_osd_release = CEPH_RELEASE_KRAKEN;
-    derr << __func__ << " mon_debug_no_require_luminous=true" << dendl;
-  } else {
-    newmap.require_osd_release = CEPH_RELEASE_LUMINOUS;
-    newmap.flags |=
-      CEPH_OSDMAP_RECOVERY_DELETES |
-      CEPH_OSDMAP_PURGED_SNAPDIRS;
-    newmap.full_ratio = g_conf->mon_osd_full_ratio;
-    if (newmap.full_ratio > 1.0) newmap.full_ratio /= 100;
-    newmap.backfillfull_ratio = g_conf->mon_osd_backfillfull_ratio;
-    if (newmap.backfillfull_ratio > 1.0) newmap.backfillfull_ratio /= 100;
-    newmap.nearfull_ratio = g_conf->mon_osd_nearfull_ratio;
-    if (newmap.nearfull_ratio > 1.0) newmap.nearfull_ratio /= 100;
-    int r = ceph_release_from_name(
-      g_conf->mon_osd_initial_require_min_compat_client.c_str());
-    if (r <= 0) {
-      assert(0 == "mon_osd_initial_require_min_compat_client is not valid");
-    }
-    newmap.require_min_compat_client = r;
+  newmap.require_osd_release = CEPH_RELEASE_LUMINOUS;
+  newmap.flags |=
+    CEPH_OSDMAP_RECOVERY_DELETES |
+    CEPH_OSDMAP_PURGED_SNAPDIRS;
+  newmap.full_ratio = g_conf->mon_osd_full_ratio;
+  if (newmap.full_ratio > 1.0) newmap.full_ratio /= 100;
+  newmap.backfillfull_ratio = g_conf->mon_osd_backfillfull_ratio;
+  if (newmap.backfillfull_ratio > 1.0) newmap.backfillfull_ratio /= 100;
+  newmap.nearfull_ratio = g_conf->mon_osd_nearfull_ratio;
+  if (newmap.nearfull_ratio > 1.0) newmap.nearfull_ratio /= 100;
+  int r = ceph_release_from_name(
+    g_conf->mon_osd_initial_require_min_compat_client.c_str());
+  if (r <= 0) {
+    assert(0 == "mon_osd_initial_require_min_compat_client is not valid");
   }
+  newmap.require_min_compat_client = r;
 
   // encode into pending incremental
   newmap.encode(pending_inc.fullmap,
