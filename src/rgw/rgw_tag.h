@@ -35,6 +35,7 @@ class RGWObjTags
   size_t count() const {return tag_map.size();}
   int set_from_string(const std::string& input);
   void clear() { tag_map.clear(); }
+  bool empty() const noexcept { return tag_map.empty(); }
   const tag_map_t& get_tags() const {return tag_map;}
 };
 WRITE_CLASS_ENCODER(RGWObjTags)
