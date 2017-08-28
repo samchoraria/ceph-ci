@@ -127,7 +127,7 @@ class LCFilter
   }
 
   bool has_tags() const {
-    return obj_tags.count() > 0;
+    return !obj_tags.empty();
   }
 
   void encode(bufferlist& bl) const {
