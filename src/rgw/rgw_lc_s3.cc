@@ -88,7 +88,7 @@ bool LCFilter_S3::xml_end(const char* el) {
   while (auto tag_xml =tags_iter.get_next()){
     std::string _key,_val;
     RGWXMLDecoder::decode_xml("Key", _key, tag_xml);
-    RGWXMLDecoder::decode_xml("Val", _val, tag_xml);
+    RGWXMLDecoder::decode_xml("Value", _val, tag_xml);
     obj_tags.emplace_tag(std::move(_key), std::move(_val));
     num_conditions++;
   }
