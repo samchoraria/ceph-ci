@@ -100,8 +100,12 @@ class LCFilter
 
  public:
 
-  const std::string& get_prefix() const{
+  const std::string& get_prefix() const {
     return prefix;
+  }
+
+  const RGWObjTags& get_tags() const {
+    return obj_tags;
   }
 
   bool empty() const {
@@ -269,7 +273,7 @@ struct lc_op
   int noncur_expiration;
   int mp_expiration;
   boost::optional<ceph::real_time> expiration_date;
-
+  boost::optional<RGWObjTags> obj_tags;
   lc_op() : status(false), dm_expiration(false), expiration(0), noncur_expiration(0), mp_expiration(0) {}
   
 };

@@ -74,6 +74,10 @@ bool RGWLifecycleConfiguration::_add_rule(LCRule *rule)
   } else {
     prefix = rule->get_prefix();
   }
+
+  if (rule->get_filter().has_tags()){
+    op.obj_tags = rule->get_filter().get_tags();
+  }
   auto ret = prefix_map.emplace(std::move(prefix), std::move(op));
   return ret.second;
 }
@@ -316,6 +320,15 @@ int RGWLC::handle_multipart_expiration(RGWRados::Bucket *target, const map<strin
   return 0;
 }
 
+static int read_obj_tags(RGWRados *store, RGWBucketInfo& bucket_info, rgw_obj& obj, RGWObjectCtx& ctx, bufferlist& tags_bl)
+{
+  RGWRados::Object op_target(store, bucket_info, ctx, obj);
+  RGWRados::Object::Read read_op(&op_target);
+
+  return read_op.get_attr(RGW_ATTR_TAGS, tags_bl);
+}
+
+
 int RGWLC::bucket_lc_process(string& shard_id)
 {
   RGWLifecycleConfiguration  config(cct);
@@ -386,6 +399,32 @@ int RGWLC::bucket_lc_process(string& shard_id)
         bool is_expired;
         for (auto obj_iter = objs.begin(); obj_iter != objs.end(); ++obj_iter) {
           rgw_obj_key key(obj_iter->key);
+          RGWObjState *state;
+          rgw_obj obj(bucket_info.bucket, key);
+          RGWObjectCtx rctx(store);
+          if (prefix_iter->second.obj_tags != boost::none) {
+            bufferlist tags_bl;
+            int ret = read_obj_tags(store, bucket_info, obj, rctx, tags_bl);
+            if (ret < 0) {
+              return ret;
+            }
+            RGWObjTags dest_obj_tags;
+            try {
+              auto iter = tags_bl.begin();
+              dest_obj_tags.decode(iter);
+            } catch (buffer::error& err) {
+               ldout(cct,0) << "ERROR: caught buffer::error, couldn't decode TagSet" << dendl;
+              return -EIO;
+            }
+
+            if (!includes(dest_obj_tags.get_tags().begin(),
+                          dest_obj_tags.get_tags().end(),
+                          prefix_iter->second.obj_tags->get_tags().begin(),
+                          prefix_iter->second.obj_tags->get_tags().end())){
+              ldout(cct, 20) << __func__ << "skipping obj " << key << " as tags do not match" << dendl;
+              continue;
+            }
+          }
 
           if (!key.ns.empty()) {
             continue;
@@ -397,15 +436,15 @@ int RGWLC::bucket_lc_process(string& shard_id)
             is_expired = obj_has_expired(now - ceph::real_clock::to_time_t(obj_iter->meta.mtime), prefix_iter->second.expiration);
           }
           if (is_expired) {
-            RGWObjectCtx rctx(store);
-            rgw_obj obj(bucket_info.bucket, key);
-            RGWObjState *state;
             int ret = store->get_obj_state(&rctx, bucket_info, obj, &state, false);
             if (ret < 0) {
               return ret;
             }
-            if (state->mtime != obj_iter->meta.mtime)//Check mtime again to avoid delete a recently update object as much as possible
+            if (state->mtime != obj_iter->meta.mtime) {
+              //Check mtime again to avoid delete a recently update object as much as possible
+              ldout(cct, 20) << __func__ << "skipping removal: state->mtime " << state->mtime << " obj->mtime " << obj_iter->meta.mtime << dendl;
               continue;
+            }
             ret = remove_expired_obj(bucket_info, obj_iter->key, true);
             if (ret < 0) {
               ldout(cct, 0) << "ERROR: remove_expired_obj " << dendl;
