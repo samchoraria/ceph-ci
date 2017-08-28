@@ -366,7 +366,7 @@ int RGWLC::bucket_lc_process(string& shard_id)
   try {
       config.decode(iter);
     } catch (const buffer::error& e) {
-      ldout(cct, 0) << __func__ <<  "decode life cycle config failed" << dendl;
+      ldout(cct, 0) << __func__ <<  "() decode life cycle config failed" << dendl;
       return -1;
     }
 
@@ -421,7 +421,7 @@ int RGWLC::bucket_lc_process(string& shard_id)
                           dest_obj_tags.get_tags().end(),
                           prefix_iter->second.obj_tags->get_tags().begin(),
                           prefix_iter->second.obj_tags->get_tags().end())){
-              ldout(cct, 20) << __func__ << "skipping obj " << key << " as tags do not match" << dendl;
+              ldout(cct, 20) << __func__ << "() skipping obj " << key << " as tags do not match" << dendl;
               continue;
             }
           }
@@ -442,7 +442,7 @@ int RGWLC::bucket_lc_process(string& shard_id)
             }
             if (state->mtime != obj_iter->meta.mtime) {
               //Check mtime again to avoid delete a recently update object as much as possible
-              ldout(cct, 20) << __func__ << "skipping removal: state->mtime " << state->mtime << " obj->mtime " << obj_iter->meta.mtime << dendl;
+              ldout(cct, 20) << __func__ << "() skipping removal: state->mtime " << state->mtime << " obj->mtime " << obj_iter->meta.mtime << dendl;
               continue;
             }
             ret = remove_expired_obj(bucket_info, obj_iter->key, true);
@@ -615,7 +615,7 @@ int RGWLC::list_lc_progress(const string& marker, uint32_t max_entries, map<stri
     int ret = cls_rgw_lc_list(store->lc_pool_ctx, obj_names[index], marker, max_entries, entries);
     if (ret < 0) {
       if (ret == -ENOENT) {
-        dout(10) << __func__ << " ignoring unfound lc object="
+        dout(10) << __func__ << "() ignoring unfound lc object="
                              << obj_names[index] << dendl;
         continue;
       } else {
