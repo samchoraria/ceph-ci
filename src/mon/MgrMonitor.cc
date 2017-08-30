@@ -43,7 +43,7 @@ const static std::string command_descs_prefix = "mgr_command_descs";
 
 void MgrMonitor::create_initial()
 {
-  boost::tokenizer<> tok(g_conf->mgr_initial_modules);
+  boost::tokenizer<> tok(g_conf->get_val<std::string>("mgr_initial_modules"));
   for (auto& m : tok) {
     pending_map.modules.insert(m);
   }
@@ -120,10 +120,10 @@ health_status_t MgrMonitor::should_warn_about_mgr_down()
   // no OSDs are ever created.
   if (ever_had_active_mgr ||
       (mon->osdmon()->osdmap.get_num_osds() > 0 &&
-       now > mon->monmap->created + g_conf->mon_mgr_mkfs_grace)) {
+       now > mon->monmap->created + g_conf->get_val<int64_t>("mon_mgr_mkfs_grace"))) {
     health_status_t level = HEALTH_WARN;
     if (first_seen_inactive != utime_t() &&
-	now - first_seen_inactive > g_conf->mon_mgr_inactive_grace) {
+	now - first_seen_inactive > g_conf->get_val<int64_t>("mon_mgr_inactive_grace")) {
       level = HEALTH_ERR;
     }
     return level;
@@ -454,7 +454,7 @@ void MgrMonitor::send_digests()
   }
 
   digest_event = mon->timer.add_event_after(
-    g_conf->mon_mgr_digest_period,
+    g_conf->get_val<int64_t>("mon_mgr_digest_period"),
     new C_MonContext(mon, [this](int) {
       send_digests();
   }));
@@ -497,7 +497,7 @@ void MgrMonitor::get_health(
     if (mon->osdmon()->osdmap.require_osd_release >= CEPH_RELEASE_LUMINOUS) {
       utime_t now = ceph_clock_now();
       if (first_seen_inactive != utime_t() &&
-	  now - first_seen_inactive > g_conf->mon_mgr_inactive_grace) {
+	  now - first_seen_inactive > g_conf->get_val<int64_t>("mon_mgr_inactive_grace")) {
 	level = HEALTH_ERR;
       }
     }
@@ -511,7 +511,7 @@ void MgrMonitor::tick()
     return;
 
   const auto now = ceph::coarse_mono_clock::now();
-  const auto cutoff = now - std::chrono::seconds(g_conf->mon_mgr_beacon_grace);
+  const auto cutoff = now - std::chrono::seconds(g_conf->get_val<int64_t>("mon_mgr_beacon_grace"));
 
   // Populate any missing beacons (i.e. no beacon since MgrMonitor
   // instantiation) with the current time, so that they will
@@ -572,8 +572,9 @@ void MgrMonitor::tick()
   if (!pending_map.available &&
       !ever_had_active_mgr &&
       should_warn_about_mgr_down() != HEALTH_OK) {
-    dout(10) << " exceeded mon_mgr_mkfs_grace " << g_conf->mon_mgr_mkfs_grace
-	     << " seconds" << dendl;
+    dout(10) << " exceeded mon_mgr_mkfs_grace "
+             << g_conf->get_val<int64_t>("mon_mgr_mkfs_grace")
+             << " seconds" << dendl;
     propose = true;
   }
 
