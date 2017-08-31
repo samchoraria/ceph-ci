@@ -13452,9 +13452,6 @@ void PrimaryLogPG::scrub_snapshot_metadata(
   const char *mode = (repair ? "repair": (deep_scrub ? "deep-scrub" : "scrub"));
   boost::optional<snapid_t> all_clones;   // Unspecified snapid_t or boost::none
 
-  /// snapsets to repair
-  map<hobject_t,SnapSet> snapset_to_repair;
-
   // traverse in reverse order.
   boost::optional<hobject_t> head;
   boost::optional<SnapSet> snapset; // If initialized so will head (above)
@@ -13505,41 +13502,35 @@ void PrimaryLogPG::scrub_snapshot_metadata(
       }
     }
 
-    if (oi) {
-      if (pgbackend->be_get_ondisk_size(oi->size) != p->second.size) {
-	osd->clog->error() << mode << " " << info.pgid << " " << soid
-			   << " on disk size (" << p->second.size
-			   << ") does not match object info size ("
-			   << oi->size << ") adjusted for ondisk to ("
-			   << pgbackend->be_get_ondisk_size(oi->size)
-			   << ")";
-	soid_error.set_size_mismatch();
-	++scrubber.shallow_errors;
-      }
+    if (pgbackend->be_get_ondisk_size(oi->size) != p->second.size) {
+      osd->clog->error() << mode << " " << info.pgid << " " << soid
+			 << " on disk size (" << p->second.size
+			 << ") does not match object info size ("
+			 << oi->size << ") adjusted for ondisk to ("
+			 << pgbackend->be_get_ondisk_size(oi->size)
+			 << ")";
+      soid_error.set_size_mismatch();
+      ++scrubber.shallow_errors;
+    }
 
-      dout(20) << mode << "  " << soid << " " << oi.get() << dendl;
+    dout(20) << mode << "  " << soid << " " << oi.get() << dendl;
 
-      // A clone num_bytes will be added later when we have snapset
-      if (!soid.is_snap()) {
-	stat.num_bytes += oi->size;
-      }
-      if (soid.nspace == cct->_conf->osd_hit_set_namespace)
-	stat.num_bytes_hit_set_archive += oi->size;
+    // A clone num_bytes will be added later when we have snapset
+    if (!soid.is_snap()) {
+      stat.num_bytes += oi->size;
+    }
+    if (soid.nspace == cct->_conf->osd_hit_set_namespace)
+      stat.num_bytes_hit_set_archive += oi->size;
 
-      if (!soid.is_snapdir()) {
-	if (oi->is_dirty())
-	  ++stat.num_objects_dirty;
-	if (oi->is_whiteout())
-	  ++stat.num_whiteouts;
-	if (oi->is_omap())
-	  ++stat.num_objects_omap;
-	if (oi->is_cache_pinned())
-	  ++stat.num_objects_pinned;
-      }
-    } else {
-      // pessimistic assumption that this object might contain a
-      // legacy SnapSet
-      stat.num_legacy_snapsets++;
+    if (!soid.is_snapdir()) {
+      if (oi->is_dirty())
+	++stat.num_objects_dirty;
+      if (oi->is_whiteout())
+	++stat.num_whiteouts;
+      if (oi->is_omap())
+	++stat.num_objects_omap;
+      if (oi->is_cache_pinned())
+	++stat.num_objects_pinned;
     }
 
     // Check for any problems while processing clones
@@ -13663,23 +13654,6 @@ void PrimaryLogPG::scrub_snapshot_metadata(
 	  // For symmetry fix this too, but probably doesn't matter
           snapset->head_exists = false;
 	}
-
-	if (get_osdmap()->require_osd_release >= CEPH_RELEASE_LUMINOUS) {
-	  if (soid.is_snapdir()) {
-	    dout(10) << " will move snapset to head from " << soid << dendl;
-	    snapset_to_repair[soid.get_head()] = *snapset;
-	  } else if (snapset->is_legacy()) {
-	    dout(10) << " will convert legacy snapset on " << soid << " " << *snapset
-		     << dendl;
-	    snapset_to_repair[soid.get_head()] = *snapset;
-	  }
-	} else {
-	  stat.num_legacy_snapsets++;
-	}
-      } else {
-	// pessimistic assumption that this object might contain a
-	// legacy SnapSet
-	stat.num_legacy_snapsets++;
       }
     } else {
       assert(soid.is_snap());
@@ -13737,21 +13711,6 @@ void PrimaryLogPG::scrub_snapshot_metadata(
         }
       }
 
-      // migrate legacy_snaps to snapset?
-      auto p = snapset_to_repair.find(soid.get_head());
-      if (p != snapset_to_repair.end()) {
-	if (!oi || oi->legacy_snaps.empty()) {
-	  osd->clog->error() << mode << " " << info.pgid << " " << soid
-			     << " has no oi or legacy_snaps; cannot convert "
-			     << *snapset;
-	  ++scrubber.shallow_errors;
-	} else {
-	  dout(20) << __func__ << "   copying legacy_snaps " << oi->legacy_snaps
-		   << " to snapset " << p->second << dendl;
-	  p->second.clone_snaps[soid.snap] = oi->legacy_snaps;
-	}
-      }
-
       // what's next?
       ++curclone;
       if (soid_error.errors)
@@ -13782,8 +13741,7 @@ void PrimaryLogPG::scrub_snapshot_metadata(
 	 missing_digest.begin();
        p != missing_digest.end();
        ++p) {
-    if (p->first.is_snapdir())
-      continue;
+    assert(!p->first.is_snapdir());
     dout(10) << __func__ << " recording digests for " << p->first << dendl;
     ObjectContextRef obc = get_object_context(p->first, false);
     if (!obc) {
@@ -13808,79 +13766,6 @@ void PrimaryLogPG::scrub_snapshot_metadata(
     ctx->register_on_success(
       [this]() {
 	dout(20) << "updating scrub digest" << dendl;
-	if (--scrubber.num_digest_updates_pending == 0) {
-	  requeue_scrub();
-	}
-      });
-
-    simple_opc_submit(std::move(ctx));
-    ++scrubber.num_digest_updates_pending;
-  }
-  for (auto& p : snapset_to_repair) {
-    // cache pools may not have the clones, which means we won't know
-    // what snaps they have.  fake out the clone_snaps entries anyway (with
-    // blank snap lists).
-    p.second.head_exists = true;
-    if (pool.info.allow_incomplete_clones()) {
-      for (auto s : p.second.clones) {
-	if (p.second.clone_snaps.count(s) == 0) {
-	  dout(10) << __func__ << " " << p.first << " faking clone_snaps for "
-		   << s << dendl;
-	  p.second.clone_snaps[s];
-	}
-      }
-    }
-    if (p.second.clones.size() != p.second.clone_snaps.size() ||
-	p.second.is_legacy()) {
-      // this happens if we encounter other errors above, like a missing
-      // or extra clone.
-      dout(10) << __func__ << " not writing snapset to " << p.first
-	       << " snapset " << p.second << " clones " << p.second.clones
-	       << "; didn't convert fully" << dendl;
-      scrub_cstat.sum.num_legacy_snapsets++;
-      continue;
-    }
-    dout(10) << __func__ << " writing snapset to " << p.first
-	     << " " << p.second << dendl;
-    ObjectContextRef obc = get_object_context(p.first, true);
-    if (!obc) {
-      osd->clog->error() << info.pgid << " " << mode
-			 << " cannot get object context for object "
-			 << p.first;
-      continue;
-    } else if (obc->obs.oi.soid != p.first) {
-      osd->clog->error() << info.pgid << " " << mode
-			 << " object " << p.first
-			 << " has a valid oi attr with a mismatched name, "
-			 << " obc->obs.oi.soid: " << obc->obs.oi.soid;
-      continue;
-    }
-    OpContextUPtr ctx = simple_opc_create(obc);
-    PGTransaction *t = ctx->op_t.get();
-    ctx->at_version = get_next_version();
-    ctx->mtime = utime_t();      // do not update mtime
-    ctx->new_snapset = p.second;
-    if (!ctx->new_obs.exists) {
-      dout(20) << __func__ << "   making " << p.first << " a whiteout" << dendl;
-      ctx->new_obs.exists = true;
-      ctx->new_snapset.head_exists = true;
-      ctx->new_obs.oi.set_flag(object_info_t::FLAG_WHITEOUT);
-      ++ctx->delta_stats.num_whiteouts;
-      ++ctx->delta_stats.num_objects;
-      t->create(p.first);
-      if (p.first < scrubber.start) {
-	dout(20) << __func__ << " kludging around update outside of scrub range"
-		 << dendl;
-      } else {
-	scrub_cstat.add(ctx->delta_stats);
-      }
-    }
-    dout(20) << __func__ << "   final snapset " << ctx->new_snapset << dendl;
-    assert(!ctx->new_snapset.is_legacy());
-    finish_ctx(ctx.get(), pg_log_entry_t::MODIFY);
-    ctx->register_on_success(
-      [this]() {
-	dout(20) << "updating snapset" << dendl;
 	if (--scrubber.num_digest_updates_pending == 0) {
 	  requeue_scrub();
 	}
@@ -13960,14 +13845,6 @@ void PrimaryLogPG::_scrub_finish()
       publish_stats_to_osd();
       share_pg_info();
     }
-  } else if (scrub_cstat.sum.num_legacy_snapsets !=
-	     info.stats.stats.sum.num_legacy_snapsets) {
-    osd->clog->info() << info.pgid << " " << mode << " updated num_legacy_snapsets"
-		      << " from " << info.stats.stats.sum.num_legacy_snapsets
-		      << " -> " << scrub_cstat.sum.num_legacy_snapsets << "\n";
-    info.stats.stats.sum.num_legacy_snapsets = scrub_cstat.sum.num_legacy_snapsets;
-    publish_stats_to_osd();
-    share_pg_info();
   }
   // Clear object context cache to get repair information
   if (repair)
