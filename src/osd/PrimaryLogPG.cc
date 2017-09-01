@@ -6859,7 +6859,6 @@ int PrimaryLogPG::_rollback_to(OpContext *ctx, ceph_osd_op& op)
 	t->remove(soid);
       }
       t->clone(soid, rollback_to_sobject);
-      snapset.head_exists = true;
       t->add_obc(rollback_to);
 
       map<snapid_t, interval_set<uint64_t> >::iterator iter =
@@ -6900,8 +6899,6 @@ int PrimaryLogPG::_rollback_to(OpContext *ctx, ceph_osd_op& op)
 	dout(10) << __func__ << " clearing omap flag on " << obs.oi.soid << dendl;
 	obs.oi.clear_flag(object_info_t::FLAG_OMAP);
       }
-
-      snapset.head_exists = true;
     }
   }
   return ret;
@@ -8319,7 +8316,6 @@ void PrimaryLogPG::finish_promote(int r, CopyResults *results,
       results->snapset,
       get_osdmap()->require_osd_release < CEPH_RELEASE_LUMINOUS);
   }
-  tctx->new_snapset.head_exists = true;
   dout(20) << __func__ << " new_snapset " << tctx->new_snapset << dendl;
 
   // take RWWRITE lock for duration of our local write.  ignore starvation.
@@ -12285,7 +12281,6 @@ void PrimaryLogPG::hit_set_persist()
 
   ctx->new_obs = obc->obs;
 
-  obc->ssc->snapset.head_exists = true;
   ctx->new_snapset = obc->ssc->snapset;
 
   ctx->delta_stats.num_objects++;
