@@ -100,7 +100,8 @@
     usage trim                 trim usage (by user, date range)
     gc list                    dump expired garbage collection objects (specify
                                --include-all to list all entries, including unexpired)
-    gc process                 manually process garbage
+    gc process                 manually process garbage (specify
+                               --include-all to process all entries, including unexpired)
     lc list                    list all bucket lifecycle progress
     lc get                     get a lifecycle bucket configuration
     lc process                 manually process lifecycle
