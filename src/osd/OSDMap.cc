@@ -3261,6 +3261,27 @@ bool OSDMap::crush_rule_in_use(int rule_id) const
   return false;
 }
 
+int OSDMap::validate_crush_rules(CrushWrapper *newcrush,
+				 ostream *ss) const
+{
+  for (auto& i : pools) {
+    auto& pool = i.second;
+    int ruleno = pool.get_crush_rule();
+    if (!newcrush->rule_exists(ruleno)) {
+      if (ss)
+	*ss << "pool " << i.first << " references crush_rule " << ruleno
+	    << " but it is not present";
+      return -EINVAL;
+    }
+    if (newcrush->get_rule_mask_ruleset(ruleno) != ruleno) {
+      if (ss)
+	*ss << "rule " << ruleno << " mask ruleset does not match rule id";
+      return -EINVAL;
+    }
+  }
+  return 0;
+}
+
 int OSDMap::build_simple_optioned(CephContext *cct, epoch_t e, uuid_d &fsid,
 				  int nosd, int pg_bits, int pgp_bits,
 				  bool default_pool)
