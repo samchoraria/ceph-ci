@@ -940,7 +940,7 @@ static int parse_args(vector<const char*>& args, std::ostream *err_msg, Config *
   }
   config.parse_env();
   config.parse_argv(args);
-  cfg->poolname = config.rbd_default_pool;
+  cfg->poolname = config.get_val<std::string>("rbd_default_pool");
 
   std::vector<const char*>::iterator i;
   std::ostringstream err;
