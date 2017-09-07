@@ -3085,7 +3085,7 @@ std::vector<Option> get_global_options() {
     .set_description(""),
 
     Option("bluefs_allocator", Option::TYPE_STR, Option::LEVEL_DEV)
-    .set_default("bitmap")
+    .set_default("stupid")
     .set_description(""),
 
     Option("bluefs_preextend_wal_files", Option::TYPE_BOOL, Option::LEVEL_ADVANCED)
@@ -3397,9 +3397,9 @@ std::vector<Option> get_global_options() {
     .set_description("Key value database to use for bluestore"),
 
     Option("bluestore_allocator", Option::TYPE_STR, Option::LEVEL_DEV)
-    .set_default("bitmap")
-    .add_tag("mkfs")
-    .set_description(""),
+    .set_default("stupid")
+    .set_enum_allowed({"bitmap", "stupid"})
+    .set_description("Allocator policy"),
 
     Option("bluestore_freelist_blocks_per_key", Option::TYPE_INT, Option::LEVEL_DEV)
     .set_default(128)
