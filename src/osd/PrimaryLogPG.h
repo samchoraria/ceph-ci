@@ -536,7 +536,7 @@ public:
     interval_set<uint64_t> modified_ranges;
     ObjectContextRef obc;
     ObjectContextRef clone_obc;    // if we created a clone
-    ObjectContextRef snapset_obc;  // if we created/deleted a snapdir
+    ObjectContextRef head_obc;     // if we also update snapset (see trim_object)
 
     // FIXME: we may want to kill this msgr hint off at some point!
     boost::optional<int> data_off = boost::none;
@@ -756,7 +756,7 @@ protected:
    * @return true on success, false if we are queued
    */
   bool get_rw_locks(bool write_ordered, OpContext *ctx) {
-    /* If snapset_obc, !obc->obs->exists and we will always take the
+    /* If head_obc, !obc->obs->exists and we will always take the
      * snapdir lock *before* the head lock.  Since all callers will do
      * this (read or write) if we get the first we will be guaranteed
      * to get the second.
@@ -770,12 +770,12 @@ protected:
       ctx->lock_type = ObjectContext::RWState::RWREAD;
     }
 
-    if (ctx->snapset_obc) {
+    if (ctx->head_obc) {
       assert(!ctx->obc->obs.exists);
       if (!ctx->lock_manager.get_lock_type(
 	    ctx->lock_type,
-	    ctx->snapset_obc->obs.oi.soid,
-	    ctx->snapset_obc,
+	    ctx->head_obc->obs.oi.soid,
+	    ctx->head_obc,
 	    ctx->op)) {
 	ctx->lock_type = ObjectContext::RWState::RWNONE;
 	return false;
@@ -788,7 +788,7 @@ protected:
 	  ctx->op)) {
       return true;
     } else {
-      assert(!ctx->snapset_obc);
+      assert(!ctx->head_obc);
       ctx->lock_type = ObjectContext::RWState::RWNONE;
       return false;
     }
@@ -1745,7 +1745,7 @@ public:
     const hobject_t& oid, ObjectContextRef obc, OpRequestRef op);
   void block_write_on_degraded_snap(const hobject_t& oid, OpRequestRef op);
 
-  bool maybe_await_blocked_snapset(const hobject_t &soid, OpRequestRef op);
+  bool maybe_await_blocked_head(const hobject_t &soid, OpRequestRef op);
   void wait_for_blocked_object(const hobject_t& soid, OpRequestRef op);
   void kick_object_context_blocked(ObjectContextRef obc);
 
