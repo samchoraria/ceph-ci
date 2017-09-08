@@ -7025,13 +7025,6 @@ bool OSDMonitor::prepare_command_impl(MonOpRequestRef op,
     goto update;
 
   } else if (prefix == "osd crush set-device-class") {
-    if (osdmap.require_osd_release < CEPH_RELEASE_LUMINOUS) {
-      ss << "you must complete the upgrade and 'ceph osd require-osd-release "
-         << "luminous' before using crush device classes";
-      err = -EPERM;
-      goto reply;
-    }
-
     string device_class;
     if (!cmd_getval(g_ceph_context, cmdmap, "class", device_class)) {
       err = -EINVAL; // no value!
@@ -7303,16 +7296,6 @@ bool OSDMonitor::prepare_command_impl(MonOpRequestRef op,
       goto reply;
     }
     if (prefix == "osd crush weight-set create") {
-      if (osdmap.require_min_compat_client > 0 &&
-	  osdmap.require_min_compat_client < CEPH_RELEASE_LUMINOUS) {
-	ss << "require_min_compat_client "
-	   << ceph_release_name(osdmap.require_min_compat_client)
-	   << " < luminous, which is required for per-pool weight-sets. "
-           << "Try 'ceph osd set-require-min-compat-client luminous' "
-           << "before using the new interface";
-	err = -EPERM;
-	goto reply;
-      }
       string poolname, mode;
       cmd_getval(g_ceph_context, cmdmap, "pool", poolname);
       pool = osdmap.lookup_pg_pool_name(poolname.c_str());
@@ -7952,15 +7935,6 @@ bool OSDMonitor::prepare_command_impl(MonOpRequestRef op,
     cmd_getval(g_ceph_context, cmdmap, "type", type);
     cmd_getval(g_ceph_context, cmdmap, "class", device_class);
 
-    if (!device_class.empty()) {
-      if (osdmap.require_osd_release < CEPH_RELEASE_LUMINOUS) {
-        ss << "you must complete the upgrade and 'ceph osd require-osd-release "
-           << "luminous' before using crush device classes";
-        err = -EPERM;
-        goto reply;
-      }
-    }
-
     if (osdmap.crush->rule_exists(name)) {
       // The name is uniquely associated to a ruleid and the rule it contains
       // From the user point of view, the rule is more meaningfull.
@@ -8288,12 +8262,6 @@ bool OSDMonitor::prepare_command_impl(MonOpRequestRef op,
   } else if (prefix == "osd set-full-ratio" ||
 	     prefix == "osd set-backfillfull-ratio" ||
              prefix == "osd set-nearfull-ratio") {
-    if (osdmap.require_osd_release < CEPH_RELEASE_LUMINOUS) {
-      ss << "you must complete the upgrade and 'ceph osd require-osd-release "
-	 << "luminous' before using the new interface";
-      err = -EPERM;
-      goto reply;
-    }
     double n;
     if (!cmd_getval(g_ceph_context, cmdmap, "ratio", n)) {
       ss << "unable to parse 'ratio' value '"
@@ -8313,12 +8281,6 @@ bool OSDMonitor::prepare_command_impl(MonOpRequestRef op,
 					      get_last_committed() + 1));
     return true;
   } else if (prefix == "osd set-require-min-compat-client") {
-    if (osdmap.require_osd_release < CEPH_RELEASE_LUMINOUS) {
-      ss << "you must complete the upgrade and 'ceph osd require-osd-release "
-	 << "luminous' before using the new interface";
-      err = -EPERM;
-      goto reply;
-    }
     string v;
     cmd_getval(g_ceph_context, cmdmap, "version", v);
     int vno = ceph_release_from_name(v.c_str());
@@ -9083,21 +9045,6 @@ bool OSDMonitor::prepare_command_impl(MonOpRequestRef op,
              prefix == "osd rm-pg-upmap" ||
              prefix == "osd pg-upmap-items" ||
              prefix == "osd rm-pg-upmap-items") {
-    if (osdmap.require_osd_release < CEPH_RELEASE_LUMINOUS) {
-      ss << "you must complete the upgrade and 'ceph osd require-osd-release "
-	 << "luminous' before using the new interface";
-      err = -EPERM;
-      goto reply;
-    }
-    if (osdmap.require_min_compat_client < CEPH_RELEASE_LUMINOUS) {
-      ss << "min_compat_client "
-	 << ceph_release_name(osdmap.require_min_compat_client)
-	 << " < luminous, which is required for pg-upmap. "
-         << "Try 'ceph osd set-require-min-compat-client luminous' "
-         << "before using the new interface";
-      err = -EPERM;
-      goto reply;
-    }
     err = check_cluster_features(CEPH_FEATUREMASK_OSDMAP_PG_UPMAP, ss);
     if (err == -EAGAIN)
       goto wait;
