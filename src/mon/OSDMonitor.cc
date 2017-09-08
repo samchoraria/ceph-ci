@@ -910,136 +910,41 @@ void OSDMonitor::encode_pending(MonitorDBStore::TransactionRef t)
     tmp.deepish_copy_from(osdmap);
     tmp.apply_incremental(pending_inc);
 
-    if (tmp.require_osd_release >= CEPH_RELEASE_LUMINOUS) {
-      // set or clear full/nearfull?
-      int full, backfill, nearfull;
-      tmp.count_full_nearfull_osds(&full, &backfill, &nearfull);
-      if (full > 0) {
-	if (!tmp.test_flag(CEPH_OSDMAP_FULL)) {
-	  dout(10) << __func__ << " setting full flag" << dendl;
-	  add_flag(CEPH_OSDMAP_FULL);
-	  remove_flag(CEPH_OSDMAP_NEARFULL);
+    // set or clear full/nearfull?
+    int full, backfill, nearfull;
+    tmp.count_full_nearfull_osds(&full, &backfill, &nearfull);
+    if (full > 0) {
+      if (!tmp.test_flag(CEPH_OSDMAP_FULL)) {
+	dout(10) << __func__ << " setting full flag" << dendl;
+	add_flag(CEPH_OSDMAP_FULL);
+	remove_flag(CEPH_OSDMAP_NEARFULL);
+      }
+    } else {
+      if (tmp.test_flag(CEPH_OSDMAP_FULL)) {
+	dout(10) << __func__ << " clearing full flag" << dendl;
+	remove_flag(CEPH_OSDMAP_FULL);
+      }
+      if (nearfull > 0) {
+	if (!tmp.test_flag(CEPH_OSDMAP_NEARFULL)) {
+	  dout(10) << __func__ << " setting nearfull flag" << dendl;
+	  add_flag(CEPH_OSDMAP_NEARFULL);
 	}
       } else {
-	if (tmp.test_flag(CEPH_OSDMAP_FULL)) {
-	  dout(10) << __func__ << " clearing full flag" << dendl;
-	  remove_flag(CEPH_OSDMAP_FULL);
-	}
-	if (nearfull > 0) {
-	  if (!tmp.test_flag(CEPH_OSDMAP_NEARFULL)) {
-	    dout(10) << __func__ << " setting nearfull flag" << dendl;
-	    add_flag(CEPH_OSDMAP_NEARFULL);
-	  }
-	} else {
-	  if (tmp.test_flag(CEPH_OSDMAP_NEARFULL)) {
-	    dout(10) << __func__ << " clearing nearfull flag" << dendl;
-	    remove_flag(CEPH_OSDMAP_NEARFULL);
-	  }
+	if (tmp.test_flag(CEPH_OSDMAP_NEARFULL)) {
+	  dout(10) << __func__ << " clearing nearfull flag" << dendl;
+	  remove_flag(CEPH_OSDMAP_NEARFULL);
 	}
       }
+    }
 
-      // min_compat_client?
-      if (tmp.require_min_compat_client == 0) {
-	auto mv = tmp.get_min_compat_client();
-	dout(1) << __func__ << " setting require_min_compat_client to currently "
-		<< "required " << ceph_release_name(mv) << dendl;
-	mon->clog->info() << "setting require_min_compat_client to currently "
-			  << "required " << ceph_release_name(mv);
-	pending_inc.new_require_min_compat_client = mv;
-      }
-
-      if (osdmap.require_osd_release < CEPH_RELEASE_LUMINOUS) {
-	// convert ec profile ruleset-* -> crush-*
-	for (auto& p : tmp.erasure_code_profiles) {
-	  bool changed = false;
-	  map<string,string> newprofile;
-	  for (auto& q : p.second) {
-	    if (q.first.find("ruleset-") == 0) {
-	      string key = "crush-";
-	      key += q.first.substr(8);
-	      newprofile[key] = q.second;
-	      changed = true;
-	      dout(20) << " updating ec profile " << p.first
-		       << " key " << q.first << " -> " << key << dendl;
-	    } else {
-	      newprofile[q.first] = q.second;
-	    }
-	  }
-	  if (changed) {
-	    dout(10) << " updated ec profile " << p.first << ": "
-		     << newprofile << dendl;
-	    pending_inc.new_erasure_code_profiles[p.first] = newprofile;
-	  }
-	}
-
-        // auto-enable pool applications upon upgrade
-        // NOTE: this can be removed post-Luminous assuming upgrades need to
-        // proceed through Luminous
-        for (auto &pool_pair : tmp.pools) {
-          int64_t pool_id = pool_pair.first;
-          pg_pool_t pg_pool = pool_pair.second;
-          if (pg_pool.is_tier()) {
-            continue;
-          }
-
-          std::string pool_name = tmp.get_pool_name(pool_id);
-          uint32_t match_count = 0;
-
-          // CephFS
-          FSMap const &pending_fsmap = mon->mdsmon()->get_pending();
-          if (pending_fsmap.pool_in_use(pool_id)) {
-            dout(10) << __func__ << " auto-enabling CephFS on pool '"
-                     << pool_name << "'" << dendl;
-            pg_pool.application_metadata.insert(
-              {pg_pool_t::APPLICATION_NAME_CEPHFS, {}});
-            ++match_count;
-          }
-
-          // RBD heuristics (default OpenStack pool names from docs and
-          // ceph-ansible)
-          if (boost::algorithm::contains(pool_name, "rbd") ||
-              pool_name == "images" || pool_name == "volumes" ||
-              pool_name == "backups" || pool_name == "vms") {
-            dout(10) << __func__ << " auto-enabling RBD on pool '"
-                     << pool_name << "'" << dendl;
-            pg_pool.application_metadata.insert(
-              {pg_pool_t::APPLICATION_NAME_RBD, {}});
-            ++match_count;
-          }
-
-          // RGW heuristics
-          if (boost::algorithm::contains(pool_name, ".rgw") ||
-              boost::algorithm::contains(pool_name, ".log") ||
-              boost::algorithm::contains(pool_name, ".intent-log") ||
-              boost::algorithm::contains(pool_name, ".usage") ||
-              boost::algorithm::contains(pool_name, ".users")) {
-            dout(10) << __func__ << " auto-enabling RGW on pool '"
-                     << pool_name << "'" << dendl;
-            pg_pool.application_metadata.insert(
-              {pg_pool_t::APPLICATION_NAME_RGW, {}});
-            ++match_count;
-          }
-
-          // OpenStack gnocchi (from ceph-ansible)
-          if (pool_name == "metrics" && match_count == 0) {
-            dout(10) << __func__ << " auto-enabling OpenStack Gnocchi on pool '"
-                     << pool_name << "'" << dendl;
-            pg_pool.application_metadata.insert({"openstack_gnocchi", {}});
-            ++match_count;
-          }
-
-          if (match_count == 1) {
-            pg_pool.last_change = pending_inc.epoch;
-            pending_inc.new_pools[pool_id] = pg_pool;
-          } else if (match_count > 1) {
-            auto pstat = mon->mgrstatmon()->get_pool_stat(pool_id);
-            if (pstat != nullptr && pstat->stats.sum.num_objects > 0) {
-              mon->clog->info() << "unable to auto-enable application for pool "
-                                << "'" << pool_name << "'";
-            }
-          }
-        }
-      }
+    // min_compat_client?
+    if (tmp.require_min_compat_client == 0) {
+      auto mv = tmp.get_min_compat_client();
+      dout(1) << __func__ << " setting require_min_compat_client to currently "
+	      << "required " << ceph_release_name(mv) << dendl;
+      mon->clog->info() << "setting require_min_compat_client to currently "
+			<< "required " << ceph_release_name(mv);
+      pending_inc.new_require_min_compat_client = mv;
     }
   }
 
