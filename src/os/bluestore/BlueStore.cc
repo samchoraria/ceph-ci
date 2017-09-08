@@ -5434,7 +5434,9 @@ static void apply(uint64_t off,
                   BlueStore::mempool_dynamic_bitset &bitset,
                   std::function<void(uint64_t,
 				     BlueStore::mempool_dynamic_bitset &)> f) {
-  auto end = ROUND_UP_TO(off + len, granularity);
+  assert(off % granularity == 0);
+  assert(len % granularity == 0);
+  auto end = off + len;
   while (off < end) {
     uint64_t pos = off / granularity;
     f(pos, bitset);
