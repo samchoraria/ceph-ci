@@ -780,6 +780,7 @@ int RGWReshard::process_single_logshard(int logshard_num)
 
   utime_t lock_start_time = ceph_clock_now();
 
+  try {
   do {
     std::list<cls_rgw_reshard_entry> entries;
     ret = list(logshard_num, marker, max_entries, entries, &truncated);
@@ -802,7 +803,8 @@ int RGWReshard::process_single_logshard(int logshard_num)
                                    &attrs);
 	if (ret < 0) {
 	  ldout(cct, 0) <<  __func__ << ": Error in get_bucket_info: " << cpp_strerror(-ret) << dendl;
-	  return -ret;
+	  ret = -ret;
+          throw ret;
 	}
 
 	RGWBucketReshard br(store, bucket_info, attrs);
@@ -813,7 +815,7 @@ int RGWReshard::process_single_logshard(int logshard_num)
 	if (ret < 0) {
 	  ldout (store->ctx(), 0) <<  __func__ << "ERROR in reshard_bucket " << entry.bucket_name << ":" <<
 	    cpp_strerror(-ret)<< dendl;
-	  return ret;
+	  throw ret;
 	}
 
 	ldout (store->ctx(), 20) <<  " removing entry" << entry.bucket_name<< dendl;
@@ -822,7 +824,7 @@ int RGWReshard::process_single_logshard(int logshard_num)
 	if (ret < 0) {
 	  ldout(cct, 0)<< __func__ << ":Error removing bucket " << entry.bucket_name << " for resharding queue: "
 		       << cpp_strerror(-ret) << dendl;
-	  return ret;
+	  throw ret;
 	}
       }
       utime_t now = ceph_clock_now();
@@ -839,6 +841,10 @@ int RGWReshard::process_single_logshard(int logshard_num)
       entry.get_key(&marker);
     }
   } while (truncated);
+  } catch (const int err) {
+    l.unlock(&store->reshard_pool_ctx, logshard_oid);
+    return ret;
+  }
 
   l.unlock(&store->reshard_pool_ctx, logshard_oid);
   return 0;
