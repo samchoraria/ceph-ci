@@ -344,20 +344,17 @@ void OSDMonitor::update_from_paxos(bool *need_bootstrap)
     osdmap.decode(latest_bl);
   }
 
-  if (mon->monmap->get_required_features().contains_all(
-	ceph::features::mon::FEATURE_LUMINOUS)) {
-    bufferlist bl;
-    if (!mon->store->get(OSD_PG_CREATING_PREFIX, "creating", bl)) {
-      auto p = bl.begin();
-      std::lock_guard<std::mutex> l(creating_pgs_lock);
-      creating_pgs.decode(p);
-      dout(7) << __func__ << " loading creating_pgs last_scan_epoch "
-	      << creating_pgs.last_scan_epoch
-	      << " with " << creating_pgs.pgs.size() << " pgs" << dendl;
-    } else {
-      dout(1) << __func__ << " missing creating pgs; upgrade from post-kraken?"
-	      << dendl;
-    }
+  bufferlist bl;
+  if (!mon->store->get(OSD_PG_CREATING_PREFIX, "creating", bl)) {
+    auto p = bl.begin();
+    std::lock_guard<std::mutex> l(creating_pgs_lock);
+    creating_pgs.decode(p);
+    dout(7) << __func__ << " loading creating_pgs last_scan_epoch "
+	    << creating_pgs.last_scan_epoch
+	    << " with " << creating_pgs.pgs.size() << " pgs" << dendl;
+  } else {
+    dout(1) << __func__ << " missing creating pgs; upgrade from post-kraken?"
+	    << dendl;
   }
 
   // walk through incrementals
@@ -426,17 +423,14 @@ void OSDMonitor::update_from_paxos(bool *need_bootstrap)
       t = MonitorDBStore::TransactionRef();
       tx_size = 0;
     }
-    if (mon->monmap->get_required_features().contains_all(
-          ceph::features::mon::FEATURE_LUMINOUS)) {
-      for (const auto &osd_state : inc.new_state) {
-	if (osd_state.second & CEPH_OSD_UP) {
-	  // could be marked up *or* down, but we're too lazy to check which
-	  last_osd_report.erase(osd_state.first);
-	}
-	if (osd_state.second & CEPH_OSD_EXISTS) {
-	  // could be created *or* destroyed, but we can safely drop it
-	  osd_epochs.erase(osd_state.first);
-	}
+    for (const auto &osd_state : inc.new_state) {
+      if (osd_state.second & CEPH_OSD_UP) {
+	// could be marked up *or* down, but we're too lazy to check which
+	last_osd_report.erase(osd_state.first);
+      }
+      if (osd_state.second & CEPH_OSD_EXISTS) {
+	// could be created *or* destroyed, but we can safely drop it
+	osd_epochs.erase(osd_state.first);
       }
     }
   }
@@ -916,136 +910,41 @@ void OSDMonitor::encode_pending(MonitorDBStore::TransactionRef t)
     tmp.deepish_copy_from(osdmap);
     tmp.apply_incremental(pending_inc);
 
-    if (tmp.require_osd_release >= CEPH_RELEASE_LUMINOUS) {
-      // set or clear full/nearfull?
-      int full, backfill, nearfull;
-      tmp.count_full_nearfull_osds(&full, &backfill, &nearfull);
-      if (full > 0) {
-	if (!tmp.test_flag(CEPH_OSDMAP_FULL)) {
-	  dout(10) << __func__ << " setting full flag" << dendl;
-	  add_flag(CEPH_OSDMAP_FULL);
-	  remove_flag(CEPH_OSDMAP_NEARFULL);
+    // set or clear full/nearfull?
+    int full, backfill, nearfull;
+    tmp.count_full_nearfull_osds(&full, &backfill, &nearfull);
+    if (full > 0) {
+      if (!tmp.test_flag(CEPH_OSDMAP_FULL)) {
+	dout(10) << __func__ << " setting full flag" << dendl;
+	add_flag(CEPH_OSDMAP_FULL);
+	remove_flag(CEPH_OSDMAP_NEARFULL);
+      }
+    } else {
+      if (tmp.test_flag(CEPH_OSDMAP_FULL)) {
+	dout(10) << __func__ << " clearing full flag" << dendl;
+	remove_flag(CEPH_OSDMAP_FULL);
+      }
+      if (nearfull > 0) {
+	if (!tmp.test_flag(CEPH_OSDMAP_NEARFULL)) {
+	  dout(10) << __func__ << " setting nearfull flag" << dendl;
+	  add_flag(CEPH_OSDMAP_NEARFULL);
 	}
       } else {
-	if (tmp.test_flag(CEPH_OSDMAP_FULL)) {
-	  dout(10) << __func__ << " clearing full flag" << dendl;
-	  remove_flag(CEPH_OSDMAP_FULL);
-	}
-	if (nearfull > 0) {
-	  if (!tmp.test_flag(CEPH_OSDMAP_NEARFULL)) {
-	    dout(10) << __func__ << " setting nearfull flag" << dendl;
-	    add_flag(CEPH_OSDMAP_NEARFULL);
-	  }
-	} else {
-	  if (tmp.test_flag(CEPH_OSDMAP_NEARFULL)) {
-	    dout(10) << __func__ << " clearing nearfull flag" << dendl;
-	    remove_flag(CEPH_OSDMAP_NEARFULL);
-	  }
+	if (tmp.test_flag(CEPH_OSDMAP_NEARFULL)) {
+	  dout(10) << __func__ << " clearing nearfull flag" << dendl;
+	  remove_flag(CEPH_OSDMAP_NEARFULL);
 	}
       }
+    }
 
-      // min_compat_client?
-      if (tmp.require_min_compat_client == 0) {
-	auto mv = tmp.get_min_compat_client();
-	dout(1) << __func__ << " setting require_min_compat_client to currently "
-		<< "required " << ceph_release_name(mv) << dendl;
-	mon->clog->info() << "setting require_min_compat_client to currently "
-			  << "required " << ceph_release_name(mv);
-	pending_inc.new_require_min_compat_client = mv;
-      }
-
-      if (osdmap.require_osd_release < CEPH_RELEASE_LUMINOUS) {
-	// convert ec profile ruleset-* -> crush-*
-	for (auto& p : tmp.erasure_code_profiles) {
-	  bool changed = false;
-	  map<string,string> newprofile;
-	  for (auto& q : p.second) {
-	    if (q.first.find("ruleset-") == 0) {
-	      string key = "crush-";
-	      key += q.first.substr(8);
-	      newprofile[key] = q.second;
-	      changed = true;
-	      dout(20) << " updating ec profile " << p.first
-		       << " key " << q.first << " -> " << key << dendl;
-	    } else {
-	      newprofile[q.first] = q.second;
-	    }
-	  }
-	  if (changed) {
-	    dout(10) << " updated ec profile " << p.first << ": "
-		     << newprofile << dendl;
-	    pending_inc.new_erasure_code_profiles[p.first] = newprofile;
-	  }
-	}
-
-        // auto-enable pool applications upon upgrade
-        // NOTE: this can be removed post-Luminous assuming upgrades need to
-        // proceed through Luminous
-        for (auto &pool_pair : tmp.pools) {
-          int64_t pool_id = pool_pair.first;
-          pg_pool_t pg_pool = pool_pair.second;
-          if (pg_pool.is_tier()) {
-            continue;
-          }
-
-          std::string pool_name = tmp.get_pool_name(pool_id);
-          uint32_t match_count = 0;
-
-          // CephFS
-          FSMap const &pending_fsmap = mon->mdsmon()->get_pending();
-          if (pending_fsmap.pool_in_use(pool_id)) {
-            dout(10) << __func__ << " auto-enabling CephFS on pool '"
-                     << pool_name << "'" << dendl;
-            pg_pool.application_metadata.insert(
-              {pg_pool_t::APPLICATION_NAME_CEPHFS, {}});
-            ++match_count;
-          }
-
-          // RBD heuristics (default OpenStack pool names from docs and
-          // ceph-ansible)
-          if (boost::algorithm::contains(pool_name, "rbd") ||
-              pool_name == "images" || pool_name == "volumes" ||
-              pool_name == "backups" || pool_name == "vms") {
-            dout(10) << __func__ << " auto-enabling RBD on pool '"
-                     << pool_name << "'" << dendl;
-            pg_pool.application_metadata.insert(
-              {pg_pool_t::APPLICATION_NAME_RBD, {}});
-            ++match_count;
-          }
-
-          // RGW heuristics
-          if (boost::algorithm::contains(pool_name, ".rgw") ||
-              boost::algorithm::contains(pool_name, ".log") ||
-              boost::algorithm::contains(pool_name, ".intent-log") ||
-              boost::algorithm::contains(pool_name, ".usage") ||
-              boost::algorithm::contains(pool_name, ".users")) {
-            dout(10) << __func__ << " auto-enabling RGW on pool '"
-                     << pool_name << "'" << dendl;
-            pg_pool.application_metadata.insert(
-              {pg_pool_t::APPLICATION_NAME_RGW, {}});
-            ++match_count;
-          }
-
-          // OpenStack gnocchi (from ceph-ansible)
-          if (pool_name == "metrics" && match_count == 0) {
-            dout(10) << __func__ << " auto-enabling OpenStack Gnocchi on pool '"
-                     << pool_name << "'" << dendl;
-            pg_pool.application_metadata.insert({"openstack_gnocchi", {}});
-            ++match_count;
-          }
-
-          if (match_count == 1) {
-            pg_pool.last_change = pending_inc.epoch;
-            pending_inc.new_pools[pool_id] = pg_pool;
-          } else if (match_count > 1) {
-            auto pstat = mon->mgrstatmon()->get_pool_stat(pool_id);
-            if (pstat != nullptr && pstat->stats.sum.num_objects > 0) {
-              mon->clog->info() << "unable to auto-enable application for pool "
-                                << "'" << pool_name << "'";
-            }
-          }
-        }
-      }
+    // min_compat_client?
+    if (tmp.require_min_compat_client == 0) {
+      auto mv = tmp.get_min_compat_client();
+      dout(1) << __func__ << " setting require_min_compat_client to currently "
+	      << "required " << ceph_release_name(mv) << dendl;
+      mon->clog->info() << "setting require_min_compat_client to currently "
+			<< "required " << ceph_release_name(mv);
+      pending_inc.new_require_min_compat_client = mv;
     }
   }
 
@@ -1142,13 +1041,10 @@ void OSDMonitor::encode_pending(MonitorDBStore::TransactionRef t)
   pending_metadata_rm.clear();
 
   // and pg creating, also!
-  if (mon->monmap->get_required_features().contains_all(
-	ceph::features::mon::FEATURE_LUMINOUS)) {
-    auto pending_creatings = update_pending_pgs(pending_inc);
-    bufferlist creatings_bl;
-    ::encode(pending_creatings, creatings_bl);
-    t->put(OSD_PG_CREATING_PREFIX, "creating", creatings_bl);
-  }
+  auto pending_creatings = update_pending_pgs(pending_inc);
+  bufferlist creatings_bl;
+  ::encode(pending_creatings, creatings_bl);
+  t->put(OSD_PG_CREATING_PREFIX, "creating", creatings_bl);
 
   // health
   health_check_map_t next;
@@ -2127,42 +2023,13 @@ bool OSDMonitor::preprocess_boot(MonOpRequestRef op)
     }
   }
 
-  // make sure upgrades stop at luminous
-  if (HAVE_FEATURE(m->osd_features, SERVER_MIMIC) &&
-      osdmap.require_osd_release < CEPH_RELEASE_LUMINOUS) {
-    mon->clog->info() << "disallowing boot of post-luminous OSD "
+  // make sure upgrades stop at nautilus
+  if (HAVE_FEATURE(m->osd_features, SERVER_O) &&
+      osdmap.require_osd_release < CEPH_RELEASE_NAUTILUS) {
+    mon->clog->info() << "disallowing boot of post-nautilus OSD "
 		      << m->get_orig_source_inst()
-		      << " because require_osd_release < luminous";
+		      << " because require_osd_release < nautilus";
     goto ignore;
-  }
-
-  // make sure upgrades stop at jewel
-  if (HAVE_FEATURE(m->osd_features, SERVER_KRAKEN) &&
-      osdmap.require_osd_release < CEPH_RELEASE_JEWEL) {
-    mon->clog->info() << "disallowing boot of post-jewel OSD "
-		      << m->get_orig_source_inst()
-		      << " because require_osd_release < jewel";
-    goto ignore;
-  }
-
-  // make sure upgrades stop at hammer
-  //  * HAMMER_0_94_4 is the required hammer feature
-  //  * MON_METADATA is the first post-hammer feature
-  if (osdmap.get_num_up_osds() > 0) {
-    if ((m->osd_features & CEPH_FEATURE_MON_METADATA) &&
-	!(osdmap.get_up_osd_features() & CEPH_FEATURE_HAMMER_0_94_4)) {
-      mon->clog->info() << "disallowing boot of post-hammer OSD "
-			<< m->get_orig_source_inst()
-			<< " because one or more up OSDs is pre-hammer v0.94.4";
-      goto ignore;
-    }
-    if (!(m->osd_features & CEPH_FEATURE_HAMMER_0_94_4) &&
-	(osdmap.get_up_osd_features() & CEPH_FEATURE_MON_METADATA)) {
-      mon->clog->info() << "disallowing boot of pre-hammer v0.94.4 OSD "
-			<< m->get_orig_source_inst()
-			<< " because all up OSDs are post-hammer";
-      goto ignore;
-    }
   }
 
   // already booted?
@@ -3089,8 +2956,7 @@ void OSDMonitor::do_application_enable(int64_t pool_id,
   dout(20) << __func__ << ": pool_id=" << pool_id << ", app_name=" << app_name
            << dendl;
 
-  assert(osdmap.require_osd_release >= CEPH_RELEASE_LUMINOUS ||
-	 pending_inc.new_require_osd_release >= CEPH_RELEASE_LUMINOUS);
+  assert(osdmap.require_osd_release >= CEPH_RELEASE_LUMINOUS);
 
   auto pp = osdmap.get_pg_pool(pool_id);
   assert(pp != nullptr);
@@ -3246,20 +3112,7 @@ void OSDMonitor::tick()
   bool do_propose = false;
   utime_t now = ceph_clock_now();
 
-  if (osdmap.require_osd_release >= CEPH_RELEASE_LUMINOUS &&
-      mon->monmap->get_required_features().contains_all(
-	ceph::features::mon::FEATURE_LUMINOUS)) {
-    if (handle_osd_timeouts(now, last_osd_report)) {
-      do_propose = true;
-    }
-  }
-  if (!osdmap.test_flag(CEPH_OSDMAP_PURGED_SNAPDIRS) &&
-      osdmap.require_osd_release >= CEPH_RELEASE_LUMINOUS &&
-      mon->mgrstatmon()->is_readable() &&
-      mon->mgrstatmon()->definitely_converted_snapsets()) {
-    dout(1) << __func__ << " all snapsets converted, setting purged_snapdirs"
-	    << dendl;
-    add_flag(CEPH_OSDMAP_PURGED_SNAPDIRS);
+  if (handle_osd_timeouts(now, last_osd_report)) {
     do_propose = true;
   }
 
@@ -7025,13 +6878,6 @@ bool OSDMonitor::prepare_command_impl(MonOpRequestRef op,
     goto update;
 
   } else if (prefix == "osd crush set-device-class") {
-    if (osdmap.require_osd_release < CEPH_RELEASE_LUMINOUS) {
-      ss << "you must complete the upgrade and 'ceph osd require-osd-release "
-         << "luminous' before using crush device classes";
-      err = -EPERM;
-      goto reply;
-    }
-
     string device_class;
     if (!cmd_getval(g_ceph_context, cmdmap, "class", device_class)) {
       err = -EINVAL; // no value!
@@ -7303,16 +7149,6 @@ bool OSDMonitor::prepare_command_impl(MonOpRequestRef op,
       goto reply;
     }
     if (prefix == "osd crush weight-set create") {
-      if (osdmap.require_min_compat_client > 0 &&
-	  osdmap.require_min_compat_client < CEPH_RELEASE_LUMINOUS) {
-	ss << "require_min_compat_client "
-	   << ceph_release_name(osdmap.require_min_compat_client)
-	   << " < luminous, which is required for per-pool weight-sets. "
-           << "Try 'ceph osd set-require-min-compat-client luminous' "
-           << "before using the new interface";
-	err = -EPERM;
-	goto reply;
-      }
       string poolname, mode;
       cmd_getval(g_ceph_context, cmdmap, "pool", poolname);
       pool = osdmap.lookup_pg_pool_name(poolname.c_str());
@@ -7952,15 +7788,6 @@ bool OSDMonitor::prepare_command_impl(MonOpRequestRef op,
     cmd_getval(g_ceph_context, cmdmap, "type", type);
     cmd_getval(g_ceph_context, cmdmap, "class", device_class);
 
-    if (!device_class.empty()) {
-      if (osdmap.require_osd_release < CEPH_RELEASE_LUMINOUS) {
-        ss << "you must complete the upgrade and 'ceph osd require-osd-release "
-           << "luminous' before using crush device classes";
-        err = -EPERM;
-        goto reply;
-      }
-    }
-
     if (osdmap.crush->rule_exists(name)) {
       // The name is uniquely associated to a ruleid and the rule it contains
       // From the user point of view, the rule is more meaningfull.
@@ -8288,12 +8115,6 @@ bool OSDMonitor::prepare_command_impl(MonOpRequestRef op,
   } else if (prefix == "osd set-full-ratio" ||
 	     prefix == "osd set-backfillfull-ratio" ||
              prefix == "osd set-nearfull-ratio") {
-    if (osdmap.require_osd_release < CEPH_RELEASE_LUMINOUS) {
-      ss << "you must complete the upgrade and 'ceph osd require-osd-release "
-	 << "luminous' before using the new interface";
-      err = -EPERM;
-      goto reply;
-    }
     double n;
     if (!cmd_getval(g_ceph_context, cmdmap, "ratio", n)) {
       ss << "unable to parse 'ratio' value '"
@@ -8313,12 +8134,6 @@ bool OSDMonitor::prepare_command_impl(MonOpRequestRef op,
 					      get_last_committed() + 1));
     return true;
   } else if (prefix == "osd set-require-min-compat-client") {
-    if (osdmap.require_osd_release < CEPH_RELEASE_LUMINOUS) {
-      ss << "you must complete the upgrade and 'ceph osd require-osd-release "
-	 << "luminous' before using the new interface";
-      err = -EPERM;
-      goto reply;
-    }
     string v;
     cmd_getval(g_ceph_context, cmdmap, "version", v);
     int vno = ceph_release_from_name(v.c_str());
@@ -8528,13 +8343,8 @@ bool OSDMonitor::prepare_command_impl(MonOpRequestRef op,
       err = 0;
       goto reply;
     }
-    if (rel == CEPH_RELEASE_LUMINOUS) {
-      if (!HAVE_FEATURE(osdmap.get_up_osd_features(), SERVER_LUMINOUS)) {
-	ss << "not all up OSDs have CEPH_FEATURE_SERVER_LUMINOUS feature";
-	err = -EPERM;
-	goto reply;
-      }
-    } else if (rel == CEPH_RELEASE_MIMIC) {
+    assert(osdmap.require_osd_release >= CEPH_RELEASE_LUMINOUS);
+    if (rel == CEPH_RELEASE_MIMIC) {
       if (!HAVE_FEATURE(osdmap.get_up_osd_features(), SERVER_MIMIC)) {
 	ss << "not all up OSDs have CEPH_FEATURE_SERVER_MIMIC feature";
 	err = -EPERM;
@@ -8551,10 +8361,6 @@ bool OSDMonitor::prepare_command_impl(MonOpRequestRef op,
       goto reply;
     }
     pending_inc.new_require_osd_release = rel;
-    if (rel >= CEPH_RELEASE_LUMINOUS &&
-	!osdmap.test_flag(CEPH_OSDMAP_RECOVERY_DELETES)) {
-      return prepare_set_flag(op, CEPH_OSDMAP_RECOVERY_DELETES);
-    }
     goto update;
   } else if (prefix == "osd cluster_snap") {
     // ** DISABLE THIS FOR NOW **
@@ -9092,21 +8898,6 @@ bool OSDMonitor::prepare_command_impl(MonOpRequestRef op,
              prefix == "osd rm-pg-upmap" ||
              prefix == "osd pg-upmap-items" ||
              prefix == "osd rm-pg-upmap-items") {
-    if (osdmap.require_osd_release < CEPH_RELEASE_LUMINOUS) {
-      ss << "you must complete the upgrade and 'ceph osd require-osd-release "
-	 << "luminous' before using the new interface";
-      err = -EPERM;
-      goto reply;
-    }
-    if (osdmap.require_min_compat_client < CEPH_RELEASE_LUMINOUS) {
-      ss << "min_compat_client "
-	 << ceph_release_name(osdmap.require_min_compat_client)
-	 << " < luminous, which is required for pg-upmap. "
-         << "Try 'ceph osd set-require-min-compat-client luminous' "
-         << "before using the new interface";
-      err = -EPERM;
-      goto reply;
-    }
     err = check_cluster_features(CEPH_FEATUREMASK_OSDMAP_PG_UPMAP, ss);
     if (err == -EAGAIN)
       goto wait;
