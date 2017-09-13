@@ -1146,9 +1146,7 @@ protected:
     map<int,
       vector<pair<pg_notify_t, PastIntervals> > > *activator_map,
     RecoveryCtx *ctx);
-public:
   void _activate_committed(epoch_t epoch, epoch_t activation_epoch);
-protected:
   void all_activated_and_committed();
 
   void proc_primary_info(ObjectStore::Transaction &t, const pg_info_t &info);

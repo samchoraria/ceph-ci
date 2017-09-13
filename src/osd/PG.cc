@@ -1506,17 +1506,6 @@ void PG::build_might_have_unfound()
   dout(15) << __func__ << ": built " << might_have_unfound << dendl;
 }
 
-struct C_PG_ActivateCommitted : public Context {
-  PGRef pg;
-  epoch_t epoch;
-  epoch_t activation_epoch;
-  C_PG_ActivateCommitted(PG *p, epoch_t e, epoch_t ae)
-    : pg(p), epoch(e), activation_epoch(ae) {}
-  void finish(int r) override {
-    pg->_activate_committed(epoch, activation_epoch);
-  }
-};
-
 void PG::activate(ObjectStore::Transaction& t,
 		  epoch_t activation_epoch,
 		  list<Context*>& tfin,
@@ -1570,11 +1559,11 @@ void PG::activate(ObjectStore::Transaction& t,
   dirty_big_info = true; // maybe
 
   // find out when we commit
+  epoch_t e = get_osdmap()->get_epoch();
   t.register_on_complete(
-    new C_PG_ActivateCommitted(
-      this,
-      get_osdmap()->get_epoch(),
-      activation_epoch));
+    new FunctionContext([&](int r) {
+	_activate_committed(e, activation_epoch);
+      }));
   
   // initialize snap_trimq
   if (is_primary()) {
