@@ -1615,10 +1615,10 @@ bool BlueStore::OnodeSpace::map_any(std::function<bool(OnodeRef)> f)
   return false;
 }
 
-void BlueStore::OnodeSpace::dump(int lvl)
+void BlueStore::OnodeSpace::dump(CephContext *cct, int lvl)
 {
   for (auto& i : onode_map) {
-    dout(lvl) << i.first << " : " << *i.second << dendl;
+    ldout(cct, lvl) << i.first << " : " << i.second << dendl;
   }
 }
 
@@ -11572,7 +11572,7 @@ void BlueStore::_flush_cache()
   for (auto& p : coll_map) {
     if (!p.second->onode_map.empty()) {
       derr << __func__ << "stray onodes on " << p.first << dendl;
-      p.second->onode_map.dump(0);
+      p.second->onode_map.dump(cct, 0);
     }
     if (!p.second->shared_blob_set.empty()) {
       derr << __func__ << " stray shared blobs on " << p.first << dendl;

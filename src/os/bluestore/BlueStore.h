@@ -1320,7 +1320,7 @@ public:
     void clear();
     bool empty();
 
-    void dump(int lvl);
+    void dump(CephContext *cct, int lvl);
 
     /// return true if f true for any item
     bool map_any(std::function<bool(OnodeRef)> f);
