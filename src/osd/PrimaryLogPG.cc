@@ -10539,9 +10539,17 @@ void PrimaryLogPG::clear_async_reads()
   }
 }
 
+void PrimaryLogPG::shutdown()
+{
+  lock();
+  on_shutdown();
+  unlock();
+  osr->flush();
+}
+
 void PrimaryLogPG::on_shutdown()
 {
-  dout(10) << "on_shutdown" << dendl;
+  dout(10) << __func__ << dendl;
 
   // remove from queues
   osd->peering_wq.dequeue(this);

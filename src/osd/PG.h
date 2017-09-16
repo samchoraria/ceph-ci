@@ -386,6 +386,8 @@ public:
 
   void get_pg_stats(std::function<void(const pg_stat_t&, epoch_t lec)> f);
 
+  virtual void shutdown() = 0;
+
   virtual void do_request(
     OpRequestRef& op,
     ThreadPool::TPHandle &handle
@@ -2661,7 +2663,6 @@ protected:
   virtual void on_change(ObjectStore::Transaction *t) = 0;
   virtual void on_activate() = 0;
   virtual void on_flushed() = 0;
-  virtual void on_shutdown() = 0;
   virtual void check_blacklisted_watchers() = 0;
 
   friend ostream& operator<<(ostream& out, const PG& pg);
