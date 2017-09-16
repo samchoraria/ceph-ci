@@ -9039,7 +9039,7 @@ void OSD::do_recovery(
       goto out;
     }
 
-    assert(!pg->deleting);
+    assert(!pg->is_deleting());
     assert(pg->is_peered() && pg->is_primary());
 
     assert(pg->recovery_queued);
@@ -9207,7 +9207,7 @@ void OSD::dequeue_op(
     session->put();
   }
 
-  if (pg->deleting)
+  if (pg->is_deleting())
     return;
 
   op->mark_reached_pg();
@@ -9270,7 +9270,7 @@ void OSD::process_peering_events(
     PG *pg = *i;
     pg->lock_suspend_timeout(handle);
     curmap = service.get_osdmap();
-    if (pg->deleting) {
+    if (pg->is_deleting()) {
       pg->unlock();
       continue;
     }
@@ -9796,7 +9796,7 @@ void OSD::ShardedOpWQ::clear_pg_pointer(spg_t pgid)
   if (p != sdata->pg_slots.end()) {
     auto& slot = p->second;
     dout(20) << __func__ << " " << pgid << " pg " << slot.pg << dendl;
-    assert(!slot.pg || slot.pg->deleting);
+    assert(!slot.pg || slot.pg->is_deleting());
     slot.pg = nullptr;
   }
 }
