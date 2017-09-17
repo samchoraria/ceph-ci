@@ -5765,7 +5765,6 @@ void PG::stuck_on_unfound(epoch_t queued, bool wip, RecoveryCtx *rctx)
       queue_recovery();
     }
   }
-  write_if_dirty(*rctx->transaction);
 }
 
 void PG::handle_advance_map(
