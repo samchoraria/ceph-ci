@@ -3937,8 +3937,7 @@ void OSD::load_pgs()
 
     pg->reg_next_scrub();
 
-    dout(10) << __func__ << " loaded " << *pg << " " << pg->pg_log.get_log()
-	     << dendl;
+    dout(10) << __func__ << " loaded " << *pg << dendl;
     pg->unlock();
     ++num;
   }
