@@ -1097,8 +1097,6 @@ protected:
   bool backfill_reserved;
   bool backfill_reserving;
 
-  friend class OSD;
-
   set<pg_shard_t> backfill_targets;
 
   bool is_backfill_targets(pg_shard_t osd) {
