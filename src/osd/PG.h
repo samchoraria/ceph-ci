@@ -354,8 +354,23 @@ public:
   bool is_ec_pg() const {
     return pool.info.ec_pool();
   }
+  int get_role() const {
+    return role;
+  }
   const vector<int> get_acting() const {
     return acting;
+  }
+  int get_acting_primary() const {
+    return primary.osd;
+  }
+  const vector<int> get_up() const {
+    return up;
+  }
+  int get_up_primary() const {
+    return up_primary.osd;
+  }
+  const PastIntervals& get_past_intervals() const {
+    return past_intervals;
   }
 
   /// initialize created PG
@@ -2456,9 +2471,6 @@ protected:
   }
   pg_shard_t get_primary() const { return primary; }
 
-  int get_role() const {
-    return role;
-  }
   void set_role(int r) {
     role = r;
   }
