@@ -8115,6 +8115,14 @@ bool OSDMonitor::prepare_command_impl(MonOpRequestRef op,
       err = -EINVAL;
       goto reply;
     }
+    for (auto& kv : profile_map) {
+      if (kv.first.find("ruleset-") == 0) {
+	ss << "property '" << kv.first << "' is no longer supported; try "
+	   << "'crush-" << kv.first.substr(8) << "' instead";
+	err = -EINVAL;
+	goto reply;
+      }
+    }
     string plugin = profile_map["plugin"];
 
     if (pending_inc.has_erasure_code_profile(name)) {
