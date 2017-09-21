@@ -1846,7 +1846,9 @@ public:
 	boost::statechart::custom_reaction< MNotifyRec >,
 	boost::statechart::custom_reaction< MLogRec >,
 	boost::statechart::custom_reaction< Backfilled >,
-	boost::statechart::custom_reaction< AllReplicasActivated >
+	boost::statechart::custom_reaction< AllReplicasActivated >,
+	boost::statechart::custom_reaction< DeferRecovery >,
+	boost::statechart::custom_reaction< DeferBackfill >
 	> reactions;
       boost::statechart::result react(const QueryState& q);
       boost::statechart::result react(const ActMap&);
@@ -1858,6 +1860,12 @@ public:
 	return discard_event();
       }
       boost::statechart::result react(const AllReplicasActivated&);
+      boost::statechart::result react(const DeferRecovery& evt) {
+	return discard_event();
+      }
+      boost::statechart::result react(const DeferBackfill& evt) {
+	return discard_event();
+      }
     };
 
     struct Clean : boost::statechart::state< Clean, Active >, NamedState {
