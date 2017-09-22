@@ -957,9 +957,9 @@ static std::atomic_flag buffer_debug_lock = ATOMIC_FLAG_INIT;
       _raw->reassign_to_mempool(pool);
     }
   }
-  void buffer::ptr::try_reassign_to_mempool(int pool) {
+  void buffer::ptr::try_assign_to_mempool(int pool) {
     if (_raw) {
-      _raw->try_reassign_to_mempool(pool);
+      _raw->try_assign_to_mempool(pool);
     }
   }
 
