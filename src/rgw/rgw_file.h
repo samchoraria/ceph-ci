@@ -177,7 +177,7 @@ namespace rgw {
 
   class RGWFileHandle : public cohort::lru::Object
   {
-    struct rgw_file_handle fh;
+    struct rgw_file_handle fh{};
     std::mutex mtx;
 
     RGWLibFS* fs;
