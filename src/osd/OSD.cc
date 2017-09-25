@@ -9820,9 +9820,7 @@ void OSD::ShardedOpWQ::wake_pg_waiters(spg_t pgid)
     osd->service.release_reserved_pushes(pushes_to_free);
   }
   if (queued) {
-    sdata->sdata_lock.Lock();
-    sdata->sdata_cond.SignalOne();
-    sdata->sdata_lock.Unlock();
+    sdata->sdata_cond.SignalOne(true);
   }
 }
 
@@ -9909,12 +9907,8 @@ void OSD::ShardedOpWQ::_process(uint32_t thread_index, heartbeat_handle_d *hb)
     // optimistically sleep a moment; maybe another work item will come along.
     osd->cct->get_heartbeat_map()->reset_timeout(hb,
       osd->cct->_conf->threadpool_default_timeout, 0);
-    sdata->sdata_lock.Lock();
-    sdata->sdata_op_ordering_lock.Unlock();
-    sdata->sdata_cond.WaitInterval(sdata->sdata_lock,
+    sdata->sdata_cond.WaitInterval(sdata->sdata_op_ordering_lock,
       utime_t(osd->cct->_conf->threadpool_empty_queue_max_wait, 0));
-    sdata->sdata_lock.Unlock();
-    sdata->sdata_op_ordering_lock.Lock();
     if (sdata->pqueue->empty()) {
       sdata->sdata_op_ordering_lock.Unlock();
       return;
@@ -10114,9 +10108,7 @@ void OSD::ShardedOpWQ::_enqueue(pair<spg_t, PGQueueable> item) {
       priority, cost, item);
   sdata->sdata_op_ordering_lock.Unlock();
 
-  sdata->sdata_lock.Lock();
-  sdata->sdata_cond.SignalOne();
-  sdata->sdata_lock.Unlock();
+  sdata->sdata_cond.SignalOne(true);
 
 }
 
@@ -10143,9 +10135,7 @@ void OSD::ShardedOpWQ::_enqueue_front(pair<spg_t, PGQueueable> item)
   }
   sdata->_enqueue_front(item, osd->op_prio_cutoff);
   sdata->sdata_op_ordering_lock.Unlock();
-  sdata->sdata_lock.Lock();
-  sdata->sdata_cond.SignalOne();
-  sdata->sdata_lock.Unlock();
+  sdata->sdata_cond.SignalOne(true);
 }
 
 namespace ceph { 
