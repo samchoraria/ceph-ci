@@ -18,9 +18,7 @@
 #include "tools/rbd_mirror/leader_watcher/Types.h"
 
 #pragma GCC diagnostic push
-#pragma clang diagnostic push
-#pragma GCC diagnostic ignore -Woverloaded-virtual
-#pragma clang diagnostic ignore -Woverloaded-virtual
+#pragma GCC diagnostic ignored "-Woverloaded-virtual"
 
 namespace librbd { class ImageCtx; }
 
@@ -305,6 +303,5 @@ private:
 } // namespace rbd
 
 #pragma GCC diagnostic pop
-#pragma clang diagnostic pop
 
 #endif // CEPH_RBD_MIRROR_LEADER_WATCHER_H
