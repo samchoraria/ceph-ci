@@ -5291,16 +5291,10 @@ void RGWCompleteMultipart::execute()
   rgw_obj target_obj;
   RGWMPObj mp;
   RGWObjManifest manifest;
-  uint64_t olh_epoch = 0;
-  string version_id;
 
   op_ret = get_params();
   if (op_ret < 0)
     return;
-  op_ret = get_system_versioning_params(s, &olh_epoch, &version_id);
-  if (op_ret < 0) {
-    return;
-  }
 
   if (!data || !len) {
     op_ret = -ERR_MALFORMED_XML;
@@ -5506,6 +5500,7 @@ void RGWCompleteMultipart::execute()
   target_obj.init(s->bucket, s->object.name);
   if (versioned_object) {
     store->gen_rand_obj_instance_name(&target_obj);
+    version_id = target_obj.key.instance;
   }
 
   RGWObjectCtx& obj_ctx = *static_cast<RGWObjectCtx *>(s->obj_ctx);

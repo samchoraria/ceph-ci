@@ -2530,6 +2530,9 @@ void RGWCompleteMultipart_ObjStore_S3::send_response()
 {
   if (op_ret)
     set_req_state_err(s, op_ret);
+  if (!version_id.empty()) {
+    dump_header(s, "x-amz-version-id", version_id);
+  }
   dump_errno(s);
   end_header(s, this, "application/xml");
   if (op_ret == 0) { 
