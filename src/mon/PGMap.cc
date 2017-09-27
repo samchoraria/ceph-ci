@@ -2938,7 +2938,7 @@ int process_pg_map_command(
         state = -1;
         break;
       } else {
-        int filter = pg_string_state(state_str);
+        int64_t filter = pg_string_state(state_str);
         if (filter < 0) {
           *ss << "'" << state_str << "' is not a valid pg state,"
               << " available choices: " << pg_state_string(0xFFFFFFFF);

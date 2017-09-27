@@ -2029,7 +2029,7 @@ void PG::mark_clean()
   kick_snap_trim();
 }
 
-void PG::_change_recovery_force_mode(int new_mode, bool clear)
+void PG::_change_recovery_force_mode(uint64_t new_mode, bool clear)
 {
   if (!deleting) {
     // we can't and shouldn't do anything if the PG is being deleted locally

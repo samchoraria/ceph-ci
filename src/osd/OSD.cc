@@ -9035,7 +9035,7 @@ void OSDService::adjust_pg_priorities(const vector<PGRef>& pgs, int newflags)
 {
   if (!pgs.size() || !(newflags & (OFR_BACKFILL | OFR_RECOVERY)))
     return;
-  int newstate = 0;
+  uint64_t newstate = 0;
 
   if (newflags & OFR_BACKFILL) {
     newstate = PG_STATE_FORCED_BACKFILL;
