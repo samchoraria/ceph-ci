@@ -15,6 +15,9 @@
 #include "librbd/managed_lock/Types.h"
 #include "tools/rbd_mirror/instance_watcher/Types.h"
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Woverloaded-virtual"
+
 namespace librbd {
 
 class ImageCtx;
@@ -260,4 +263,5 @@ private:
 } // namespace mirror
 } // namespace rbd
 
+#pragma GCC diagnostic pop
 #endif // CEPH_RBD_MIRROR_INSTANCE_WATCHER_H
