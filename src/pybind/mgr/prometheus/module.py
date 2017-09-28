@@ -83,6 +83,8 @@ OSD_METADATA = ('cluster_addr', 'device_class', 'id', 'public_addr', 'weight')
 
 POOL_METADATA = ('pool_id', 'name')
 
+DISK_OCCUPATION = ('instance', 'device', 'ceph_daemon')
+
 
 class Metric(object):
     def __init__(self, mtype, name, desc, labels=None):
@@ -184,6 +186,17 @@ class Module(MgrModule):
             'OSD Metadata',
             OSD_METADATA
         )
+
+        # The reason for having this separate to OSD_METADATA is
+        # so that we can stably use the same tag names that
+        # the Prometheus node_exporter does
+        metrics['disk_occupation'] = Metric(
+            'undef',
+            'disk_occupation',
+            'Associate Ceph daemon with disk used',
+            DISK_OCCUPATION
+        )
+
         metrics['pool_metadata'] = Metric(
             'undef',
             'pool_metadata',
@@ -258,7 +271,7 @@ class Module(MgrModule):
             if state not in reported_states:
                 self.metrics[path].set(0)
 
-    def get_metadata(self):
+    def get_osd_metadata(self):
         osd_map = self.get('osd_map')
         osd_dev = self.get('osd_map_crush')['devices']
         for osd in osd_map['osds']:
@@ -275,6 +288,27 @@ class Module(MgrModule):
                 w
             ))
 
+            osd_metadata = self.get_metadata("osd", str(id_))
+            dev_keys = ("backend_filestore_dev_node", "bluestore_bdev_dev_node")
+            osd_dev = None
+            for dev_key in dev_keys:
+                val = osd_metadata.get(dev_key, None)
+                if val and val != "unknown":
+                    osd_dev = val
+                    break
+            osd_hostname = osd_metadata.get('hostname', None)
+            if osd_dev and osd_hostname:
+                self.log.debug("Got dev for osd {0}: {1}/{2}".format(
+                    id_, osd_hostname, osd_dev))
+                self.metrics['disk_occupation'].set(0, (
+                    osd_hostname,
+                    osd_dev,
+                    "osd.{0}".format(id_)
+                ))
+            else:
+                self.log.info("Missing dev node metadata for osd {0}, skipping "
+                               "occupation record for this osd".format(id_))
+
         for pool in osd_map['pools']:
             id_ = pool['pool']
             name = pool['pool_name']
@@ -284,7 +318,7 @@ class Module(MgrModule):
         self.get_health()
         self.get_df()
         self.get_quorum_status()
-        self.get_metadata()
+        self.get_osd_metadata()
         self.get_pg_status()
 
         for daemon, counters in self.get_all_perf_counters().iteritems():
