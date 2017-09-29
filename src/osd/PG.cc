@@ -5318,7 +5318,15 @@ void PG::on_new_interval()
     upacting_features &= osdmap->get_xinfo(*p).features;
   }
 
-  assert(osdmap->test_flag(CEPH_OSDMAP_SORTBITWISE));
+  // we don't speak non-sortbitwise, so we'd better not go
+  // active if they somehow haven't set it!
+  if (!osdmap->test_flag(CEPH_OSDMAP_SORTBITWISE) &&
+	 // but we have to be nice in case we're sortbitwise *now*
+	 // and are processing updates from before that happened
+      (osd->osd->is_active() && osdmap->get_epoch() >= osd->get_boot_epoch())) {
+    derr << __func__ << " SORTBITWISE flag is not set" << dendl;
+    ceph_abort();
+  }
 
   _on_new_interval();
 }
