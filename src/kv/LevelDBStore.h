@@ -397,8 +397,7 @@ err:
   }
 
 
-protected:
-  WholeSpaceIterator _get_iterator() override {
+  WholeSpaceIterator get_wholespace_iterator() override {
     return std::make_shared<LevelDBWholeSpaceIteratorImpl>(
 	db->NewIterator(leveldb::ReadOptions()));
   }
