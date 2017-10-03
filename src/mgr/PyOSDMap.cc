@@ -32,6 +32,7 @@ static PyObject *osdmap_get_crush_version(PyObject *self, PyObject *obj)
 static PyObject *osdmap_dump(PyObject *self, PyObject *obj)
 {
   OSDMap *osdmap = static_cast<OSDMap*>(PyCapsule_GetPointer(obj, nullptr));
+  assert(osdmap != nullptr);
   PyFormatter f;
   osdmap->dump(&f);
   return f.get();
@@ -76,6 +77,7 @@ static PyObject *osdmap_apply_incremental(PyObject *self, PyObject *args)
     return nullptr;
   }
   OSDMap *osdmap = static_cast<OSDMap*>(PyCapsule_GetPointer(mapobj, nullptr));
+  assert(osdmap != nullptr);
   OSDMap::Incremental *inc = static_cast<OSDMap::Incremental*>(
     PyCapsule_GetPointer(incobj, nullptr));
   if (!osdmap || !inc) {
@@ -95,6 +97,7 @@ static PyObject *osdmap_apply_incremental(PyObject *self, PyObject *args)
 static PyObject *osdmap_get_crush(PyObject *self, PyObject *obj)
 {
   OSDMap *osdmap = static_cast<OSDMap*>(PyCapsule_GetPointer(obj, nullptr));
+  assert(osdmap != nullptr);
 
   // Construct a capsule containing a the CrushWrapper.
   return PyCapsule_New(osdmap->crush.get(), nullptr, nullptr);
@@ -109,6 +112,7 @@ static PyObject *osdmap_get_pools_by_take(PyObject *self, PyObject *args)
     return nullptr;
   }
   OSDMap *osdmap = static_cast<OSDMap*>(PyCapsule_GetPointer(mapobj, nullptr));
+  assert(osdmap != nullptr);
   PyFormatter f;
   f.open_array_section("pools");
   for (auto& p : osdmap->get_pools()) {
@@ -132,6 +136,7 @@ static PyObject *osdmap_calc_pg_upmaps(PyObject *self, PyObject *args)
   }
 
   OSDMap *osdmap = static_cast<OSDMap*>(PyCapsule_GetPointer(mapobj, nullptr));
+  assert(osdmap != nullptr);
   OSDMap::Incremental *inc = static_cast<OSDMap::Incremental*>(
     PyCapsule_GetPointer(incobj, nullptr));
 
@@ -205,6 +210,7 @@ static PyObject *osdmap_inc_get_epoch(PyObject *self, PyObject *obj)
 {
   OSDMap::Incremental *inc = static_cast<OSDMap::Incremental*>(
     PyCapsule_GetPointer(obj, nullptr));
+  assert(inc != nullptr);
   return PyInt_FromLong(inc->epoch);
 }
 
@@ -212,6 +218,7 @@ static PyObject *osdmap_inc_dump(PyObject *self, PyObject *obj)
 {
   OSDMap::Incremental *inc = static_cast<OSDMap::Incremental*>(
     PyCapsule_GetPointer(obj, nullptr));
+  assert(inc != nullptr);
   PyFormatter f;
   inc->dump(&f);
   return f.get();
