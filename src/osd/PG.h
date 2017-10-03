@@ -579,7 +579,7 @@ public:
 
 protected:
   int         role;    // 0 = primary, 1 = replica, -1=none.
-  unsigned    state;   // PG_STATE_*
+  uint64_t    state;   // PG_STATE_*
 
   bool send_notify;    ///< true if we are non-primary and should notify the primary
 
@@ -981,7 +981,7 @@ public:
   unsigned get_backfill_priority();
 
   void mark_clean();  ///< mark an active pg clean
-  void _change_recovery_force_mode(int new_mode, bool clear);
+  void _change_recovery_force_mode(uint64_t new_mode, bool clear);
 
   /// return [start,end) bounds for required past_intervals
   static pair<epoch_t, epoch_t> get_required_past_interval_bounds(
@@ -2309,14 +2309,14 @@ public:
   epoch_t get_last_peering_reset() const { return last_peering_reset; }
   
   //int  get_state() const { return state; }
-  bool state_test(int m) const { return (state & m) != 0; }
-  void state_set(int m) { state |= m; }
-  void state_clear(int m) { state &= ~m; }
+  bool state_test(uint64_t m) const { return (state & m) != 0; }
+  void state_set(uint64_t m) { state |= m; }
+  void state_clear(uint64_t m) { state &= ~m; }
 
   bool is_complete() const { return info.last_complete == info.last_update; }
   bool should_send_notify() const { return send_notify; }
 
-  int get_state() const { return state; }
+  uint64_t get_state() const { return state; }
   bool       is_active() const { return state_test(PG_STATE_ACTIVE); }
   bool       is_activating() const { return state_test(PG_STATE_ACTIVATING); }
   bool       is_peering() const { return state_test(PG_STATE_PEERING); }
