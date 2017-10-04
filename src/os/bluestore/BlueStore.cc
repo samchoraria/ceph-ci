@@ -65,7 +65,13 @@ const string PREFIX_OBJ = "O";     // object name -> onode_t
 const string PREFIX_OMAP = "M";    // u64 + keyname -> value
 const string PREFIX_DEFERRED = "L";  // id -> deferred_transaction_t
 const string PREFIX_ALLOC = "B";   // u64 offset -> u64 length (freelist)
+const string PREFIX_ALLOC_BITMAP = "b"; // (see BitmapFreelistManager)
 const string PREFIX_SHARED_BLOB = "X"; // u64 offset -> shared_blob_t
+
+const std::vector<KeyValueDB::ColumnFamily> cfs = {
+  KeyValueDB::ColumnFamily(PREFIX_OMAP, ""),
+  KeyValueDB::ColumnFamily(PREFIX_DEFERRED, ""),
+};
 
 // write a label in the first block.  always use this size.  note that
 // bluefs makes a matching assumption about the location of its
@@ -3952,10 +3958,10 @@ int BlueStore::_reload_logger()
   int r = statfs(&store_statfs);
   if(r >= 0) {
     logger->set(l_bluestore_allocated, store_statfs.allocated);
-    logger->set(l_bluestore_stored, store_statfs.stored);
-    logger->set(l_bluestore_compressed, store_statfs.compressed);
-    logger->set(l_bluestore_compressed_allocated, store_statfs.compressed_allocated);
-    logger->set(l_bluestore_compressed_original, store_statfs.compressed_original);
+    logger->set(l_bluestore_stored, store_statfs.data_stored);
+    logger->set(l_bluestore_compressed, store_statfs.data_compressed);
+    logger->set(l_bluestore_compressed_allocated, store_statfs.data_compressed_allocated);
+    logger->set(l_bluestore_compressed_original, store_statfs.data_compressed_original);
   }
   return r;
 }
@@ -4734,10 +4740,17 @@ int BlueStore::_open_db(bool create)
   if (kv_backend == "rocksdb")
     options = cct->_conf->bluestore_rocksdb_options;
   db->init(options);
-  if (create)
-    r = db->create_and_open(err);
-  else
-    r = db->open(err);
+  if (create) {
+    if (cct->_conf->get_val<bool>("bluestore_rocksdb_cf")) {
+      r = db->create_and_open(err, cfs);
+    } else {
+      r = db->create_and_open(err);
+    }
+  } else {
+    // we pass in cf list here, but it is only used if the db already has
+    // column families created.
+    r = db->open(err, cfs);
+  }
   if (r) {
     derr << __func__ << " erroring opening db: " << err.str() << dendl;
     if (bluefs) {
@@ -4860,12 +4873,25 @@ int BlueStore::_balance_bluefs_freespace(PExtentVector *extents)
 	     << " > max_ratio " << cct->_conf->bluestore_bluefs_max_ratio
 	     << ", should reclaim " << pretty_si_t(reclaim) << dendl;
   }
+
+  // don't take over too much of the freespace
+  uint64_t free_cap = cct->_conf->bluestore_bluefs_max_ratio * total_free;
   if (bluefs_total < cct->_conf->bluestore_bluefs_min &&
-    cct->_conf->bluestore_bluefs_min <
-      (uint64_t)(cct->_conf->bluestore_bluefs_max_ratio * total_free)) {
+      cct->_conf->bluestore_bluefs_min < free_cap) {
     uint64_t g = cct->_conf->bluestore_bluefs_min - bluefs_total;
     dout(10) << __func__ << " bluefs_total " << bluefs_total
 	     << " < min " << cct->_conf->bluestore_bluefs_min
+	     << ", should gift " << pretty_si_t(g) << dendl;
+    if (g > gift)
+      gift = g;
+    reclaim = 0;
+  }
+  uint64_t min_free = cct->_conf->get_val<uint64_t>("bluestore_bluefs_min_free");
+  if (bluefs_free < min_free &&
+      min_free < free_cap) {
+    uint64_t g = min_free - bluefs_free;
+    dout(10) << __func__ << " bluefs_free " << bluefs_total
+	     << " < min " << min_free
 	     << ", should gift " << pretty_si_t(g) << dendl;
     if (g > gift)
       gift = g;
@@ -5484,7 +5510,7 @@ int BlueStore::_fsck_check_extents(
       continue;
     expected_statfs.allocated += e.length;
     if (compressed) {
-      expected_statfs.compressed_allocated += e.length;
+      expected_statfs.data_compressed_allocated += e.length;
     }
     bool already = false;
     apply(
@@ -5779,7 +5805,7 @@ int BlueStore::_fsck(bool deep, bool repair)
 	  ++errors;
 	}
 	pos = l.logical_offset + l.length;
-	expected_statfs.stored += l.length;
+	expected_statfs.data_stored += l.length;
 	assert(l.blob);
 	const bluestore_blob_t& blob = l.blob->get_blob();
 
@@ -5863,8 +5889,8 @@ int BlueStore::_fsck(bool deep, bool repair)
 	  ++errors;
 	}
 	if (blob.is_compressed()) {
-	  expected_statfs.compressed += blob.get_compressed_payload_length();
-	  expected_statfs.compressed_original += 
+	  expected_statfs.data_compressed += blob.get_compressed_payload_length();
+	  expected_statfs.data_compressed_original +=
 	    i.first->get_referenced_bytes();
 	}
 	if (blob.is_shared()) {
@@ -5964,6 +5990,8 @@ int BlueStore::_fsck(bool deep, bool repair)
 	 << " key is missing (" << *p.second.sb << ")" << dendl;
     ++errors;
   }
+  actual_statfs.internal_metadata = 0;
+  actual_statfs.omap_allocated = 0;
   if (!(actual_statfs == expected_statfs)) {
     derr << "fsck error: actual " << actual_statfs
 	 << " != expected " << expected_statfs << dendl;
@@ -6140,26 +6168,34 @@ int BlueStore::statfs(struct store_statfs_t *buf)
   buf->total = bdev->get_size();
   buf->available = alloc->get_free();
 
+  buf->omap_allocated = db->estimate_prefix_size(PREFIX_OMAP);
+
   if (bluefs) {
     // part of our shared device is "free" according to BlueFS
     // Don't include bluestore_bluefs_min because that space can't
     // be used for any other purpose.
-    buf->available += bluefs->get_free(bluefs_shared_bdev) - cct->_conf->bluestore_bluefs_min;
+    buf->available += bluefs->get_free(bluefs_shared_bdev) -
+      cct->_conf->bluestore_bluefs_min;
 
     // include dedicated db, too, if that isn't the shared device.
     if (bluefs_shared_bdev != BlueFS::BDEV_DB) {
       buf->total += bluefs->get_total(BlueFS::BDEV_DB);
     }
+
+    // call any non-omap bluefs space "internal metadata"
+    buf->internal_metadata =
+      std::max(bluefs->get_used(), (uint64_t)cct->_conf->bluestore_bluefs_min) -
+      buf->omap_allocated;
   }
 
   {
     std::lock_guard<std::mutex> l(vstatfs_lock);
     
     buf->allocated = vstatfs.allocated();
-    buf->stored = vstatfs.stored();
-    buf->compressed = vstatfs.compressed();
-    buf->compressed_original = vstatfs.compressed_original();
-    buf->compressed_allocated = vstatfs.compressed_allocated();
+    buf->data_stored = vstatfs.stored();
+    buf->data_compressed = vstatfs.compressed();
+    buf->data_compressed_original = vstatfs.compressed_original();
+    buf->data_compressed_allocated = vstatfs.compressed_allocated();
   }
 
   dout(20) << __func__ << *buf << dendl;
@@ -11527,7 +11563,7 @@ void BlueStore::generate_db_histogram(Formatter *f)
 
   utime_t start = ceph_clock_now();
 
-  KeyValueDB::WholeSpaceIterator iter = db->get_iterator();
+  KeyValueDB::WholeSpaceIterator iter = db->get_wholespace_iterator();
   iter->seek_to_first();
   while (iter->valid()) {
     dout(30) << __func__ << " Key: " << iter->key() << dendl;
@@ -11564,7 +11600,7 @@ void BlueStore::generate_db_histogram(Formatter *f)
     } else if (key.first == PREFIX_DEFERRED) {
 	hist.update_hist_entry(hist.key_hist, PREFIX_DEFERRED, key_size, value_size);
 	num_deferred++;
-    } else if (key.first == PREFIX_ALLOC || key.first == "b" ) {
+    } else if (key.first == PREFIX_ALLOC || key.first == PREFIX_ALLOC_BITMAP) {
 	hist.update_hist_entry(hist.key_hist, PREFIX_ALLOC, key_size, value_size);
 	num_alloc++;
     } else if (key.first == PREFIX_SHARED_BLOB) {

@@ -221,14 +221,16 @@ int BlueFS::reclaim_blocks(unsigned id, uint64_t want,
   return 0;
 }
 
-uint64_t BlueFS::get_fs_usage()
+uint64_t BlueFS::get_used()
 {
   std::lock_guard<std::mutex> l(lock);
-  uint64_t total_bytes = 0;
-  for (auto& p : file_map) {
-    total_bytes += p.second->fnode.get_allocated();
+  uint64_t used = 0;
+  for (unsigned id = 0; id < MAX_BDEV; ++id) {
+    if (alloc[id]) {
+      used += block_all[id].size() - alloc[id]->get_free();
+    }
   }
-  return total_bytes;
+  return used;
 }
 
 uint64_t BlueFS::get_total(unsigned id)
@@ -1509,6 +1511,7 @@ int BlueFS::_flush_range(FileWriter *h, uint64_t offset, uint64_t length)
       derr << __func__ << " allocated: 0x" << std::hex << allocated
            << " offset: 0x" << offset << " length: 0x" << length << std::dec
            << dendl;
+      assert(0 == "bluefs enospc");
       return r;
     }
     h->file->fnode.recalc_allocated();
