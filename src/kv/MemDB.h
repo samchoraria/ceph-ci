@@ -197,13 +197,11 @@ public:
     buf->reset();
     buf->total = m_total_bytes;
     buf->allocated = m_allocated_bytes;
-    buf->stored = m_total_bytes;
+    buf->data_stored = m_total_bytes;
     return 0;
   }
 
-protected:
-
-  WholeSpaceIterator _get_iterator() override {
+  WholeSpaceIterator get_wholespace_iterator() override {
     return std::shared_ptr<KeyValueDB::WholeSpaceIteratorImpl>(
       new MDBWholeSpaceIteratorImpl(&m_map, &m_lock, &iterator_seq_no, m_using_btree));
   }
