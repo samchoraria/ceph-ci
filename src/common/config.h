@@ -160,7 +160,7 @@ public:
   // No metavariables will be returned (they will have already been expanded)
   int get_val(const std::string &key, char **buf, int len) const;
   int _get_val(const std::string &key, char **buf, int len) const;
-  Option::value_t get_val_generic(const std::string &key) const;
+  const Option::value_t& get_val_generic(const std::string &key) const;
   template<typename T> T get_val(const std::string &key) const;
 
   void get_all_keys(std::vector<std::string> *keys) const;
@@ -199,7 +199,7 @@ private:
   void validate_default_settings();
 
   int _get_val(const std::string &key, std::string *value) const;
-  Option::value_t _get_val(const std::string &key) const;
+  const Option::value_t& _get_val(const std::string &key) const;
   void _show_config(std::ostream *out, Formatter *f);
 
   void _get_my_sections(std::vector <std::string> &sections) const;
@@ -333,7 +333,7 @@ struct get_typed_value_visitor : public boost::static_visitor<T> {
 };
 
 template<typename T> T md_config_t::get_val(const std::string &key) const {
-  Option::value_t generic_val = this->get_val_generic(key);
+  auto& generic_val = this->get_val_generic(key);
   get_typed_value_visitor<T> gtv;
   return boost::apply_visitor(gtv, generic_val);
 }
