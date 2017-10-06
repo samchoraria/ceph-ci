@@ -863,18 +863,19 @@ int md_config_t::get_val(const std::string &key, char **buf, int len) const
   return _get_val(key, buf,len);
 }
 
-Option::value_t md_config_t::get_val_generic(const std::string &key) const
+const Option::value_t& md_config_t::get_val_generic(const std::string &key) const
 {
   Mutex::Locker l(lock);
   return _get_val(key);
 }
 
-Option::value_t md_config_t::_get_val(const std::string &key) const
+const Option::value_t& md_config_t::_get_val(const std::string &key) const
 {
   assert(lock.is_locked());
 
+  static const Option::value_t empty{boost::blank()};
   if (key.empty()) {
-    return Option::value_t(boost::blank());
+    return empty;
   }
 
   // In key names, leading and trailing whitespace are not significant.
@@ -886,7 +887,7 @@ Option::value_t md_config_t::_get_val(const std::string &key) const
     // entries in ::values
     return values.at(k);
   } else {
-    return Option::value_t(boost::blank());
+    return empty;
   }
 }
 
