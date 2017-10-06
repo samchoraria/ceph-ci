@@ -141,6 +141,10 @@ public:
       c.release()->complete(t);
     pg->unlock();
   }
+  bool sync_finish(T t) {
+    c.release()->complete(t);
+    return true;
+  }
 };
 
 GenContext<ThreadPool::TPHandle&> *PrimaryLogPG::bless_gencontext(
@@ -163,6 +167,10 @@ public:
     else
       c.release()->complete(r);
     pg->unlock();
+  }
+  bool sync_finish(int r) {
+    c.release()->complete(r);
+    return true;
   }
 };
 
