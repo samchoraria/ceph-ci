@@ -226,8 +226,14 @@ class PrimaryLogPG::C_OSD_AppliedRecoveredObject : public Context {
   public:
   C_OSD_AppliedRecoveredObject(PrimaryLogPG *p, ObjectContextRef o) :
     pg(p), obc(o) {}
-  void finish(int r) override {
+  bool sync_finish(int r) override {
     pg->_applied_recovered_object(obc);
+    return true;
+  }
+  void finish(int r) override {
+    pg->lock();
+    pg->_applied_recovered_object(obc);
+    pg->unlock();
   }
 };
 
@@ -250,8 +256,14 @@ class PrimaryLogPG::C_OSD_AppliedRecoveredObjectReplica : public Context {
   public:
   explicit C_OSD_AppliedRecoveredObjectReplica(PrimaryLogPG *p) :
     pg(p) {}
-  void finish(int r) override {
+  bool sync_finish(int r) override {
     pg->_applied_recovered_object_replica();
+    return true;
+  }
+  void finish(int r) override {
+    pg->lock();
+    pg->_applied_recovered_object_replica();
+    pg->unlock();
   }
 };
 
@@ -10292,7 +10304,6 @@ void PrimaryLogPG::_committed_pushed_object(
 
 void PrimaryLogPG::_applied_recovered_object(ObjectContextRef obc)
 {
-  lock();
   dout(20) << __func__ << dendl;
   if (obc) {
     dout(20) << "obc = " << *obc << dendl;
@@ -10309,12 +10320,10 @@ void PrimaryLogPG::_applied_recovered_object(ObjectContextRef obc)
       requeue_scrub(false);
     }
   }
-  unlock();
 }
 
 void PrimaryLogPG::_applied_recovered_object_replica()
 {
-  lock();
   dout(20) << __func__ << dendl;
   assert(active_pushes >= 1);
   --active_pushes;
@@ -10334,7 +10343,6 @@ void PrimaryLogPG::_applied_recovered_object_replica()
 	get_osdmap()->get_epoch()));
     scrubber.active_rep_scrub.reset();
   }
-  unlock();
 }
 
 void PrimaryLogPG::recover_got(hobject_t oid, eversion_t v)
