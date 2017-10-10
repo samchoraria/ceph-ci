@@ -8126,7 +8126,7 @@ void BlueStore::_txc_applied_kv(TransContext *txc)
 void BlueStore::_txc_committed_kv(TransContext *txc)
 {
   dout(20) << __func__ << " txc " << txc << dendl;
-  unsigned n = txc->osr->parent->shard_hint.hash_to_shard(m_finisher_num);
+  unsigned n = txc->osr->shard_hint.hash_to_shard(m_finisher_num);
   logger->tinc(l_bluestore_commit_lat, ceph_clock_now() - txc->start);
   finishers[n]->queue(txc->oncommits);
 }
@@ -8921,6 +8921,7 @@ int BlueStore::queue_transactions(
   } else {
     osr = new OpSequencer(cct, this);
     osr->parent = posr;
+    osr->shard_hint = posr->shard_hint;
     posr->p = osr;
     dout(10) << __func__ << " new " << osr << " " << *osr << dendl;
   }
@@ -8984,7 +8985,7 @@ int BlueStore::queue_transactions(
   for (auto c : on_applied_sync) {
     c->complete(0);
   }
-  unsigned n = osr->parent->shard_hint.hash_to_shard(m_finisher_num);
+  unsigned n = osr->shard_hint.hash_to_shard(m_finisher_num);
   for (auto c : on_applied) {
     // NOTE: these may complete out of order since some may be sync and some
     // may be async.
