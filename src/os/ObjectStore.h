@@ -1579,6 +1579,11 @@ public:
   virtual bool wants_journal() = 0;  //< prefers a journal
   virtual bool allows_journal() = 0; //< allows a journal
 
+  /// true if a txn is readable immediately after it is queued.
+  virtual bool is_sync_onreadable() {
+    return true;
+  }
+
   /**
    * is_rotational
    *

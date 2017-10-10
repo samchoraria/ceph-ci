@@ -483,6 +483,10 @@ public:
     return false;
   }
 
+  bool is_sync_onreadable() override {
+    return false;
+  }
+
   bool is_rotational() override;
   bool is_journal_rotational() override;
 
