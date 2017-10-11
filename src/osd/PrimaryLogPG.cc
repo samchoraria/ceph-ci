@@ -93,6 +93,11 @@ struct PrimaryLogPG::C_OSD_OnApplied : Context {
     epoch_t epoch,
     eversion_t v)
     : pg(pg), epoch(epoch), v(v) {}
+  bool sync_complete(int r) override {
+    pg->op_applied(v);
+    delete this;
+    return true;
+  }
   void finish(int) override {
     pg->lock();
     if (!pg->pg_has_reset_since(epoch))
