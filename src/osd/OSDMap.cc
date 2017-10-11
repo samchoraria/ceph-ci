@@ -472,9 +472,12 @@ void OSDMap::Incremental::encode(bufferlist& bl, uint64_t features) const
   ENCODE_START(8, 7, bl);
 
   {
-    uint8_t v = 5;
+    uint8_t v = 6;
     if (!HAVE_FEATURE(features, SERVER_LUMINOUS)) {
       v = 3;
+    }
+    if (!HAVE_FEATURE(features, SERVER_MIMIC)) {
+      v = 5;
     }
     ENCODE_START(v, 1, bl); // client-usable data
     ::encode(fsid, bl);
@@ -511,6 +514,10 @@ void OSDMap::Incremental::encode(bufferlist& bl, uint64_t features) const
       ::encode(old_pg_upmap, bl);
       ::encode(new_pg_upmap_items, bl);
       ::encode(old_pg_upmap_items, bl);
+    }
+    if (v >= 6) {
+      ::encode(new_removed_snaps, bl);
+      ::encode(new_purged_snaps, bl);
     }
     ENCODE_FINISH(bl); // client-usable data
   }
@@ -693,7 +700,7 @@ void OSDMap::Incremental::decode(bufferlist::iterator& bl)
     return;
   }
   {
-    DECODE_START(5, bl); // client-usable data
+    DECODE_START(6, bl); // client-usable data
     ::decode(fsid, bl);
     ::decode(epoch, bl);
     ::decode(modified, bl);
@@ -735,6 +742,10 @@ void OSDMap::Incremental::decode(bufferlist::iterator& bl)
       ::decode(old_pg_upmap, bl);
       ::decode(new_pg_upmap_items, bl);
       ::decode(old_pg_upmap_items, bl);
+    }
+    if (struct_v >= 6) {
+      ::decode(new_removed_snaps, bl);
+      ::decode(new_purged_snaps, bl);
     }
     DECODE_FINISH(bl); // client-usable data
   }
@@ -1051,6 +1062,31 @@ void OSDMap::Incremental::dump(Formatter *f) const
   f->open_array_section("old_erasure_code_profiles");
   for (const auto &erasure_code_profile : old_erasure_code_profiles) {
     f->dump_string("old", erasure_code_profile.c_str());
+  }
+  f->close_section();
+
+  f->open_array_section("new_removed_snaps");
+  for (auto& p : new_removed_snaps) {
+    f->open_object_section("pool");
+    f->dump_int("pool", p.first);
+    f->open_array_section("snaps");
+    for (auto snap : p.second) {
+      f->dump_unsigned("snap", snap);
+    }
+    f->close_section();
+    f->close_section();
+  }
+  f->close_section();
+  f->open_array_section("new_purged_snaps");
+  for (auto& p : new_purged_snaps) {
+    f->open_object_section("pool");
+    f->dump_int("pool", p.first);
+    f->open_array_section("snaps");
+    for (auto snap : p.second) {
+      f->dump_unsigned("snap", snap);
+    }
+    f->close_section();
+    f->close_section();
   }
   f->close_section();
 }
@@ -1611,6 +1647,8 @@ int OSDMap::apply_incremental(const Incremental &inc)
     pools[pool.first] = pool.second;
     pools[pool.first].last_change = epoch;
   }
+  new_removed_snaps = inc.new_removed_snaps;
+  new_purged_snaps = inc.new_purged_snaps;
 
   for (const auto &pname : inc.new_pool_names) {
     auto pool_name_entry = pool_name.find(pname.first);
@@ -2318,9 +2356,12 @@ void OSDMap::encode(bufferlist& bl, uint64_t features) const
   ENCODE_START(8, 7, bl);
 
   {
-    uint8_t v = 6;
+    uint8_t v = 7;
     if (!HAVE_FEATURE(features, SERVER_LUMINOUS)) {
       v = 3;
+    }
+    if (!HAVE_FEATURE(features, SERVER_MIMIC)) {
+      v = 6;
     }
     ENCODE_START(v, 1, bl); // client-usable data
     // base
@@ -2383,6 +2424,10 @@ void OSDMap::encode(bufferlist& bl, uint64_t features) const
     }
     if (v >= 6) {
       ::encode(crush_version, bl);
+    }
+    if (v >= 7) {
+      ::encode(new_removed_snaps, bl);
+      ::encode(new_purged_snaps, bl);
     }
     ENCODE_FINISH(bl); // client-usable data
   }
@@ -2594,7 +2639,7 @@ void OSDMap::decode(bufferlist::iterator& bl)
    * Since we made it past that hurdle, we can use our normal paths.
    */
   {
-    DECODE_START(6, bl); // client-usable data
+    DECODE_START(7, bl); // client-usable data
     // base
     ::decode(fsid, bl);
     ::decode(epoch, bl);
@@ -2651,6 +2696,10 @@ void OSDMap::decode(bufferlist::iterator& bl)
     }
     if (struct_v >= 6) {
       ::decode(crush_version, bl);
+    }
+    if (struct_v >= 7) {
+      ::decode(new_removed_snaps, bl);
+      ::decode(new_purged_snaps, bl);
     }
     DECODE_FINISH(bl); // client-usable data
   }
@@ -2886,6 +2935,31 @@ void OSDMap::dump(Formatter *f) const
   f->close_section();
 
   dump_erasure_code_profiles(erasure_code_profiles, f);
+
+  f->open_array_section("new_removed_snaps");
+  for (auto& p : new_removed_snaps) {
+    f->open_object_section("pool");
+    f->dump_int("pool", p.first);
+    f->open_array_section("snaps");
+    for (auto snap : p.second) {
+      f->dump_unsigned("snap", snap);
+    }
+    f->close_section();
+    f->close_section();
+  }
+  f->close_section();
+  f->open_array_section("new_purged_snaps");
+  for (auto& p : new_purged_snaps) {
+    f->open_object_section("pool");
+    f->dump_int("pool", p.first);
+    f->open_array_section("snaps");
+    for (auto snap : p.second) {
+      f->dump_unsigned("snap", snap);
+    }
+    f->close_section();
+    f->close_section();
+  }
+  f->close_section();
 }
 
 void OSDMap::generate_test_instances(list<OSDMap*>& o)
