@@ -1009,14 +1009,16 @@ bool Objecter::ms_dispatch(Message *m)
   return false;
 }
 
-void Objecter::_scan_requests(OSDSession *s,
-			      bool skipped_map,
-			      bool cluster_full,
-			      map<int64_t, bool> *pool_full_map,
-			      map<ceph_tid_t, Op*>& need_resend,
-			      list<LingerOp*>& need_resend_linger,
-			      map<ceph_tid_t, CommandOp*>& need_resend_command,
-			      shunique_lock& sul)
+void Objecter::_scan_requests(
+  OSDSession *s,
+  bool skipped_map,
+  bool cluster_full,
+  map<int64_t, bool> *pool_full_map,
+  map<ceph_tid_t, Op*>& need_resend,
+  list<LingerOp*>& need_resend_linger,
+  map<ceph_tid_t, CommandOp*>& need_resend_command,
+  shunique_lock& sul,
+  const mempool::osdmap::map<int64_t,mempool::osdmap::flat_set<snapid_t>> *gap_removed_snaps)
 {
   assert(sul.owns_lock() && sul.mutex() == &rwlock);
 
@@ -1066,6 +1068,9 @@ void Objecter::_scan_requests(OSDSession *s,
     ++p;   // check_op_pool_dne() may touch ops; prevent iterator invalidation
     ldout(cct, 10) << " checking op " << op->tid << dendl;
     _prune_snapc(osdmap->get_new_removed_snaps(), op);
+    if (skipped_map) {
+      _prune_snapc(*gap_removed_snaps, op);
+    }
     bool force_resend_writes = cluster_full;
     if (pool_full_map)
       force_resend_writes = force_resend_writes ||
@@ -1221,16 +1226,21 @@ void Objecter::handle_osd_map(MOSDMap *m)
 	// check all outstanding requests on every epoch
 	for (auto& i : need_resend) {
 	  _prune_snapc(osdmap->get_new_removed_snaps(), i.second);
+	  if (skipped_map) {
+	    _prune_snapc(m->gap_removed_snaps, i.second);
+	  }
 	}
 	_scan_requests(homeless_session, skipped_map, cluster_full,
 		       &pool_full_map, need_resend,
-		       need_resend_linger, need_resend_command, sul);
+		       need_resend_linger, need_resend_command, sul,
+		       &m->gap_removed_snaps);
 	for (map<int,OSDSession*>::iterator p = osd_sessions.begin();
 	     p != osd_sessions.end(); ) {
 	  OSDSession *s = p->second;
 	  _scan_requests(s, skipped_map, cluster_full,
 			 &pool_full_map, need_resend,
-			 need_resend_linger, need_resend_command, sul);
+			 need_resend_linger, need_resend_command, sul,
+			 &m->gap_removed_snaps);
 	  ++p;
 	  // osd down or addr change?
 	  if (!osdmap->is_up(s->osd) ||
@@ -1250,7 +1260,8 @@ void Objecter::handle_osd_map(MOSDMap *m)
 	     p != osd_sessions.end(); ++p) {
 	  OSDSession *s = p->second;
 	  _scan_requests(s, false, false, NULL, need_resend,
-			 need_resend_linger, need_resend_command, sul);
+			 need_resend_linger, need_resend_command, sul,
+			 nullptr);
 	}
 	ldout(cct, 3) << "handle_osd_map decoding full epoch "
 		      << m->get_last() << dendl;
@@ -1258,7 +1269,7 @@ void Objecter::handle_osd_map(MOSDMap *m)
 
 	_scan_requests(homeless_session, false, false, NULL,
 		       need_resend, need_resend_linger,
-		       need_resend_command, sul);
+		       need_resend_command, sul, nullptr);
       } else {
 	ldout(cct, 3) << "handle_osd_map hmm, i want a full map, requesting"
 		      << dendl;
