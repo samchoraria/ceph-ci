@@ -22,13 +22,18 @@
 
 class MOSDMap : public Message {
 
-  static const int HEAD_VERSION = 3;
+  static const int HEAD_VERSION = 4;
 
  public:
   uuid_d fsid;
   map<epoch_t, bufferlist> maps;
   map<epoch_t, bufferlist> incremental_maps;
   epoch_t oldest_map =0, newest_map = 0;
+
+  // if we are fetching maps from the mon and have to jump a gap
+  // (client's next needed map is older than mon's oldest) we can
+  // share removed snaps from the gap here.
+  mempool::osdmap::map<int64_t,mempool::osdmap::flat_set<snapid_t>> gap_removed_snaps;
 
   epoch_t get_first() const {
     epoch_t e = 0;
@@ -130,6 +135,9 @@ public:
       ::encode(oldest_map, payload);
       ::encode(newest_map, payload);
     }
+    if (header.version >= 3) {
+      ::encode(gap_removed_snaps, payload);
+    }
   }
 
   const char *get_type_name() const override { return "osdmap"; }
@@ -137,6 +145,8 @@ public:
     out << "osd_map(" << get_first() << ".." << get_last();
     if (oldest_map || newest_map)
       out << " src has " << oldest_map << ".." << newest_map;
+    if (!gap_removed_snaps.empty())
+      out << " +gap_removed_snaps";
     out << ")";
   }
 };

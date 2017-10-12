@@ -529,6 +529,10 @@ public:
     send_incremental(op, start);
   }
 
+  void get_removed_snaps_range(
+    epoch_t start, epoch_t end,
+    mempool::osdmap::map<int64_t,mempool::osdmap::flat_set<snapid_t>> *gap_removed_snaps);
+
   int get_version(version_t ver, bufferlist& bl) override;
   int get_version_full(version_t ver, bufferlist& bl) override;
 
