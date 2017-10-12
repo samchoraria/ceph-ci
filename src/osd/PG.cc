@@ -2747,6 +2747,14 @@ void PG::publish_stats_to_osd()
   pre_publish.stats.add(unstable_stats);
   utime_t cutoff = now;
   cutoff -= cct->_conf->osd_pg_stat_report_interval_max;
+
+  bool swapped = false;
+  if (get_osdmap()->require_osd_release >= CEPH_RELEASE_MIMIC) {
+    // temporarily move purged_snaps to stats struct to avoid an expensive copy
+    pre_publish.purged_snaps.swap(info.purged_snaps);
+    swapped = true;
+  }
+
   if (pg_stats_publish_valid && pre_publish == pg_stats_publish &&
       info.stats.last_fresh > cutoff) {
     dout(15) << "publish_stats_to_osd " << pg_stats_publish.reported_epoch
@@ -2775,6 +2783,9 @@ void PG::publish_stats_to_osd()
 
     dout(15) << "publish_stats_to_osd " << pg_stats_publish.reported_epoch
 	     << ":" << pg_stats_publish.reported_seq << dendl;
+  }
+  if (swapped) {
+    pre_publish.purged_snaps.swap(info.purged_snaps);
   }
   pg_stats_publish_lock.Unlock();
 }
