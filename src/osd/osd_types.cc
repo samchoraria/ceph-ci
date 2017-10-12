@@ -2732,7 +2732,7 @@ void pg_history_t::generate_test_instances(list<pg_history_t*>& o)
 
 void pg_info_t::encode(bufferlist &bl) const
 {
-  ENCODE_START(32, 26, bl);
+  ENCODE_START(33, 26, bl);
   ::encode(pgid.pgid, bl);
   ::encode(last_update, bl);
   ::encode(last_complete, bl);
@@ -2752,12 +2752,13 @@ void pg_info_t::encode(bufferlist &bl) const
   ::encode(last_backfill, bl);
   ::encode(last_backfill_bitwise, bl);
   ::encode(last_interval_started, bl);
+  ::encode(removed_snaps, bl);
   ENCODE_FINISH(bl);
 }
 
 void pg_info_t::decode(bufferlist::iterator &bl)
 {
-  DECODE_START(32, bl);
+  DECODE_START(33, bl);
   ::decode(pgid.pgid, bl);
   ::decode(last_update, bl);
   ::decode(last_complete, bl);
@@ -2780,6 +2781,9 @@ void pg_info_t::decode(bufferlist::iterator &bl)
   } else {
     last_interval_started = last_epoch_started;
   }
+  if (struct_v >= 33) {
+    ::decode(removed_snaps, bl);
+  }
   DECODE_FINISH(bl);
 }
 
@@ -2794,11 +2798,21 @@ void pg_info_t::dump(Formatter *f) const
   f->dump_int("last_user_version", last_user_version);
   f->dump_stream("last_backfill") << last_backfill;
   f->dump_int("last_backfill_bitwise", (int)last_backfill_bitwise);
+  f->open_array_section("removed_snaps");
+  for (interval_set<snapid_t>::const_iterator i = removed_snaps.begin();
+       i != removed_snaps.end();
+       ++i) {
+    f->open_object_section("interval");
+    f->dump_stream("start") << i.get_start();
+    f->dump_stream("length") << i.get_len();
+    f->close_section();
+  }
+  f->close_section();
   f->open_array_section("purged_snaps");
   for (interval_set<snapid_t>::const_iterator i=purged_snaps.begin();
        i != purged_snaps.end();
        ++i) {
-    f->open_object_section("purged_snap_interval");
+    f->open_object_section("interval");
     f->dump_stream("start") << i.get_start();
     f->dump_stream("length") << i.get_len();
     f->close_section();

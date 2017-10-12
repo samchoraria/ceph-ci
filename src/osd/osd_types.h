@@ -2306,7 +2306,8 @@ struct pg_info_t {
   hobject_t last_backfill;     ///< objects >= this and < last_complete may be missing
   bool last_backfill_bitwise;  ///< true if last_backfill reflects a bitwise (vs nibblewise) sort
 
-  interval_set<snapid_t> purged_snaps;
+  interval_set<snapid_t> removed_snaps;  ///< snaps logically removed
+  interval_set<snapid_t> purged_snaps;   ///< removed snaps we have purged
 
   pg_stat_t stats;
 
