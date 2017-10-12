@@ -3009,9 +3009,11 @@ int PG::_prepare_write_info(CephContext* cct,
   last_written_info = info;
 
   // info.  store purged_snaps separately.
-  interval_set<snapid_t> purged_snaps;
+  interval_set<snapid_t> removed_snaps, purged_snaps;
+  removed_snaps.swap(info.removed_snaps);
   purged_snaps.swap(info.purged_snaps);
   ::encode(info, (*km)[info_key]);
+  removed_snaps.swap(info.removed_snaps);
   purged_snaps.swap(info.purged_snaps);
 
   if (dirty_big_info) {
@@ -3019,6 +3021,7 @@ int PG::_prepare_write_info(CephContext* cct,
     bufferlist& bigbl = (*km)[biginfo_key];
     ::encode(past_intervals, bigbl);
     ::encode(info.purged_snaps, bigbl);
+    ::encode(info.removed_snaps, bigbl);
     //dout(20) << "write_info bigbl " << bigbl.length() << dendl;
     if (logger)
       logger->inc(l_osd_pg_biginfo);
@@ -3344,6 +3347,9 @@ int PG::read_info(
   p = values[biginfo_key].begin();
   ::decode(past_intervals, p);
   ::decode(info.purged_snaps, p);
+  if (!p.end()) {
+    ::decode(info.removed_snaps, p);
+  }
 
   p = values[fastinfo_key].begin();
   if (!p.end()) {
