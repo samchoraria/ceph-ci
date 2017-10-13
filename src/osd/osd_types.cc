@@ -1259,21 +1259,19 @@ unsigned pg_pool_t::get_pg_num_divisor(pg_t pgid) const
 
 /*
  * we have two snap modes:
- *  - pool global snaps
+ *  - pool snaps
  *    - snap existence/non-existence defined by snaps[] and snap_seq
  *  - user managed snaps
- *    - removal governed by removed_snaps
- *
- * we know which mode we're using based on whether removed_snaps is empty.
+ *    - existence tracked by librados user
  */
 bool pg_pool_t::is_pool_snaps_mode() const
 {
-  return removed_snaps.empty() && get_snap_seq() > 0;
+  return has_flag(FLAG_POOL_SNAPS);
 }
 
 bool pg_pool_t::is_unmanaged_snaps_mode() const
 {
-  return removed_snaps.size() && get_snap_seq() > 0;
+  return has_flag(FLAG_SELFMANAGED_SNAPS);
 }
 
 bool pg_pool_t::is_removed_snap(snapid_t s) const
@@ -1323,6 +1321,7 @@ snapid_t pg_pool_t::snap_exists(const char *s) const
 void pg_pool_t::add_snap(const char *n, utime_t stamp)
 {
   assert(!is_unmanaged_snaps_mode());
+  flags |= FLAG_POOL_SNAPS;
   snapid_t s = get_snap_seq() + 1;
   snap_seq = s;
   snaps[s].snapid = s;
@@ -1332,11 +1331,15 @@ void pg_pool_t::add_snap(const char *n, utime_t stamp)
 
 void pg_pool_t::add_unmanaged_snap(uint64_t& snapid)
 {
-  if (removed_snaps.empty()) {
-    assert(!is_pool_snaps_mode());
+  assert(!is_pool_snaps_mode());
+  if (snap_seq == 0) {
+    // kludge for pre-mimic tracking of pool vs selfmanaged snaps.  after
+    // mimic this field is not decoded but our flag is set; pre-mimic, we
+    // have a non-empty removed_snaps to signifiy a non-pool-snaps pool.
     removed_snaps.insert(snapid_t(1));
     snap_seq = 1;
   }
+  flags |= FLAG_SELFMANAGED_SNAPS;
   snapid = snap_seq = snap_seq + 1;
 }
 
@@ -1563,7 +1566,13 @@ void pg_pool_t::encode(bufferlist& bl, uint64_t features) const
   ::encode(snaps, bl, features);
   ::encode(removed_snaps, bl);
   ::encode(auid, bl);
-  ::encode(flags, bl);
+  if (v >= 27) {
+    ::encode(flags, bl);
+  } else {
+    auto tmp = flags;
+    tmp &= ~(FLAG_SELFMANAGED_SNAPS | FLAG_POOL_SNAPS);
+    ::encode(tmp, bl);
+  }
   ::encode(crash_replay_interval, bl);
   ::encode(min_size, bl);
   ::encode(quota_max_bytes, bl);
@@ -1662,6 +1671,14 @@ void pg_pool_t::decode(bufferlist::iterator& bl)
       crash_replay_interval = 60;
     else
       crash_replay_interval = 0;
+  }
+  // upgrade path for selfmanaged vs pool snaps
+  if (snap_seq > 0 && (flags & (FLAG_SELFMANAGED_SNAPS|FLAG_POOL_SNAPS)) == 0) {
+    if (!removed_snaps.empty()) {
+      flags |= FLAG_SELFMANAGED_SNAPS;
+    } else {
+      flags |= FLAG_POOL_SNAPS;
+    }
   }
   if (struct_v >= 7) {
     ::decode(min_size, bl);
