@@ -3808,6 +3808,36 @@ int BlueStore::_set_cache_sizes()
   return 0;
 }
 
+int BlueStore::write_meta(const std::string& key, const std::string& value)
+{
+  bluestore_bdev_label_t label;
+  string p = path + "/block";
+  int r = _read_bdev_label(cct, p, &label);
+  if (r < 0) {
+    return ObjectStore::write_meta(key, value);
+  }
+  label.meta[key] = value;
+  r = _write_bdev_label(p, label);
+  assert(r == 0);
+  return ObjectStore::write_meta(key, value);
+}
+
+int BlueStore::read_meta(const std::string& key, std::string *value)
+{
+  bluestore_bdev_label_t label;
+  string p = path + "/block";
+  int r = _read_bdev_label(cct, p, &label);
+  if (r < 0) {
+    return ObjectStore::read_meta(key, value);
+  }
+  auto i = label.meta.find(key);
+  if (i == label.meta.end()) {
+    return ObjectStore::read_meta(key, value);
+  }
+  *value = i->second;
+  return 0;
+}
+
 void BlueStore::_init_logger()
 {
   PerfCountersBuilder b(cct, "bluestore",
@@ -4535,7 +4565,9 @@ int BlueStore::_open_db(bool create)
     string bfn;
     struct stat st;
 
-    bfn = path + "/block.db";
+    if (read_meta("path_block.db", &bfn) < 0) {
+      bfn = path + "/block.db";
+    }
     if (::stat(bfn.c_str(), &st) == 0) {
       r = bluefs->add_block_device(BlueFS::BDEV_DB, bfn);
       if (r < 0) {
@@ -4574,7 +4606,9 @@ int BlueStore::_open_db(bool create)
     }
 
     // shared device
-    bfn = path + "/block";
+    if (read_meta("path_block", &bfn) < 0) {
+      bfn = path + "/block";
+    }
     r = bluefs->add_block_device(bluefs_shared_bdev, bfn);
     if (r < 0) {
       derr << __func__ << " add block device(" << bfn << ") returned: " 
@@ -4603,7 +4637,9 @@ int BlueStore::_open_db(bool create)
       bluefs_extents.insert(start, initial);
     }
 
-    bfn = path + "/block.wal";
+    if (read_meta("path_block.wal", &bfn) < 0) {
+      bfn = path + "/block.wal";
+    }
     if (::stat(bfn.c_str(), &st) == 0) {
       r = bluefs->add_block_device(BlueFS::BDEV_WAL, bfn);
       if (r < 0) {
@@ -5217,6 +5253,13 @@ int BlueStore::mkfs()
   if (r < 0)
     goto out_close_fsid;
 
+  if (cct->_conf->bluestore_block_wal_path.size()) {
+    write_meta("path_block.wal", cct->_conf->bluestore_block_wal_path);
+  }
+  if (cct->_conf->bluestore_block_db_path.size()) {
+    write_meta("path_block.db", cct->_conf->bluestore_block_db_path);
+  }
+
   // choose min_alloc_size
   if (cct->_conf->bluestore_min_alloc_size) {
     min_alloc_size = cct->_conf->bluestore_min_alloc_size;
@@ -5272,7 +5315,7 @@ int BlueStore::mkfs()
   if (r < 0)
     goto out_close_fm;
 
-  r = write_meta("bluefs", stringify((int)cct->_conf->bluestore_bluefs));
+  r = write_meta("bluefs", stringify(bluefs ? 1 : 0));
   if (r < 0)
     goto out_close_fm;
 
