@@ -886,6 +886,7 @@ COMMAND("osd blacklist " \
 COMMAND("osd blacklist ls", "show blacklisted clients", "osd", "r", "cli,rest")
 COMMAND("osd blacklist clear", "clear all blacklisted clients", "osd", "rw",
         "cli,rest")
+COMMAND("osd pool spamsnaps name=pool,type=CephPoolname", "asdf", "osd", "rw", "cli,rest")
 COMMAND("osd pool mksnap " \
 	"name=pool,type=CephPoolname " \
 	"name=snap,type=CephString", \

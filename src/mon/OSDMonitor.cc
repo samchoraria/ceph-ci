@@ -9809,6 +9809,34 @@ bool OSDMonitor::prepare_command_impl(MonOpRequestRef op,
 	goto reply;
       }
     }
+  } else if (prefix == "osd pool spamsnaps") {
+    string poolstr;
+    cmd_getval(cct, cmdmap, "pool", poolstr);
+    int64_t pool = osdmap.lookup_pg_pool_name(poolstr.c_str());
+    if (pool < 0) {
+      ss << "unrecognized pool '" << poolstr << "'";
+      err = -ENOENT;
+      goto reply;
+    }
+    const pg_pool_t *p = osdmap.get_pg_pool(pool);
+    pg_pool_t *pp = 0;
+    if (pending_inc.new_pools.count(pool))
+      pp = &pending_inc.new_pools[pool];
+    if (!pp) {
+      pp = &pending_inc.new_pools[pool];
+      *pp = *p;
+    }
+    int n = 100000;
+    pp->snap_seq = n*2 + 10;
+    pp->flags |= pg_pool_t::FLAG_SELFMANAGED_SNAPS;
+    for (int i = 2; i < n; ++i) {
+      pp->remove_unmanaged_snap(i*2);
+    }
+    pp->set_snap_epoch(pending_inc.epoch);
+    getline(ss, rs);
+    wait_for_finished_proposal(op, new Monitor::C_Command(mon, op, 0, rs,
+					      get_last_committed() + 1));
+    return true;
   } else if (prefix == "osd pool mksnap") {
     string poolstr;
     cmd_getval(cct, cmdmap, "pool", poolstr);
