@@ -230,6 +230,7 @@ int OSDMap::Incremental::propagate_snaps_to_tiers(CephContext *cct,
 	tier->snap_epoch = base.snap_epoch;
 	tier->snaps = base.snaps;
 	tier->recent_removed_snaps = base.recent_removed_snaps;
+	tier->recent_removed_snaps_begin = base.recent_removed_snaps_begin;
       }
     }
   }
@@ -3044,8 +3045,12 @@ void OSDMap::print_pools(ostream& out) const
     for (const auto &snap : pool.second.snaps)
       out << "\tsnap " << snap.second.snapid << " '" << snap.second.name << "' " << snap.second.stamp << "\n";
 
-    if (!pool.second.recent_removed_snaps.empty())
-      out << "\tremoved_snaps " << pool.second.recent_removed_snaps << "\n";
+    if (!pool.second.recent_removed_snaps.empty()) {
+      out << "\trecent_removed_snaps_begin "
+	  << pool.second.recent_removed_snaps_begin << "\n";
+      out << "\trecent_removed_snaps " << pool.second.recent_removed_snaps
+	  << "\n";
+    }
   }
   out << std::endl;
 }

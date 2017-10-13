@@ -1186,6 +1186,7 @@ void pg_pool_t::dump(Formatter *f) const
     f->close_section();
   }
   f->close_section();
+  f->dump_int("recent_removed_snaps_begin", recent_removed_snaps_begin);
   f->dump_unsigned("quota_max_bytes", quota_max_bytes);
   f->dump_unsigned("quota_max_objects", quota_max_objects);
   f->open_array_section("tiers");
@@ -1549,7 +1550,7 @@ void pg_pool_t::encode(bufferlist& bl, uint64_t features) const
     return;
   }
 
-  uint8_t v = 26;
+  uint8_t v = 27;
   if (!(features & CEPH_FEATURE_NEW_OSDOP_ENCODING)) {
     // this was the first post-hammer thing we added; if it's missing, encode
     // like hammer.
@@ -1557,6 +1558,9 @@ void pg_pool_t::encode(bufferlist& bl, uint64_t features) const
   }
   if (!HAVE_FEATURE(features, SERVER_LUMINOUS)) {
     v = 24;
+  }
+  if (!HAVE_FEATURE(features, SERVER_MIMIC)) {
+    v = 26;
   }
 
   ENCODE_START(v, 5, bl);
@@ -1632,12 +1636,15 @@ void pg_pool_t::encode(bufferlist& bl, uint64_t features) const
   if (v >= 26) {
     ::encode(application_metadata, bl);
   }
+  if (v >= 27) {
+    ::encode(recent_removed_snaps_begin, bl);
+  }
   ENCODE_FINISH(bl);
 }
 
 void pg_pool_t::decode(bufferlist::iterator& bl)
 {
-  DECODE_START_LEGACY_COMPAT_LEN(26, 5, 5, bl);
+  DECODE_START_LEGACY_COMPAT_LEN(27, 5, 5, bl);
   ::decode(type, bl);
   ::decode(size, bl);
   ::decode(crush_rule, bl);
@@ -1795,6 +1802,9 @@ void pg_pool_t::decode(bufferlist::iterator& bl)
   if (struct_v >= 26) {
     ::decode(application_metadata, bl);
   }
+  if (struct_v >= 27) {
+    ::decode(recent_removed_snaps_begin, bl);
+  }
   DECODE_FINISH(bl);
   calc_pg_masks();
   calc_grade_table();
@@ -1882,6 +1892,8 @@ ostream& operator<<(ostream& out, const pg_pool_t& p)
     out << " flags " << p.get_flags_string();
   if (p.crash_replay_interval)
     out << " crash_replay_interval " << p.crash_replay_interval;
+  if (p.recent_removed_snaps_begin)
+    out << " rrsb " << p.recent_removed_snaps_begin;
   if (p.quota_max_bytes)
     out << " max_bytes " << p.quota_max_bytes;
   if (p.quota_max_objects)

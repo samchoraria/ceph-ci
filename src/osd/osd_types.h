@@ -1325,6 +1325,10 @@ public:
    * removed_snaps_begin) here for convenience.
    */
   interval_set<snapid_t> recent_removed_snaps;
+  epoch_t recent_removed_snaps_begin = 0;
+
+  /// new_{removed,purged}_snaps spanning set includes all deletions >= this
+  epoch_t purged_snaps_upper_bound = 0;
 
   unsigned pg_num_mask, pgp_num_mask;
 
