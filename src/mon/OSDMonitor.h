@@ -362,6 +362,9 @@ private:
 
   string make_snap_epoch_key(int64_t pool, epoch_t epoch);
   string make_snap_key(int64_t pool, snapid_t snap);
+  string make_snap_purged_key(int64_t pool, snapid_t snap);
+  bool try_prune_purged_snaps();
+
   bool prepare_set_flag(MonOpRequestRef op, int flag);
   bool prepare_unset_flag(MonOpRequestRef op, int flag);
 

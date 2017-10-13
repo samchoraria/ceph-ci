@@ -1298,11 +1298,14 @@ void OSDMonitor::encode_pending(MonitorDBStore::TransactionRef t)
 	t->put(OSD_SNAP_PREFIX, k, v);
       }
     }
-    for (auto& i : pending_purged_snaps) {
-      for (auto& j : i.second) {
-	string k = make_snap_epoch_key(i.first, j.first);
-	dout(20) << " updating " << k << " with new pruned info" << dendl;
-	t->put(OSD_SNAP_PREFIX, k, j.second);
+    for (auto& i : pending_inc.new_removed_snaps) {
+      auto poolid = i.first;
+      for (auto snap : i.second) {
+	// each snap purged
+	string k = make_snap_purged_key(poolid, snap);
+	bufferlist v;
+	::encode(pending_inc.epoch, v);
+	t->put(OSD_SNAP_PREFIX, k, v);
       }
     }
   }
@@ -3513,6 +3516,10 @@ void OSDMonitor::tick()
     }
   }
 
+  if (try_prune_purged_snaps()) {
+    do_propose = true;
+  }
+
   if (update_pools_status())
     do_propose = true;
 
@@ -5006,6 +5013,83 @@ string OSDMonitor::make_snap_key(int64_t pool, snapid_t snap)
   snprintf(k, sizeof(k), "removed_snap_%lld_%016llx",
 	   (unsigned long long)pool, (unsigned long long)snap);
   return k;
+}
+
+string OSDMonitor::make_snap_purged_key(int64_t pool, snapid_t snap)
+{
+  char k[40];
+  snprintf(k, sizeof(k), "purged_snap_%lld_%016llx",
+	   (unsigned long long)pool, (unsigned long long)snap);
+  return k;
+}
+
+bool OSDMonitor::try_prune_purged_snaps()
+{
+  if (!mon->mgrstatmon()->is_readable()) {
+    return false;
+  }
+  if (osdmap.require_osd_release < CEPH_RELEASE_MIMIC) {
+    return false;
+  }
+  if (!pending_inc.new_purged_snaps.empty()) {
+    return false;  // we already pruned for this epoch
+  }
+
+  unsigned max_prune = cct->_conf->get_val<uint64_t>(
+    "mon_max_snap_prune_per_epoch");
+  if (!max_prune) {
+    max_prune = 100000;
+  }
+  dout(10) << __func__ << " max_prune " << max_prune << dendl;
+
+  unsigned num_pruned = 0;
+  auto& purged_snaps = mon->mgrstatmon()->get_digest().purged_snaps;
+  for (auto& p : osdmap.get_pools()) {
+    auto q = purged_snaps.find(p.first);
+    if (q == purged_snaps.end()) {
+      continue;
+    }
+    auto& purged = q->second;
+    if (purged.empty()) {
+      dout(20) << __func__ << " " << p.first << " nothing purged" << dendl;
+      continue;
+    }
+    mempool::osdmap::flat_set<snapid_t> to_prune;
+    for (auto i = purged.begin(); i != purged.end(); ++i) {
+      auto end = i.get_start() + i.get_len();
+      for (snapid_t snap = i.get_start(); snap < end; ++snap) {
+	string k;
+	make_snap_purged_key(p.first, snap);
+	bufferlist v;
+	if (mon->store->get(OSD_SNAP_PREFIX, k, v) == 0) {
+	  // already removed.
+	  // be a bit aggressive about backing off here, because the mon may
+	  // do a lot of work going through this set, and if we know the
+	  // purged set from the OSDs is at least *partly* stale we may as
+	  // well wait for it to be fresh.
+	  break;
+	}
+	to_prune.insert(snap);
+	++num_pruned;
+	if (num_pruned >= max_prune) {
+	  break;
+	}
+      }
+      if (num_pruned >= max_prune) {
+	break;
+      }
+    }
+    if (!to_prune.empty()) {
+      dout(10) << __func__ << " pool " << p.first << " pruned " << to_prune
+	       << dendl;
+      pending_inc.new_purged_snaps[p.first].swap(to_prune);
+    }
+    if (num_pruned >= max_prune) {
+      break;
+    }
+  }
+  dout(10) << __func__ << " pruned " << num_pruned << dendl;
+  return !!num_pruned;
 }
 
 bool OSDMonitor::update_pools_status()
