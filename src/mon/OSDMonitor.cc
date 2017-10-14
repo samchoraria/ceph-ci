@@ -2825,7 +2825,7 @@ bool OSDMonitor::preprocess_remove_snaps(MonOpRequestRef op)
 	 p != q->second.end();
 	 ++p) {
       if (*p > pi->get_snap_seq() ||
-	  !pi->removed_snaps.contains(*p))
+	  !pi->recent_removed_snaps.contains(*p))
 	return false;
     }
   }
@@ -2853,17 +2853,17 @@ bool OSDMonitor::prepare_remove_snaps(MonOpRequestRef op)
     for (vector<snapid_t>::iterator q = p->second.begin();
 	 q != p->second.end();
 	 ++q) {
-      if (!pi.removed_snaps.contains(*q) &&
+      if (!pi.recent_removed_snaps.contains(*q) &&
 	  (!pending_inc.new_pools.count(p->first) ||
-	   !pending_inc.new_pools[p->first].removed_snaps.contains(*q))) {
+	   !pending_inc.new_pools[p->first].recent_removed_snaps.contains(*q))) {
 	pg_pool_t *newpi = pending_inc.get_new_pool(p->first, &pi);
 	if (osdmap.require_osd_release < CEPH_RELEASE_MIMIC) {
 	  // NOTE: this is imprecise!  we may end up setting this in the osdmap
 	  // when the require_osd_release is set to mimic, in which case we will
 	  // drop this in pg_pool_t::encode().
-	  newpi->removed_snaps.insert(*q);
+	  newpi->recent_removed_snaps.insert(*q);
 	  dout(10) << " pool " << p->first << " removed_snaps added " << *q
-		   << " (now " << newpi->removed_snaps << ")" << dendl;
+		   << " (now " << newpi->recent_removed_snaps << ")" << dendl;
 	}
 	if (*q > newpi->get_snap_seq()) {
 	  dout(10) << " pool " << p->first << " snap_seq "
@@ -10279,7 +10279,7 @@ bool OSDMonitor::prepare_command_impl(MonOpRequestRef op,
       err = -ENOTSUP;
       goto reply;
     }
-    if ((!tp->removed_snaps.empty() || !tp->snaps.empty()) &&
+    if ((!tp->recent_removed_snaps.empty() || !tp->snaps.empty()) &&
 	((force_nonempty != "--force-nonempty") ||
 	 (!g_conf->mon_debug_unsafe_allow_tier_with_nonempty_snaps))) {
       ss << "tier pool '" << tierpoolstr << "' has snapshot state; it cannot be added as a tier without breaking the pool";

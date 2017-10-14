@@ -1176,7 +1176,16 @@ void pg_pool_t::dump(Formatter *f) const
     f->close_section();
   }
   f->close_section();
-  f->dump_stream("removed_snaps") << removed_snaps;
+  f->open_array_section("recent_removed_snaps");
+  for (interval_set<snapid_t>::const_iterator i = recent_removed_snaps.begin();
+       i != recent_removed_snaps.end();
+       ++i) {
+    f->open_object_section("interval");
+    f->dump_stream("start") << i.get_start();
+    f->dump_stream("length") << i.get_len();
+    f->close_section();
+  }
+  f->close_section();
   f->dump_unsigned("quota_max_bytes", quota_max_bytes);
   f->dump_unsigned("quota_max_objects", quota_max_objects);
   f->open_array_section("tiers");
@@ -1279,7 +1288,7 @@ bool pg_pool_t::is_removed_snap(snapid_t s) const
   if (is_pool_snaps_mode())
     return s <= get_snap_seq() && snaps.count(s) == 0;
   else
-    return removed_snaps.contains(s);
+    return recent_removed_snaps.contains(s);
 }
 
 /*
@@ -1294,16 +1303,16 @@ void pg_pool_t::build_removed_snaps(interval_set<snapid_t>& rs) const
       if (snaps.count(s) == 0)
 	rs.insert(s);
   } else {
-    rs = removed_snaps;
+    rs = recent_removed_snaps;
   }
 }
 
 bool pg_pool_t::maybe_updated_removed_snaps(const interval_set<snapid_t>& cached) const
 {
   if (is_unmanaged_snaps_mode()) { // remove_unmanaged_snap increments range_end
-    if (removed_snaps.empty() || cached.empty()) // range_end is undefined
-      return removed_snaps.empty() != cached.empty();
-    return removed_snaps.range_end() != cached.range_end();
+    if (recent_removed_snaps.empty() || cached.empty()) // range_end is undefined
+      return recent_removed_snaps.empty() != cached.empty();
+    return recent_removed_snaps.range_end() != cached.range_end();
   }
   return true;
 }
@@ -1335,8 +1344,8 @@ void pg_pool_t::add_unmanaged_snap(uint64_t& snapid)
   if (snap_seq == 0) {
     // kludge for pre-mimic tracking of pool vs selfmanaged snaps.  after
     // mimic this field is not decoded but our flag is set; pre-mimic, we
-    // have a non-empty removed_snaps to signifiy a non-pool-snaps pool.
-    removed_snaps.insert(snapid_t(1));
+    // have a non-empty recent_removed_snaps to signifiy a non-pool-snaps pool.
+    recent_removed_snaps.insert(snapid_t(1));
     snap_seq = 1;
   }
   flags |= FLAG_SELFMANAGED_SNAPS;
@@ -1353,10 +1362,10 @@ void pg_pool_t::remove_snap(snapid_t s)
 void pg_pool_t::remove_unmanaged_snap(snapid_t s)
 {
   assert(is_unmanaged_snaps_mode());
-  removed_snaps.insert(s);
+  recent_removed_snaps.insert(s);
   snap_seq = snap_seq + 1;
   // add in the new seq, just to try to keep the interval_set contiguous
-  removed_snaps.insert(get_snap_seq());
+  recent_removed_snaps.insert(get_snap_seq());
 }
 
 SnapContext pg_pool_t::get_snap_context() const
@@ -1458,13 +1467,13 @@ void pg_pool_t::encode(bufferlist& bl, uint64_t features) const
 
     __u32 n = snaps.size();
     ::encode(n, bl);
-    n = removed_snaps.num_intervals();
+    n = recent_removed_snaps.num_intervals();
     ::encode(n, bl);
 
     ::encode(auid, bl);
 
     ::encode_nohead(snaps, bl, features);
-    ::encode_nohead(removed_snaps, bl);
+    ::encode_nohead(recent_removed_snaps, bl);
     return;
   }
 
@@ -1484,7 +1493,7 @@ void pg_pool_t::encode(bufferlist& bl, uint64_t features) const
     ::encode(snap_seq, bl);
     ::encode(snap_epoch, bl);
     ::encode(snaps, bl, features);
-    ::encode(removed_snaps, bl);
+    ::encode(recent_removed_snaps, bl);
     ::encode(auid, bl);
     ::encode(flags, bl);
     ::encode(crash_replay_interval, bl);
@@ -1511,7 +1520,7 @@ void pg_pool_t::encode(bufferlist& bl, uint64_t features) const
     ::encode(snap_seq, bl);
     ::encode(snap_epoch, bl);
     ::encode(snaps, bl, features);
-    ::encode(removed_snaps, bl);
+    ::encode(recent_removed_snaps, bl);
     ::encode(auid, bl);
     ::encode(flags, bl);
     ::encode(crash_replay_interval, bl);
@@ -1564,7 +1573,7 @@ void pg_pool_t::encode(bufferlist& bl, uint64_t features) const
   ::encode(snap_seq, bl);
   ::encode(snap_epoch, bl);
   ::encode(snaps, bl, features);
-  ::encode(removed_snaps, bl);
+  ::encode(recent_removed_snaps, bl);
   ::encode(auid, bl);
   if (v >= 27) {
     ::encode(flags, bl);
@@ -1646,7 +1655,7 @@ void pg_pool_t::decode(bufferlist::iterator& bl)
 
   if (struct_v >= 3) {
     ::decode(snaps, bl);
-    ::decode(removed_snaps, bl);
+    ::decode(recent_removed_snaps, bl);
     ::decode(auid, bl);
   } else {
     __u32 n, m;
@@ -1654,7 +1663,7 @@ void pg_pool_t::decode(bufferlist::iterator& bl)
     ::decode(m, bl);
     ::decode(auid, bl);
     ::decode_nohead(n, snaps, bl);
-    ::decode_nohead(m, removed_snaps, bl);
+    ::decode_nohead(m, recent_removed_snaps, bl);
   }
 
   if (struct_v >= 4) {
@@ -1674,7 +1683,7 @@ void pg_pool_t::decode(bufferlist::iterator& bl)
   }
   // upgrade path for selfmanaged vs pool snaps
   if (snap_seq > 0 && (flags & (FLAG_SELFMANAGED_SNAPS|FLAG_POOL_SNAPS)) == 0) {
-    if (!removed_snaps.empty()) {
+    if (!recent_removed_snaps.empty()) {
       flags |= FLAG_SELFMANAGED_SNAPS;
     } else {
       flags |= FLAG_POOL_SNAPS;
@@ -1821,7 +1830,7 @@ void pg_pool_t::generate_test_instances(list<pg_pool_t*>& o)
   a.snaps[6].stamp = utime_t(23423, 4);
   o.push_back(new pg_pool_t(a));
 
-  a.removed_snaps.insert(2);   // not quite valid to combine with snaps!
+  a.recent_removed_snaps.insert(2);   // not quite valid to combine with snaps!
   a.quota_max_bytes = 2473;
   a.quota_max_objects = 4374;
   a.tiers.insert(0);

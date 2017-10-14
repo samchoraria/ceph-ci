@@ -1321,11 +1321,10 @@ public:
   map<snapid_t, pool_snap_info_t> snaps;
   /*
    * Alternatively, if we are defining non-pool snaps (e.g. via the
-   * Ceph MDS), we must track @removed_snaps (since @snaps is not
-   * used).  Snaps and removed_snaps are to be used exclusive of each
-   * other!
+   * Ceph MDS), we keep recently removed snaps (everything removed at or after
+   * removed_snaps_begin) here for convenience.
    */
-  interval_set<snapid_t> removed_snaps;
+  interval_set<snapid_t> recent_removed_snaps;
 
   unsigned pg_num_mask, pgp_num_mask;
 
