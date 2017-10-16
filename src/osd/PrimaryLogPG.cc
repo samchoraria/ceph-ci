@@ -9799,7 +9799,6 @@ int PrimaryLogPG::find_object_context(const hobject_t& oid,
   hobject_t head = oid.get_head();
 
   // we want a snap
-#warning fixme recent
   if (!map_snapid_to_clone && pool.info.is_recent_removed_snap(oid.snap)) {
     dout(10) << __func__ << " snap " << oid.snap << " is removed" << dendl;
     return -ENOENT;
