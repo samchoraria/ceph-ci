@@ -1021,11 +1021,6 @@ void PGMap::apply_incremental(CephContext *cct, const Incremental& inc)
   assert(inc.version == version+1);
   version++;
 
-  utime_t delta_t;
-  delta_t = inc.stamp;
-  delta_t -= stamp;
-  stamp = inc.stamp;
-
   pool_stat_t pg_sum_old = pg_sum;
   mempool::pgmap::unordered_map<uint64_t, pool_stat_t> pg_pool_sum_old;
 
@@ -1085,18 +1080,24 @@ void PGMap::apply_incremental(CephContext *cct, const Incremental& inc)
     }
   }
 
-  // calculate a delta, and average over the last 2 deltas.
-  pool_stat_t d = pg_sum;
-  d.stats.sub(pg_sum_old.stats);
-  pg_sum_deltas.push_back(make_pair(d, delta_t));
-  stamp_delta += delta_t;
-
-  pg_sum_delta.stats.add(d.stats);
-  if (pg_sum_deltas.size() > (unsigned)MAX(1, cct ? cct->_conf->mon_stat_smooth_intervals : 1)) {
-    pg_sum_delta.stats.sub(pg_sum_deltas.front().first.stats);
-    stamp_delta -= pg_sum_deltas.front().second;
-    pg_sum_deltas.pop_front();
+  if (!stamp.is_zero() && !pg_sum_old.stats.sum.is_zero()) {
+    utime_t delta_t;
+    delta_t = inc.stamp;
+    delta_t -= stamp;
+    // calculate a delta, and average over the last 2 deltas.
+    pool_stat_t d = pg_sum;
+    d.stats.sub(pg_sum_old.stats);
+    pg_sum_deltas.push_back(make_pair(d, delta_t));
+    stamp_delta += delta_t;
+    pg_sum_delta.stats.add(d.stats);
+    unsigned smooth_intervals = (unsigned)MAX(1, cct ? cct->_conf->mon_stat_smooth_intervals : 1);
+    if (pg_sum_deltas.size() > smooth_intervals) {
+      pg_sum_delta.stats.sub(pg_sum_deltas.front().first.stats);
+      stamp_delta -= pg_sum_deltas.front().second;
+      pg_sum_deltas.pop_front();
+    }
   }
+  stamp = inc.stamp;
 
   update_pool_deltas(cct, inc.stamp, pg_pool_sum_old);
 
@@ -1895,13 +1896,17 @@ void PGMap::update_delta(
    */
   pool_stat_t d = current_pool_sum;
   d.stats.sub(old_pool_sum.stats);
-  delta_avg_list->push_back(make_pair(d,delta_t));
-  *result_ts_delta += delta_t;
 
   /* Aggregate current delta, and take out the last seen delta (if any) to
    * average it out.
+   * If mgr restarts first update of pg_sum is previous pg_sum
+   * so skip this huge value.
    */
-  result_pool_delta->stats.add(d.stats);
+  if(!old_pool_sum.stats.sum.is_zero()) {
+    delta_avg_list->push_back(make_pair(d,delta_t));
+    *result_ts_delta += delta_t;
+    result_pool_delta->stats.add(d.stats);
+  }
   size_t s = MAX(1, cct ? cct->_conf->mon_stat_smooth_intervals : 1);
   if (delta_avg_list->size() > s) {
     result_pool_delta->stats.sub(delta_avg_list->front().first.stats);
