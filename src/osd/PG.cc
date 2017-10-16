@@ -3479,8 +3479,10 @@ void PG::update_snap_map(
  */
 void PG::filter_snapc(vector<snapid_t> &snaps)
 {
-  //nothing needs to trim, we can return immediately
-  if(snap_trimq.empty() && info.purged_snaps.empty())
+  // nothing needs to trim, we can return immediately
+  if (info.purged_snaps.empty() &&
+      info.removed_snaps.empty() &&
+      pool.info.recent_removed_snaps.empty())
     return;
 
   bool filtering = false;
@@ -3488,7 +3490,8 @@ void PG::filter_snapc(vector<snapid_t> &snaps)
   for (vector<snapid_t>::iterator p = snaps.begin();
        p != snaps.end();
        ++p) {
-    if (snap_trimq.contains(*p) || info.purged_snaps.contains(*p)) {
+    if (info.removed_snaps.contains(*p) ||
+	pool.info.recent_removed_snaps.contains(*p)) {
       if (!filtering) {
 	// start building a new vector with what we've seen so far
 	dout(10) << "filter_snapc filtering " << snaps << dendl;
