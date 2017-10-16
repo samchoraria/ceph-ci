@@ -248,7 +248,7 @@ void PGPool::update(CephContext *cct, OSDMapRef map)
       (pi->get_snap_epoch() == map->get_epoch())) {
     updated = true;
     if (pi->maybe_updated_removed_snaps(cached_removed_snaps)) {
-      pi->build_removed_snaps(newly_removed_snaps);
+      pi->legacy_build_removed_snaps(newly_removed_snaps);
       if (cached_removed_snaps.subset_of(newly_removed_snaps)) {
           interval_set<snapid_t> removed_snaps = newly_removed_snaps;
           newly_removed_snaps.subtract(cached_removed_snaps);
@@ -287,7 +287,7 @@ void PGPool::update(CephContext *cct, OSDMapRef map)
     << dendl;
   if (cct->_conf->osd_debug_verify_cached_snaps) {
     interval_set<snapid_t> actual_removed_snaps;
-    pi->build_removed_snaps(actual_removed_snaps);
+    pi->legacy_build_removed_snaps(actual_removed_snaps);
     if (!(actual_removed_snaps == cached_removed_snaps)) {
       lgeneric_derr(cct) << __func__
 			 << ": mismatch between the actual removed snaps "

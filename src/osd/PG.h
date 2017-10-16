@@ -237,7 +237,7 @@ struct PGPool {
     info = *pi;
     snapc = pi->get_snap_context();
     if (map->require_osd_release < CEPH_RELEASE_MIMIC) {
-      pi->build_removed_snaps(cached_removed_snaps);
+      pi->legacy_build_removed_snaps(cached_removed_snaps);
     }
   }
 

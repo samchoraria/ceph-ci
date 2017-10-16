@@ -1579,7 +1579,7 @@ public:
    * build set of known-removed sets from either pool snaps or
    * explicit removed_snaps set.
    */
-  void build_removed_snaps(interval_set<snapid_t>& rs) const;
+  void legacy_build_removed_snaps(interval_set<snapid_t>& rs) const;
   bool maybe_updated_removed_snaps(const interval_set<snapid_t>& cached) const;
   snapid_t snap_exists(const char *s) const;
   void add_snap(const char *n, utime_t stamp);
