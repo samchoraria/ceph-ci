@@ -1176,6 +1176,54 @@ void OSDMonitor::encode_pending(MonitorDBStore::TransactionRef t)
 	}
       }
     }
+    if (osdmap.require_osd_release >= CEPH_RELEASE_MIMIC) {
+      unsigned keep = cct->_conf->get_val<uint64_t>(
+	"mon_osd_recent_removed_snaps_epochs");
+      dout(20) << "mon_osd_recent_removed_snaps_epochs " << keep << dendl;
+      if (pending_inc.epoch > keep) {
+	epoch_t target = pending_inc.epoch - keep;
+	pg_pool_t *pp = nullptr;
+	for (auto& p : tmp.get_pools()) {
+	  string start = make_snap_epoch_key(
+	    p.first, p.second.recent_removed_snaps_begin);
+	  string end = make_snap_epoch_key(p.first, target);
+	  derr << " start " << start << " end " << end << dendl;
+	  auto it = mon->store->get_iterator(OSD_SNAP_PREFIX);
+	  it->lower_bound(start);
+	  while (it->valid() && it->key() < end) {
+	    bufferlist v = it->value();
+	    auto bit = v.begin();
+	    vector<snapid_t> snaps;
+	    ::decode(snaps, bit);
+	    dout(20) << __func__ << " pool " << p.first << " removing snaps "
+		     << snaps << " from recent_removed_snaps from key "
+		     << it->key() << dendl;
+	    if (!pp) {
+	      pp = &pending_inc.new_pools[p.first];
+	      *pp = p.second;
+	    }
+	    for (auto snap : snaps) {
+	      if (pp->recent_removed_snaps.contains(snap)) {
+		pp->recent_removed_snaps.erase(snap);
+	      } else {
+		derr << __func__ << " warning: recent snap " << snap
+		     << " from key " << it->key()
+		     << " not in recent_removed_snaps "
+		     << pp->recent_removed_snaps << dendl;
+		// FIXME: should we rebuild the removed_snaps in this case
+		// by considering [target, epoch) + new_removed_snaps?
+	      }
+	    }
+	    it->next();
+	  }
+	  if (pp) {
+	    dout(10) << __func__ << " pool " << p.first
+		     << " recent_removed_snaps_begin now " << target << dendl;
+	    pp->recent_removed_snaps_begin = target;
+	  }
+	}
+      }
+    }
   }
 
   // tell me about it

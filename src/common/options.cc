@@ -1140,6 +1140,11 @@ std::vector<Option> get_global_options() {
     .set_default(100)
     .set_description("Max number of pruned snaps we will process in a single OSDMap epoch"),
 
+    Option("mon_osd_recent_removed_snaps_epochs", Option::TYPE_UINT, Option::LEVEL_ADVANCED)
+    .set_default(100)
+    .set_description("Number of epochs to record recent snap deletions in OSDMap")
+    .set_long_description("OSDs that receive requests older than this (e.g., from laggy/stale clients) will disconnect the client and force them to resend requests with a more recent map, so a low value here may make laggy clients slower to recover."),
+
     Option("mon_min_osdmap_epochs", Option::TYPE_INT, Option::LEVEL_ADVANCED)
     .set_default(500)
     .set_description(""),
