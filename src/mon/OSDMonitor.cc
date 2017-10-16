@@ -1127,6 +1127,55 @@ void OSDMonitor::encode_pending(MonitorDBStore::TransactionRef t)
 			<< "required " << ceph_release_name(mv);
       pending_inc.new_require_min_compat_client = mv;
     }
+
+    // upgrade to mimic?
+    if (osdmap.require_osd_release < CEPH_RELEASE_MIMIC &&
+	tmp.require_osd_release >= CEPH_RELEASE_MIMIC) {
+      dout(10) << __func__ << " first mimic epoch" << dendl;
+      // record this epoch as the deletion for all legacy removed_snaps
+      for (auto& p : tmp.get_pools()) {
+	if (!p.second.recent_removed_snaps.empty()) {
+	  // all snaps removed this epoch
+	  vector<snapid_t> snaps;
+	  snaps.reserve(p.second.recent_removed_snaps.size());
+	  for (auto q = p.second.recent_removed_snaps.begin();
+	       q != p.second.recent_removed_snaps.end();
+	       ++q) {
+	    auto end = q.get_start() + q.get_len();
+	    for (snapid_t s = q.get_start(); s < end; ++s) {
+	      snaps.push_back(s);
+	    }
+	  }
+	  dout(10) << __func__ << " converting pool " << p.first
+		   << " with " << snaps.size()
+		   << " legacy removed_snaps" << dendl;
+
+	  string k = make_snap_epoch_key(p.first, pending_inc.epoch);
+	  bufferlist v;
+	  ::encode(snaps, v);
+	  vector<epoch_t> pruned(snaps.size());
+	  ::encode(pruned, v);
+	  t->put(OSD_SNAP_PREFIX, k, v);
+
+	  for (auto snap : snaps) {
+	    // each snap removed
+	    string k = make_snap_key(p.first, snap);
+	    bufferlist v;
+	    ::encode(pending_inc.epoch, v);
+	    t->put(OSD_SNAP_PREFIX, k, v);
+	  }
+
+	  // Consider these snaps as deleted in *this* epoch, since we
+	  // don't actually know when it happend.  That makes
+	  // recently_removed_snaps_begin this epoch.
+	  if (pending_inc.new_pools.count(p.first) == 0) {
+	    pending_inc.new_pools[p.first] = p.second;
+	  }
+	  pending_inc.new_pools[p.first].recent_removed_snaps_begin =
+	    pending_inc.epoch;
+	}
+      }
+    }
   }
 
   // tell me about it
