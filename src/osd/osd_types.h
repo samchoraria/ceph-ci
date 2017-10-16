@@ -1573,7 +1573,7 @@ public:
    */
   bool is_pool_snaps_mode() const;
   bool is_unmanaged_snaps_mode() const;
-  bool is_removed_snap(snapid_t s) const;
+  bool is_recent_removed_snap(snapid_t s) const;
 
   /*
    * build set of known-removed sets from either pool snaps or
@@ -4502,8 +4502,8 @@ struct SnapSet {
     return max;
   }
 
-  SnapSet get_filtered(const pg_pool_t &pinfo) const;
-  void filter(const pg_pool_t &pinfo);
+  SnapSet get_filtered_by_recent(const pg_pool_t &pinfo) const;
+  void filter_recent(const pg_pool_t &pinfo);
 };
 WRITE_CLASS_ENCODER(SnapSet)
 

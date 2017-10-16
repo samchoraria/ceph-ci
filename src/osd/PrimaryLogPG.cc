@@ -3618,7 +3618,8 @@ int PrimaryLogPG::trim_object(
   for (set<snapid_t>::iterator i = old_snaps.begin();
        i != old_snaps.end();
        ++i) {
-    if (!pool.info.is_removed_snap(*i))
+#warning fixme recent
+    if (!pool.info.is_recent_removed_snap(*i))
       new_snaps.insert(*i);
   }
 
@@ -3799,7 +3800,8 @@ int PrimaryLogPG::trim_object(
     t->remove(head_oid);
   } else {
     dout(10) << coid << " filtering snapset on " << head_oid << dendl;
-    snapset.filter(pool.info);
+#warning fixme recent
+    snapset.filter_recent(pool.info);
     dout(10) << coid << " writing updated snapset on " << head_oid
 	     << ", snapset is " << snapset << dendl;
     ctx->log.push_back(
@@ -7974,7 +7976,8 @@ void PrimaryLogPG::process_copy_chunk(hobject_t oid, ceph_tid_t tid, int r)
     // verify snap hasn't been deleted
     vector<snapid_t>::iterator p = cop->results.snaps.begin();
     while (p != cop->results.snaps.end()) {
-      if (pool.info.is_removed_snap(*p)) {
+#warning fixme recent
+      if (pool.info.is_recent_removed_snap(*p)) {
 	dout(10) << __func__ << " clone snap " << *p << " has been deleted"
 		 << dendl;
 	for (vector<snapid_t>::iterator q = p + 1;
@@ -8594,7 +8597,8 @@ int PrimaryLogPG::start_flush(
 	   << dendl;
 
   // get a filtered snapset, need to remove removed snaps
-  SnapSet snapset = obc->ssc->snapset.get_filtered(pool.info);
+#warning fixme recent
+  SnapSet snapset = obc->ssc->snapset.get_filtered_by_recent(pool.info);
 
   // verify there are no (older) check for dirty clones
   {
@@ -9796,7 +9800,8 @@ int PrimaryLogPG::find_object_context(const hobject_t& oid,
   hobject_t head = oid.get_head();
 
   // we want a snap
-  if (!map_snapid_to_clone && pool.info.is_removed_snap(oid.snap)) {
+#warning fixme recent
+  if (!map_snapid_to_clone && pool.info.is_recent_removed_snap(oid.snap)) {
     dout(10) << __func__ << " snap " << oid.snap << " is removed" << dendl;
     return -ENOENT;
   }

@@ -11051,7 +11051,7 @@ bool OSDMonitor::preprocess_pool_op(MonOpRequestRef op)
       _pool_op_reply(op, -EINVAL, osdmap.get_epoch());
       return true;
     }
-    if (p->is_removed_snap(m->snapid)) {
+    if (p->is_recent_removed_snap(m->snapid)) {
       _pool_op_reply(op, 0, osdmap.get_epoch());
       return true;
     }
@@ -11216,7 +11216,7 @@ bool OSDMonitor::prepare_pool_op(MonOpRequestRef op)
     break;
 
   case POOL_OP_DELETE_UNMANAGED_SNAP:
-    if (!pp.is_removed_snap(m->snapid)) {
+    if (!pp.is_recent_removed_snap(m->snapid)) {
       pp.remove_unmanaged_snap(m->snapid);
       pending_inc.new_removed_snaps[m->pool].insert(m->snapid);
       changed = true;

@@ -1284,7 +1284,7 @@ bool pg_pool_t::is_unmanaged_snaps_mode() const
   return has_flag(FLAG_SELFMANAGED_SNAPS);
 }
 
-bool pg_pool_t::is_removed_snap(snapid_t s) const
+bool pg_pool_t::is_recent_removed_snap(snapid_t s) const
 {
   if (is_pool_snaps_mode())
     return s <= get_snap_seq() && snaps.count(s) == 0;
@@ -4828,22 +4828,22 @@ uint64_t SnapSet::get_clone_bytes(snapid_t clone) const
   return size - overlap.size();
 }
 
-void SnapSet::filter(const pg_pool_t &pinfo)
+void SnapSet::filter_recent(const pg_pool_t &pinfo)
 {
   vector<snapid_t> oldsnaps;
   oldsnaps.swap(snaps);
   for (vector<snapid_t>::const_iterator i = oldsnaps.begin();
        i != oldsnaps.end();
        ++i) {
-    if (!pinfo.is_removed_snap(*i))
+    if (!pinfo.is_recent_removed_snap(*i))
       snaps.push_back(*i);
   }
 }
 
-SnapSet SnapSet::get_filtered(const pg_pool_t &pinfo) const
+SnapSet SnapSet::get_filtered_by_recent(const pg_pool_t &pinfo) const
 {
   SnapSet ss = *this;
-  ss.filter(pinfo);
+  ss.filter_recent(pinfo);
   return ss;
 }
 
