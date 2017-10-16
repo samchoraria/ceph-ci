@@ -3618,8 +3618,7 @@ int PrimaryLogPG::trim_object(
   for (set<snapid_t>::iterator i = old_snaps.begin();
        i != old_snaps.end();
        ++i) {
-#warning fixme recent
-    if (!pool.info.is_recent_removed_snap(*i))
+    if (!info.removed_snaps.contains(*i))
       new_snaps.insert(*i);
   }
 
