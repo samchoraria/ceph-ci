@@ -3799,8 +3799,13 @@ int PrimaryLogPG::trim_object(
     t->remove(head_oid);
   } else {
     dout(10) << coid << " filtering snapset on " << head_oid << dendl;
-#warning fixme recent
-    snapset.filter_recent(pool.info);
+    // This is only filtering against recently removed_snaps.  It's possible
+    // for the snapc to still have snapids for which no clone was ever created
+    // and which were removed longer ago than the oldest in removed_snaps. Those
+    // are also snaps for which accuracy does not matter, since we will never
+    // create clones that reference then, and will never need to read from.
+    snapset.filter(info.removed_snaps);
+
     dout(10) << coid << " writing updated snapset on " << head_oid
 	     << ", snapset is " << snapset << dendl;
     ctx->log.push_back(
