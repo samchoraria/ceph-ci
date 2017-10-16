@@ -4504,6 +4504,7 @@ struct SnapSet {
 
   SnapSet get_filtered_by_recent(const pg_pool_t &pinfo) const;
   void filter_recent(const pg_pool_t &pinfo);
+  void filter(const interval_set<snapid_t>& removed_snaps);
 };
 WRITE_CLASS_ENCODER(SnapSet)
 

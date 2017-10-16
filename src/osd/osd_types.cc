@@ -4832,11 +4832,23 @@ void SnapSet::filter_recent(const pg_pool_t &pinfo)
 {
   vector<snapid_t> oldsnaps;
   oldsnaps.swap(snaps);
-  for (vector<snapid_t>::const_iterator i = oldsnaps.begin();
-       i != oldsnaps.end();
-       ++i) {
-    if (!pinfo.is_recent_removed_snap(*i))
-      snaps.push_back(*i);
+  snaps.reserve(oldsnaps.size());
+  for (auto snap : oldsnaps) {
+    if (!pinfo.is_recent_removed_snap(snap)) {
+      snaps.push_back(snap);
+    }
+  }
+}
+
+void SnapSet::filter(const interval_set<snapid_t>& removed_snaps)
+{
+  vector<snapid_t> oldsnaps;
+  oldsnaps.swap(snaps);
+  snaps.reserve(oldsnaps.size());
+  for (auto snap : oldsnaps) {
+    if (!removed_snaps.contains(snap)) {
+      snaps.push_back(snap);
+    }
   }
 }
 
