@@ -1365,8 +1365,6 @@ void pg_pool_t::remove_unmanaged_snap(snapid_t s)
   assert(is_unmanaged_snaps_mode());
   recent_removed_snaps.insert(s);
   snap_seq = snap_seq + 1;
-  // add in the new seq, just to try to keep the interval_set contiguous
-  recent_removed_snaps.insert(get_snap_seq());
 }
 
 SnapContext pg_pool_t::get_snap_context() const

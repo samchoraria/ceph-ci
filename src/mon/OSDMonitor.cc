@@ -891,9 +891,6 @@ void OSDMonitor::encode_pending(MonitorDBStore::TransactionRef t)
   // finalize up pending_inc
   pending_inc.modified = ceph_clock_now();
 
-  int r = pending_inc.propagate_snaps_to_tiers(cct, osdmap);
-  assert(r == 0);
-
   if (mapping_job) {
     if (!mapping_job->is_done()) {
       dout(1) << __func__ << " skipping prime_pg_temp; mapping job "
@@ -1184,6 +1181,10 @@ void OSDMonitor::encode_pending(MonitorDBStore::TransactionRef t)
 	epoch_t target = pending_inc.epoch - keep;
 	pg_pool_t *pp = nullptr;
 	for (auto& p : tmp.get_pools()) {
+	  if (p.second.is_tier()) {
+	    // we'll update the base tier and mirror it here.
+	    continue;
+	  }
 	  string start = make_snap_epoch_key(
 	    p.first, p.second.recent_removed_snaps_begin);
 	  string end = make_snap_epoch_key(p.first, target);
@@ -1225,6 +1226,9 @@ void OSDMonitor::encode_pending(MonitorDBStore::TransactionRef t)
       }
     }
   }
+
+  int r = pending_inc.propagate_snaps_to_tiers(cct, osdmap);
+  assert(r == 0);
 
   // tell me about it
   for (auto i = pending_inc.new_state.begin();
