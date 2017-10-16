@@ -4,6 +4,9 @@
 #include "include/types.h"
 #include "include/fs_types.h"
 
+template<typename T>
+class interval_set;
+
 namespace ceph {
 
 class Formatter;
@@ -52,6 +55,8 @@ struct SnapContext {
     snaps.clear();
   }
   bool empty() { return seq == 0; }
+
+  void filter(const interval_set<snapid_t>& recent_removed_snaps);
 
   void encode(bufferlist& bl) const {
     ::encode(seq, bl);

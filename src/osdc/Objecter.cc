@@ -2426,6 +2426,12 @@ void Objecter::_op_submit(Op *op, shunique_lock& sul, ceph_tid_t *ptid)
 
   _send_op_account(op);
 
+  if (!op->snapc.empty()) {
+    const pg_pool_t *pi = osdmap->get_pg_pool(op->target.pgid.pool());
+    assert(pi);
+    op->snapc.filter(pi->recent_removed_snaps);
+  }
+
   // send?
 
   assert(op->target.flags & (CEPH_OSD_FLAG_READ|CEPH_OSD_FLAG_WRITE));

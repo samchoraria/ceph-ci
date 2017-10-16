@@ -1,6 +1,7 @@
 
 #include "snap_types.h"
 #include "common/Formatter.h"
+#include "include/interval_set.h"
 
 void SnapRealmInfo::encode(bufferlist& bl) const
 {
@@ -70,6 +71,31 @@ bool SnapContext::is_valid() const
     }
   }
   return true;
+}
+
+void SnapContext::filter(const interval_set<snapid_t>& recent_removed_snaps)
+{
+  if (recent_removed_snaps.empty()) {
+    return;
+  }
+  bool filtering = false;
+  vector<snapid_t> newsnaps;
+  for (auto p = snaps.begin(); p != snaps.end(); ++p) {
+    if (recent_removed_snaps.contains(*p)) {
+      if (!filtering) {
+	newsnaps.reserve(snaps.size());
+	newsnaps.insert(newsnaps.end(), snaps.begin(), p);
+	filtering = true;
+      }
+    } else {
+      if (filtering) {
+	newsnaps.push_back(*p);
+      }
+    }
+  }
+  if (filtering) {
+    snaps.swap(newsnaps);
+  }
 }
 
 void SnapContext::dump(Formatter *f) const
