@@ -269,7 +269,9 @@ void SnapServer::check_osd_map(bool force)
 	}
 
 	for (const auto& q : p.second) {
-	  if (pi->is_removed_snap(q)) {
+	  // we assume here that we are examining OSDMaps frequently enough
+	  // to overlap with recent_removed_snaps.
+	  if (pi->is_recent_removed_snap(q)) {
 	    dout(10) << " osdmap marks " << q << " as removed" << dendl;
 	    all_purged[id].push_back(q);
 	  } else {
