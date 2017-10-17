@@ -10,6 +10,8 @@ overrides:
         filestore odsync write: true
         osd max backfills: 2
         osd snap trim sleep: .5
+      mon:
+        mon osd recent removed snaps epochs: 2
 tasks:
 - thrashosds:
     timeout: 1200
