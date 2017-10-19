@@ -1,12 +1,16 @@
 
 from unittest import case
 import json
+import logging
 
 from teuthology import misc
 from tasks.ceph_test_case import CephTestCase
 
-# TODO move definition of CephCluster
+# TODO move definition of CephCluster away from the CephFS stuff
 from tasks.cephfs.filesystem import CephCluster
+
+
+log = logging.getLogger(__name__)
 
 
 class MgrCluster(CephCluster):
@@ -43,6 +47,12 @@ class MgrCluster(CephCluster):
     def get_standby_ids(self):
         return [s['name'] for s in self.get_mgr_map()["standbys"]]
 
+    def set_module_localized_conf(self, module, mgr_id, key, val):
+        self.mon_manager.raw_cluster_cmd("config-key", "set",
+                                         "mgr/{0}/{1}/{2}".format(
+                                             module, mgr_id, key
+                                         ), val)
+
 
 class MgrTestCase(CephTestCase):
     MGRS_REQUIRED = 1
@@ -77,3 +87,31 @@ class MgrTestCase(CephTestCase):
         self.wait_until_true(
             lambda: set(self.mgr_cluster.get_standby_ids()) == expect_standbys,
             timeout=20)
+
+    def _load_module(self, module_name):
+        loaded = json.loads(self.mgr_cluster.mon_manager.raw_cluster_cmd("mgr", "module", "ls"))
+        if module_name in loaded:
+            # The enable command is idempotent, but our wait for a restart
+            # isn't, so let's return now if it's already loaded
+            return
+
+        initial_gid = self.mgr_cluster.get_mgr_map()['active_gid']
+        self.mgr_cluster.mon_manager.raw_cluster_cmd("mgr", "module", "enable",
+                                         module_name)
+
+        # Wait for the module to load
+        def has_restarted():
+            map = self.mgr_cluster.get_mgr_map()
+            return map['active_gid'] != initial_gid and map['available']
+        self.wait_until_true(has_restarted, timeout=30)
+
+    def _get_uri(self, service_name):
+        def _get_or_none():
+            mgr_map = self.mgr_cluster.get_mgr_map()
+            result = mgr_map['services'].get(service_name, None)
+            log.info("services={0}".format(mgr_map['services']))
+            return result
+
+        self.wait_until_true(lambda: _get_or_none() is not None, 30)
+
+        return _get_or_none()
