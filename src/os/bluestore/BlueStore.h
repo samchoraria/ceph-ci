@@ -1546,9 +1546,6 @@ public:
     set<SharedBlobRef> shared_blobs_written; ///< update these on io completion
 
     KeyValueDB::Transaction t; ///< then we will commit this
-    Context *oncommit = nullptr;         ///< signal on commit
-    Context *onreadable = nullptr;       ///< signal on readable
-    Context *onreadable_sync = nullptr;  ///< signal on readable
     list<Context*> oncommits;  ///< more commit completions
     list<CollectionRef> removed_collections; ///< colls we removed
 
@@ -1657,6 +1654,8 @@ public:
 
     Sequencer *parent;
     BlueStore *store;
+
+    spg_t shard_hint;
 
     uint64_t last_seq = 0;
 

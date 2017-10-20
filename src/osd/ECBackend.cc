@@ -1994,22 +1994,25 @@ bool ECBackend::try_reads_to_commit()
 	i->osd, r, get_parent()->get_epoch());
     }
   }
-  if (should_write_local) {
-      handle_sub_write(
-	get_parent()->whoami_shard(),
-	op->client_op,
-	local_write_op,
-	op->trace,
-	op->on_local_applied_sync);
-      op->on_local_applied_sync = 0;
-  }
-
+  // do on_write events first before the local handle_sub_write()
+  // because a synchronous on_local_applied_sync on bluestore may
+  // recursively call back into check_ops() and process the next op in
+  // the queue, breaking our ordering (the on_write events must come
+  // immediately after the op we just finished).
   for (auto i = op->on_write.begin();
        i != op->on_write.end();
        op->on_write.erase(i++)) {
     (*i)();
   }
-
+  if (should_write_local) {
+    handle_sub_write(
+      get_parent()->whoami_shard(),
+      op->client_op,
+      local_write_op,
+      op->trace,
+      op->on_local_applied_sync);
+    op->on_local_applied_sync = 0;
+  }
   return true;
 }
 
