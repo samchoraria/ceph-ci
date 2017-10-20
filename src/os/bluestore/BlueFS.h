@@ -333,6 +333,7 @@ public:
   void umount();
 
   void collect_metadata(map<string,string> *pm);
+  void get_devices(set<string> *ls);
   int fsck();
 
   uint64_t get_fs_usage();

@@ -461,6 +461,15 @@ void BlueFS::collect_metadata(map<string,string> *pm)
     bdev[BDEV_SLOW]->collect_metadata("bluefs_slow_", pm);
 }
 
+void BlueFS::get_devices(set<string> *ls)
+{
+  for (unsigned i = 0; i < MAX_BDEV; ++i) {
+    if (bdev[i]) {
+      bdev[i]->get_devices(ls);
+    }
+  }
+}
+
 int BlueFS::fsck()
 {
   std::lock_guard<std::mutex> l(lock);
