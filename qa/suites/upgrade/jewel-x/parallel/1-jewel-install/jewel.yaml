@@ -11,6 +11,7 @@ tasks:
 - ceph:
     skip_mgr_daemons: true
     add_osds_to_crush: true
+    crush_tunables: jewel
     log-whitelist:
       - overall HEALTH_
       - \(FS_
