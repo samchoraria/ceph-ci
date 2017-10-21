@@ -1,0 +1,6 @@
+tasks:
+- exec:
+    mon.a:
+      - ceph osd crush weight-set create-compat
+      - ceph osd crush weight-set reweight-compat osd.0 .9
+      - ceph osd crush weight-set reweight-compat osd.1 1.2
