@@ -138,6 +138,7 @@ int KernelDevice::open(const string& p)
     } else {
       dout(20) << __func__ << " devname " << devname << dendl;
       rotational = block_device_is_rotational(devname);
+      this->devname = devname;
     }
   }
 
@@ -169,6 +170,50 @@ int KernelDevice::open(const string& p)
   VOID_TEMP_FAILURE_RETRY(::close(fd_direct));
   fd_direct = -1;
   return r;
+}
+
+static int easy_readdir(const string& dir, set<string> *out)
+{
+  DIR *h = ::opendir(dir.c_str());
+  if (!h) {
+    return -errno;
+  }
+  struct dirent *de = nullptr;
+  while ((de = ::readdir(h))) {
+    if (strcmp(de->d_name, ".") == 0 ||
+	strcmp(de->d_name, "..") == 0) {
+      continue;
+    }
+    out->insert(de->d_name);
+  }
+  closedir(h);
+  return 0;
+}
+
+static void get_dm_parents(const string& dev, set<string> *ls)
+{
+  string p = string("/sys/block/") + dev + "/slaves";
+  set<string> parents;
+  easy_readdir(p, &parents);
+  for (auto& d : parents) {
+    ls->insert(d);
+    // recurse in case it is dm-on-dm
+    if (d.find("dm-") == 0) {
+      get_dm_parents(d, ls);
+    }
+  }
+}
+
+int KernelDevice::get_devices(std::set<std::string> *ls)
+{
+  if (devname.empty()) {
+    return 0;
+  }
+  ls->insert(devname);
+  if (devname.find("dm-") == 0) {
+    get_dm_parents(devname, ls);
+  }
+  return 0;
 }
 
 void KernelDevice::close()
