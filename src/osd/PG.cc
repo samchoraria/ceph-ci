@@ -2596,6 +2596,9 @@ void PG::_update_calc_stats()
     // Total of object copies/shards found
     int64_t object_copies = 0;
 
+    // Backfill targets we've procssed so far
+    int num_backfill_shards_seen = 0;
+
     // num_objects_missing on each peer
     for (map<pg_shard_t, pg_info_t>::iterator pi =
         peer_info.begin();
@@ -2638,10 +2641,14 @@ void PG::_update_calc_stats()
 	  misplaced += osd_objects;
       } else {
         // If this peer has more objects then it should, ignore them
-        int64_t osd_backfilled = MIN(num_objects, peer_info[p].stats.stats.sum.num_objects);
-        // Include computed backfilled objects on up nodes
-        object_copies += osd_backfilled;
-        backfilled += osd_backfilled;
+        int64_t osd_backfilled = MIN(num_objects,
+				     peer_info[p].stats.stats.sum.num_objects);
+	if (actingset.size() + num_backfill_shards_seen < pool.info.size) {
+	  // Include computed backfilled objects on up nodes
+	  object_copies += osd_backfilled;
+	}
+	backfilled += osd_backfilled;
+	++num_backfill_shards_seen;
       }
     }
 
