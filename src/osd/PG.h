@@ -2357,7 +2357,7 @@ protected:
 	> reactions;
       explicit Recovering(my_context ctx);
       void exit();
-      void release_reservations(bool cancel = false);
+      void release_reservations();
       boost::statechart::result react(const AllReplicasRecovered &evt);
       boost::statechart::result react(const DeferRecovery& evt);
       boost::statechart::result react(const UnfoundRecovery& evt);
