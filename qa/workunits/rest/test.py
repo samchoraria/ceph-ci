@@ -151,11 +151,6 @@ if __name__ == '__main__':
 
     # XXX no ceph -w equivalent yet
 
-    expect('mds/cluster_down', 'PUT', 200, '')
-    expect('mds/cluster_down', 'PUT', 200, '')
-    expect('mds/cluster_up', 'PUT', 200, '')
-    expect('mds/cluster_up', 'PUT', 200, '')
-
     expect('mds/compat/rm_incompat?feature=4', 'PUT', 200, '')
     expect('mds/compat/rm_incompat?feature=4', 'PUT', 200, '')
 
