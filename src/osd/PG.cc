@@ -4135,6 +4135,7 @@ int PG::build_scrub_map_chunk(
   // objects
   vector<hobject_t> ls;
   vector<ghobject_t> rollback_obs;
+  osr->flush();
   int ret = get_pgbackend()->objects_list_range(
     start,
     end,
@@ -4508,6 +4509,7 @@ void PG::chunky_scrub(ThreadPool::TPHandle &handle)
           hobject_t start = scrubber.start;
 	  hobject_t candidate_end;
 	  vector<hobject_t> objects;
+	  osr->flush();
 	  ret = get_pgbackend()->objects_list_partial(
 	    start,
 	    min,
