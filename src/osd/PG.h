@@ -1859,6 +1859,7 @@ protected:
   TrivialEvent(RequestBackfill)
   TrivialEvent(RecoveryDone)
   protected:
+  TrivialEvent(RemoteRecoveryPreempted)
   TrivialEvent(RemoteBackfillPreempted)
   TrivialEvent(BackfillTooFull)
   TrivialEvent(RecoveryTooFull)
@@ -2266,7 +2267,9 @@ protected:
 	boost::statechart::custom_reaction< DeferRecovery >,
 	boost::statechart::custom_reaction< DeferBackfill >,
 	boost::statechart::custom_reaction< UnfoundRecovery >,
-	boost::statechart::custom_reaction< UnfoundBackfill >
+	boost::statechart::custom_reaction< UnfoundBackfill >,
+	boost::statechart::custom_reaction< RemoteBackfillPreempted >,
+	boost::statechart::custom_reaction< RemoteRecoveryPreempted >
 	> reactions;
       boost::statechart::result react(const QueryState& q);
       boost::statechart::result react(const MInfoRec& infoevt);
@@ -2286,6 +2289,12 @@ protected:
       boost::statechart::result react(const UnfoundBackfill& evt) {
 	return discard_event();
       }
+      boost::statechart::result react(const RemoteBackfillPreempted& evt) {
+	return discard_event();
+      }
+      boost::statechart::result react(const RemoteRecoveryPreempted& evt) {
+	return discard_event();
+      }
     };
 
     struct RepRecovering : boost::statechart::state< RepRecovering, ReplicaActive >, NamedState {
@@ -2295,9 +2304,11 @@ protected:
 	boost::statechart::transition< RemoteReservationRejected, RepNotRecovering >,
 	boost::statechart::transition< RemoteReservationCanceled, RepNotRecovering >,
 	boost::statechart::custom_reaction< BackfillTooFull >,
+	boost::statechart::custom_reaction< RemoteRecoveryPreempted >,
 	boost::statechart::custom_reaction< RemoteBackfillPreempted >
 	> reactions;
       explicit RepRecovering(my_context ctx);
+      boost::statechart::result react(const RemoteRecoveryPreempted &evt);
       boost::statechart::result react(const BackfillTooFull &evt);
       boost::statechart::result react(const RemoteBackfillPreempted &evt);
       void exit();
