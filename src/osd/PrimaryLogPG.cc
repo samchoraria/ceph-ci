@@ -932,7 +932,6 @@ int PrimaryLogPG::do_command(
   if (command == "query") {
     f->open_object_section("pg");
     f->dump_string("state", pg_state_string(get_state()));
-    f->dump_stream("snap_trimq") << snap_trimq;
     f->dump_unsigned("epoch", get_osdmap()->get_epoch());
     f->open_array_section("up");
     for (vector<int>::iterator p = up.begin(); p != up.end(); ++p)
@@ -3836,7 +3835,7 @@ void PrimaryLogPG::kick_snap_trim()
 {
   assert(is_active());
   assert(is_primary());
-  if (is_clean() && !snap_trimq.empty()) {
+  if (is_clean() && !info.removed_snaps.empty()) {
     dout(10) << __func__ << ": clean and snaps to trim, kicking" << dendl;
     snap_trimmer_machine.process_event(KickTrim());
   }
@@ -3845,7 +3844,7 @@ void PrimaryLogPG::kick_snap_trim()
 void PrimaryLogPG::snap_trimmer_scrub_complete()
 {
   if (is_primary() && is_active() && is_clean()) {
-    assert(!snap_trimq.empty());
+    assert(!info.removed_snaps.empty());
     snap_trimmer_machine.process_event(ScrubComplete());
   }
 }
@@ -13974,7 +13973,7 @@ boost::statechart::result PrimaryLogPG::NotTrimming::react(const KickTrim&)
     return discard_event();
   }
   if (!pg->is_clean() ||
-      pg->snap_trimq.empty()) {
+      pg->info.removed_snaps.empty()) {
     ldout(pg->cct, 10) << "NotTrimming not clean or nothing to trim" << dendl;
     return discard_event();
   }
@@ -13997,9 +13996,9 @@ boost::statechart::result PrimaryLogPG::WaitReservation::react(const SnapTrimRes
     return transit< NotTrimming >();
   }
 
-  context<Trimming>().snap_to_trim = pg->snap_trimq.range_start();
+  context<Trimming>().snap_to_trim = pg->info.removed_snaps.range_start();
   ldout(pg->cct, 10) << "NotTrimming: trimming "
-		     << pg->snap_trimq.range_start()
+		     << pg->info.removed_snaps.range_start()
 		     << dendl;
   return transit< AwaitAsyncWork >();
 }
@@ -14052,10 +14051,9 @@ boost::statechart::result PrimaryLogPG::AwaitAsyncWork::react(const DoSnapWork&)
 		       << " to purged_snaps"
 		       << dendl;
     pg->info.purged_snaps.insert(snap_to_trim);
-    pg->snap_trimq.erase(snap_to_trim);
+    pg->info.removed_snaps.erase(snap_to_trim);
     ldout(pg->cct, 10) << "purged_snaps now "
-		       << pg->info.purged_snaps << ", snap_trimq now "
-		       << pg->snap_trimq << dendl;
+		       << pg->info.purged_snaps << dendl;
 
     ObjectStore::Transaction t;
     pg->dirty_big_info = true;
