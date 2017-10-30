@@ -302,6 +302,13 @@ bool MgrMonitor::prepare_beacon(MonOpRequestRef op)
   bool updated = false;
 
   if (pending_map.active_gid == m->get_gid()) {
+    if (pending_map.services != m->get_services()) {
+      dout(4) << "updated services from mgr." << m->get_name()
+              << ": " << m->get_services() << dendl;
+      pending_map.services = m->get_services();
+      updated = true;
+    }
+
     // A beacon from the currently active daemon
     if (pending_map.active_addr != m->get_server_addr()) {
       dout(4) << "learned address " << m->get_server_addr()
@@ -600,6 +607,7 @@ void MgrMonitor::drop_active()
   pending_map.active_gid = 0;
   pending_map.available = false;
   pending_map.active_addr = entity_addr_t();
+  pending_map.services.clear();
 
   // So that when new active mgr subscribes to mgrdigest, it will
   // get an immediate response instead of waiting for next timer
@@ -669,6 +677,13 @@ bool MgrMonitor::preprocess_command(MonOpRequestRef op)
     f->open_array_section("modules");
     for (auto& p : map.modules) {
       f->dump_string("module", p);
+    }
+    f->close_section();
+    f->flush(rdata);
+  } else if (prefix == "mgr services") {
+    f->open_object_section("services");
+    for (const auto &i : map.services) {
+      f->dump_string(i.first.c_str(), i.second);
     }
     f->close_section();
     f->flush(rdata);
