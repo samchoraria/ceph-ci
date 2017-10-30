@@ -412,7 +412,7 @@ public:
 									\
     template<typename k, typename v, typename cmp = std::less<k> >	\
     using flat_map = boost::container::flat_map<k,v,cmp,		\
-						pool_allocator<std::pair<const k,v>>>; \
+						pool_allocator<std::pair<k,v>>>; \
                                                                         \
     template<typename v>						\
     using list = std::list<v,pool_allocator<v>>;			\
