@@ -224,13 +224,25 @@ void PG::dump_live_ids()
 #endif
 
 
-void PGPool::update(OSDMapRef map)
+void PGPool::update(CephContext *cct, OSDMapRef map)
 {
   const pg_pool_t *pi = map->get_pg_pool(id);
   assert(pi);
   info = *pi;
   auid = pi->auid;
   name = map->get_pool_name(id);
+
+  if (map->require_osd_release >= CEPH_RELEASE_MIMIC) {
+    // mimic tracks removed_snaps and purged_snaps in the pg_info_t, with
+    // deltas for both in each OSDMap.
+
+    // caller should have cleared these on first mimic osdmap
+    assert(cached_removed_snaps.empty());
+    assert(newly_removed_snaps.empty());
+    return;
+  }
+
+  // legacy (<= luminous) removed_snaps tracking
   bool updated = false;
   if ((map->get_epoch() != cached_epoch + 1) ||
       (pi->get_snap_epoch() == map->get_epoch())) {
@@ -273,6 +285,19 @@ void PGPool::update(OSDMapRef map)
     << " snapc " << snapc
     << (updated ? " (updated)":" (no change)")
     << dendl;
+  if (cct->_conf->osd_debug_verify_cached_snaps) {
+    interval_set<snapid_t> actual_removed_snaps;
+    pi->build_removed_snaps(actual_removed_snaps);
+    if (!(actual_removed_snaps == cached_removed_snaps)) {
+      lgeneric_derr(cct) << __func__
+			 << ": mismatch between the actual removed snaps "
+			 << actual_removed_snaps
+			 << " and pool.cached_removed_snaps "
+			 << " pool.cached_removed_snaps " << cached_removed_snaps
+			 << dendl;
+    }
+    assert(actual_removed_snaps == cached_removed_snaps);
+  }
 }
 
 PG::PG(OSDService *o, OSDMapRef curmap,
@@ -985,7 +1010,9 @@ void PG::clear_primary_state()
 
   last_update_ondisk = eversion_t();
 
-  snap_trimq.clear();
+  if (get_osdmap()->require_osd_release < CEPH_RELEASE_MIMIC) {
+    info.removed_snaps.clear();
+  }
 
   finish_sync_event = 0;  // so that _finish_recovery doesn't go off in another thread
 
@@ -1601,20 +1628,22 @@ void PG::activate(ObjectStore::Transaction& t,
       get_osdmap()->get_epoch(),
       activation_epoch));
   
-  // initialize snap_trimq
-  if (is_primary()) {
+  // initialize removed_snaps (legacy)
+  if (is_primary() && get_osdmap()->require_osd_release < CEPH_RELEASE_MIMIC) {
     dout(20) << "activate - purged_snaps " << info.purged_snaps
-	     << " cached_removed_snaps " << pool.cached_removed_snaps << dendl;
-    snap_trimq = pool.cached_removed_snaps;
+	     << " removed_snaps " << pool.cached_removed_snaps
+	     << dendl;
+    info.removed_snaps = pool.cached_removed_snaps;
     interval_set<snapid_t> intersection;
-    intersection.intersection_of(snap_trimq, info.purged_snaps);
+    intersection.intersection_of(info.removed_snaps, info.purged_snaps);
     if (intersection == info.purged_snaps) {
-      snap_trimq.subtract(info.purged_snaps);
+      info.removed_snaps.subtract(info.purged_snaps);
     } else {
-        dout(0) << "warning: info.purged_snaps (" << info.purged_snaps
-                << ") is not a subset of pool.cached_removed_snaps ("
-                << pool.cached_removed_snaps << ")" << dendl;
-        snap_trimq.subtract(intersection);
+      dout(0) << "warning: info.purged_snaps (" << info.purged_snaps
+	      << ") is not a subset of removed_snaps ("
+	      << pool.cached_removed_snaps << ")" << dendl;
+      info.removed_snaps.subtract(intersection);
+      assert(!cct->_conf->osd_debug_verify_cached_snaps);
     }
   }
 
@@ -2283,7 +2312,7 @@ void PG::split_into(pg_t child_pgid, PG *child, unsigned split_bits)
   child->info.last_epoch_started = info.last_epoch_started;
   child->info.last_interval_started = info.last_interval_started;
 
-  child->snap_trimq = snap_trimq;
+  child->info.removed_snaps = info.removed_snaps;
 
   // There can't be recovery/backfill going on now
   int primary, up_primary;
@@ -2813,6 +2842,22 @@ void PG::publish_stats_to_osd()
   pre_publish.stats.add(unstable_stats);
   utime_t cutoff = now;
   cutoff -= cct->_conf->osd_pg_stat_report_interval_max;
+
+  if (get_osdmap()->require_osd_release >= CEPH_RELEASE_MIMIC) {
+    // share (some of) our purged_snaps via the pg_stats. limit # of intervals
+    // because we don't want to make the pg_stat_t structures too expensive.
+    unsigned max = cct->_conf->get_val<uint64_t>("osd_max_snap_prune_intervals_per_epoch");
+    unsigned num = 0;
+    auto i = info.purged_snaps.begin();
+    while (num < max && i != info.purged_snaps.end()) {
+      pre_publish.purged_snaps.insert(i.get_start(), i.get_len());
+      ++num;
+      ++i;
+    }
+    dout(20) << __func__ << " reporting purged_snaps "
+	     << pre_publish.purged_snaps << dendl;
+  }
+
   if (pg_stats_publish_valid && pre_publish == pg_stats_publish &&
       info.stats.last_fresh > cutoff) {
     dout(15) << "publish_stats_to_osd " << pg_stats_publish.reported_epoch
@@ -3007,9 +3052,11 @@ int PG::_prepare_write_info(CephContext* cct,
   last_written_info = info;
 
   // info.  store purged_snaps separately.
-  interval_set<snapid_t> purged_snaps;
+  interval_set<snapid_t> removed_snaps, purged_snaps;
+  removed_snaps.swap(info.removed_snaps);
   purged_snaps.swap(info.purged_snaps);
   ::encode(info, (*km)[info_key]);
+  removed_snaps.swap(info.removed_snaps);
   purged_snaps.swap(info.purged_snaps);
 
   if (dirty_big_info) {
@@ -3017,6 +3064,7 @@ int PG::_prepare_write_info(CephContext* cct,
     bufferlist& bigbl = (*km)[biginfo_key];
     ::encode(past_intervals, bigbl);
     ::encode(info.purged_snaps, bigbl);
+    ::encode(info.removed_snaps, bigbl);
     //dout(20) << "write_info bigbl " << bigbl.length() << dendl;
     if (logger)
       logger->inc(l_osd_pg_biginfo);
@@ -3342,6 +3390,9 @@ int PG::read_info(
   p = values[biginfo_key].begin();
   ::decode(past_intervals, p);
   ::decode(info.purged_snaps, p);
+  if (!p.end()) {
+    ::decode(info.removed_snaps, p);
+  }
 
   p = values[fastinfo_key].begin();
   if (!p.end()) {
@@ -3492,7 +3543,7 @@ void PG::update_snap_map(
 void PG::filter_snapc(vector<snapid_t> &snaps)
 {
   //nothing needs to trim, we can return immediately
-  if(snap_trimq.empty() && info.purged_snaps.empty())
+  if (info.removed_snaps.empty() && info.purged_snaps.empty())
     return;
 
   bool filtering = false;
@@ -3500,7 +3551,7 @@ void PG::filter_snapc(vector<snapid_t> &snaps)
   for (vector<snapid_t>::iterator p = snaps.begin();
        p != snaps.end();
        ++p) {
-    if (snap_trimq.contains(*p) || info.purged_snaps.contains(*p)) {
+    if (info.removed_snaps.contains(*p) || info.purged_snaps.contains(*p)) {
       if (!filtering) {
 	// start building a new vector with what we've seen so far
 	dout(10) << "filter_snapc filtering " << snaps << dendl;
@@ -4682,7 +4733,7 @@ void PG::chunky_scrub(ThreadPool::TPHandle &handle)
         scrubber.state = PG::Scrubber::INACTIVE;
         done = true;
 
-	if (!snap_trimq.empty()) {
+	if (!info.removed_snaps.empty()) {
 	  dout(10) << "scrub finished, requeuing snap_trimmer" << dendl;
 	  snap_trimmer_scrub_complete();
 	}
@@ -5617,8 +5668,12 @@ ostream& operator<<(ostream& out, const PG& pg)
 	out << " u=" << unfound;
     }
   }
-  if (pg.snap_trimq.size())
-    out << " snaptrimq=" << pg.snap_trimq;
+  if (pg.info.removed_snaps.size()) {
+    out << " removed_snaps=" << pg.info.removed_snaps.size();
+  }
+  if (pg.info.purged_snaps.size()) {
+    out << " purged_snaps=" << pg.info.purged_snaps.size();
+  }
 
   out << "]";
 
@@ -5893,20 +5948,75 @@ void PG::handle_advance_map(
 	   << " -- " << up_primary << "/" << acting_primary
 	   << dendl;
   update_osdmap_ref(osdmap);
-  pool.update(osdmap);
-  if (cct->_conf->osd_debug_verify_cached_snaps) {
-    interval_set<snapid_t> actual_removed_snaps;
-    const pg_pool_t *pi = osdmap->get_pg_pool(info.pgid.pool());
-    assert(pi);
-    pi->build_removed_snaps(actual_removed_snaps);
-    if (!(actual_removed_snaps == pool.cached_removed_snaps)) {
-      derr << __func__ << ": mismatch between the actual removed snaps "
-	   << actual_removed_snaps << " and pool.cached_removed_snaps "
-	   << " pool.cached_removed_snaps " << pool.cached_removed_snaps
-	   << dendl;
+  if (osdmap->require_osd_release >= CEPH_RELEASE_MIMIC) {
+    // upgrade transition?
+    if (lastmap->require_osd_release < CEPH_RELEASE_MIMIC) {
+      info.removed_snaps = pool.cached_removed_snaps;
+      interval_set<snapid_t> intersection;
+      intersection.intersection_of(info.removed_snaps, info.purged_snaps);
+      info.removed_snaps.subtract(intersection);
+      dout(10) << __func__ << " upgrade, moving removed_snaps from PGPool to "
+	       << "pg_info_t: " << info.removed_snaps << dendl;
+      pool.cached_removed_snaps.clear();
+      pool.newly_removed_snaps.clear();
+      dirty_info = true;
+      dirty_big_info = true;
     }
-    assert(actual_removed_snaps == pool.cached_removed_snaps);
+    // deltas
+    const auto& new_removed_snaps = osdmap->get_new_removed_snaps();
+    const auto& new_purged_snaps = osdmap->get_new_purged_snaps();
+    auto i = new_removed_snaps.find(info.pgid.pool());
+    if (i != new_removed_snaps.end()) {
+      bool bad = false;
+      for (auto j : i->second) {
+	if (info.removed_snaps.intersects(j.first, j.second)) {
+	  decltype(info.removed_snaps) added, overlap;
+	  added.insert(j.first, j.second);
+	  overlap.intersection_of(info.removed_snaps, added);
+	  derr << __func__ << " removed_snaps already contains " << overlap
+	       << dendl;
+	  bad = false;
+	  info.removed_snaps.union_of(added);
+	} else {
+	  info.removed_snaps.insert(j.first, j.second);
+	}
+      }
+      dout(10) << __func__ << " new removed_snaps " << i->second
+	       << ", now " << info.removed_snaps << dendl;
+      assert(!bad || cct->_conf->osd_debug_verify_cached_snaps);
+      dirty_info = true;
+      dirty_big_info = true;
+    }
+    auto j = new_purged_snaps.find(info.pgid.pool());
+    if (j != new_purged_snaps.end()) {
+      bool bad = false;
+      for (auto k : j->second) {
+	if (!info.purged_snaps.contains(k.first, k.second)) {
+	  decltype(info.removed_snaps) rm, overlap;
+	  rm.insert(k.first, k.second);
+	  overlap.intersection_of(info.purged_snaps, rm);
+	  derr << __func__ << " purged_snaps does not contain "
+	       << rm << ", only " << overlap << dendl;
+	  info.purged_snaps.subtract(overlap);
+	} else {
+	  info.purged_snaps.erase(k.first, k.second);
+	}
+      }
+      dout(10) << __func__ << " new purged_snaps " << j->second
+	       << ", now " << info.purged_snaps << dendl;
+      assert(!bad || cct->_conf->osd_debug_verify_cached_snaps);
+      dirty_info = true;
+      dirty_big_info = true;
+    }
+    if (dirty_big_info) {
+      // share updated purged_snaps to mgr/mon so that we (a) stop reporting
+      // purged snaps and (b) perhaps share more snaps that we have purged
+      // but didn't fit in pg_stat_t.
+      publish_stats_to_osd();
+    }
   }
+  pool.update(cct, osdmap);
+
   AdvMap evt(
     osdmap, lastmap, newup, up_primary,
     newacting, acting_primary);
@@ -7256,9 +7366,12 @@ boost::statechart::result PG::RecoveryState::Active::react(const AdvMap& advmap)
 {
   PG *pg = context< RecoveryMachine >().pg;
   ldout(pg->cct, 10) << "Active advmap" << dendl;
-  if (!pg->pool.newly_removed_snaps.empty()) {
-    pg->snap_trimq.union_of(pg->pool.newly_removed_snaps);
-    ldout(pg->cct, 10) << *pg << " snap_trimq now " << pg->snap_trimq << dendl;
+
+  if (advmap.osdmap->require_osd_release < CEPH_RELEASE_MIMIC &&
+      !pg->pool.newly_removed_snaps.empty()) {
+    pg->info.removed_snaps.union_of(pg->pool.newly_removed_snaps);
+    ldout(pg->cct, 10) << *pg << " newly removed snaps "
+		       << pg->pool.newly_removed_snaps << dendl;
     pg->dirty_info = true;
     pg->dirty_big_info = true;
   }
