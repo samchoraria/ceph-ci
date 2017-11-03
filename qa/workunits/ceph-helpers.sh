@@ -1525,7 +1525,7 @@ function inject_eio() {
     fi
     set_config osd $osd_id filestore_debug_inject_read_err true || return 1
     local loop=0
-    while ( CEPH_ARGS='' ceph --admin-daemon $(get_asok_path osd.$osd_id) \
+    while ( CEPH_ARGS='' ceph --admin-daemon $dir/ceph-osd.$osd_id.asok \
              inject${which}err $poolname $objname $shard_id | grep -q Invalid ); do
         loop=$(expr $loop + 1)
         if [ $loop = "10" ]; then
