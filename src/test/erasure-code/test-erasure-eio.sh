@@ -451,14 +451,14 @@ function TEST_ec_backfill_errors() {
 
     sleep 15
 
-    while(true); do
-      state=$(get_state 2.0)
-      echo $state | grep -v backfilling
-      if [ "$?" = "0" ]; then
-        break
-      fi
-      echo -n "$state "
-    done
+    # while(true); do
+    #   state=$(get_state 2.0)
+    #  echo $state | grep -v backfilling
+    #  if [ "$?" = "0" ]; then
+    #    break
+    #  fi
+    #  echo -n "$state "
+    #done
 
     ceph pg dump pgs
     ceph pg 2.0 list_missing | grep -q $testobj || return 1
@@ -526,14 +526,14 @@ function TEST_ec_recovery_errors() {
 
     sleep 15
 
-    while(true); do
-      state=$(get_state 2.0)
-      echo $state | grep -v recovering
-      if [ "$?" = "0" ]; then
-        break
-      fi
-      echo -n "$state "
-    done
+    #while(true); do
+    #  state=$(get_state 2.0)
+    #  echo $state | grep -v recovering
+    #  if [ "$?" = "0" ]; then
+    #    break
+    #  fi
+    #  echo -n "$state "
+    #done
 
     ceph pg dump pgs
     ceph pg 2.0 list_missing | grep -q $testobj || return 1
