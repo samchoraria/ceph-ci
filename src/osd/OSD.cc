@@ -9942,8 +9942,6 @@ void OSD::ShardedOpWQ::_process(uint32_t thread_index, heartbeat_handle_d *hb)
     tracepoint(osd, opwq_process_finish, reqid.name._type,
         reqid.name._num, reqid.tid, reqid.inc);
   }
-
-  pg->unlock();
 }
 
 void OSD::ShardedOpWQ::_enqueue(OpQueueItem&& item) {
