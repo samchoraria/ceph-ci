@@ -7277,6 +7277,17 @@ void OSD::handle_osd_map(MOSDMap *m)
     skip_maps = true;
   }
 
+  // wait for pgs to catch up
+  {
+    epoch_t num = last - first + 1;
+    if (cct->_conf->osd_map_cache_size > num &&
+	cct->_conf->osd_map_cache_size < last) {
+      epoch_t min = last - cct->_conf->osd_map_cache_size + 1;
+      dout(10) << __func__ << " waiting for pgs to consume " << min << dendl;
+      service.wait_min_pg_epoch(min);
+    }
+  }
+
   ObjectStore::Transaction t;
   uint64_t txn_size = 0;
 

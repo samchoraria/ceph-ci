@@ -385,6 +385,7 @@ public:
 private:
   // -- map epoch lower bound --
   Mutex pg_epoch_lock;
+  Cond pg_cond;
   multiset<epoch_t> pg_epochs;
   map<spg_t,epoch_t> pg_epoch;
 
@@ -418,6 +419,14 @@ public:
       return 0;
     else
       return *pg_epochs.begin();
+  }
+
+  void wait_min_pg_epoch(epoch_t e) {
+    Mutex::Locker l(pg_epoch_lock);
+    while (!pg_epochs.empty() &&
+	   *pg_epochs.begin() < e) {
+      pg_cond.Wait(pg_epoch_lock);
+    }
   }
 
 private:
