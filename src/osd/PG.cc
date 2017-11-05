@@ -90,7 +90,7 @@ static ostream& _prefix(std::ostream *_dout, T *t)
   return *_dout << t->gen_prefix();
 }
 
-MEMPOOL_DEFINE_OBJECT_FACTORY(PG::CephPeeringEvt, pg_peering_evt, osd);
+MEMPOOL_DEFINE_OBJECT_FACTORY(PGPeeringEvent, pg_peering_evt, osd);
 
 void PGStateHistory::enter(PG* pg, const utime_t entime, const char* state)
 {
@@ -1964,8 +1964,8 @@ void PG::all_activated_and_committed()
   assert(blocked_by.empty());
 
   queue_peering_event(
-    CephPeeringEvtRef(
-      std::make_shared<CephPeeringEvt>(
+    PGPeeringEventRef(
+      std::make_shared<PGPeeringEvent>(
         get_osdmap()->get_epoch(),
         get_osdmap()->get_epoch(),
         AllReplicasActivated())));
@@ -4986,8 +4986,8 @@ void PG::scrub_finish()
 
   if (has_error) {
     queue_peering_event(
-      CephPeeringEvtRef(
-	std::make_shared<CephPeeringEvt>(
+      PGPeeringEventRef(
+	std::make_shared<PGPeeringEvent>(
 	  get_osdmap()->get_epoch(),
 	  get_osdmap()->get_epoch(),
 	  DoRecovery())));
@@ -5783,7 +5783,7 @@ void PG::take_waiters()
 {
   dout(10) << "take_waiters" << dendl;
   requeue_map_waiters();
-  for (list<CephPeeringEvtRef>::iterator i = peering_waiters.begin();
+  for (list<PGPeeringEventRef>::iterator i = peering_waiters.begin();
        i != peering_waiters.end();
        ++i) osd->queue_for_peering(this);
   peering_queue.splice(peering_queue.begin(), peering_waiters,
@@ -5793,7 +5793,7 @@ void PG::take_waiters()
 void PG::process_peering_event(RecoveryCtx *rctx)
 {
   assert(!peering_queue.empty());
-  CephPeeringEvtRef evt = peering_queue.front();
+  PGPeeringEventRef evt = peering_queue.front();
   peering_queue.pop_front();
 
   dout(10) << __func__ << ": " << evt->get_desc() << dendl;
@@ -5808,7 +5808,7 @@ void PG::process_peering_event(RecoveryCtx *rctx)
   write_if_dirty(*rctx->transaction);
 }
 
-void PG::queue_peering_event(CephPeeringEvtRef evt)
+void PG::queue_peering_event(PGPeeringEventRef evt)
 {
   if (old_peering_evt(evt))
     return;
@@ -5821,7 +5821,7 @@ void PG::queue_null(epoch_t msg_epoch,
 {
   dout(10) << "null" << dendl;
   queue_peering_event(
-    CephPeeringEvtRef(std::make_shared<CephPeeringEvt>(msg_epoch, query_epoch,
+    PGPeeringEventRef(std::make_shared<PGPeeringEvent>(msg_epoch, query_epoch,
 					 NullEvt())));
 }
 
@@ -5829,7 +5829,7 @@ void PG::queue_flushed(epoch_t e)
 {
   dout(10) << "flushed" << dendl;
   queue_peering_event(
-    CephPeeringEvtRef(std::make_shared<CephPeeringEvt>(e, e,
+    PGPeeringEventRef(std::make_shared<PGPeeringEvent>(e, e,
 					 FlushedEvt())));
 }
 
@@ -5839,7 +5839,7 @@ void PG::queue_query(epoch_t msg_epoch,
 {
   dout(10) << "handle_query " << q << " from replica " << from << dendl;
   queue_peering_event(
-    CephPeeringEvtRef(std::make_shared<CephPeeringEvt>(msg_epoch, query_epoch,
+    PGPeeringEventRef(std::make_shared<PGPeeringEvent>(msg_epoch, query_epoch,
 					 MQuery(from, q, query_epoch))));
 }
 
@@ -5855,16 +5855,16 @@ void PG::find_unfound(epoch_t queued, RecoveryCtx *rctx)
   if (rctx->query_map->empty()) {
     string action;
     if (state_test(PG_STATE_BACKFILLING)) {
-      auto evt = PG::CephPeeringEvtRef(
-	new PG::CephPeeringEvt(
+      auto evt = PGPeeringEventRef(
+	new PGPeeringEvent(
 	  queued,
 	  queued,
 	  PG::UnfoundBackfill()));
       queue_peering_event(evt);
       action = "in backfill";
     } else if (state_test(PG_STATE_RECOVERING)) {
-      auto evt = PG::CephPeeringEvtRef(
-	new PG::CephPeeringEvt(
+      auto evt = PGPeeringEventRef(
+	new PGPeeringEvent(
 	  queued,
 	  queued,
 	  PG::UnfoundRecovery()));
