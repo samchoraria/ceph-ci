@@ -5790,14 +5790,6 @@ void PG::take_waiters()
   }
 }
 
-void PG::process_peering_event(RecoveryCtx *rctx)
-{
-  assert(!peering_queue.empty());
-  PGPeeringEventRef evt = peering_queue.front();
-  peering_queue.pop_front();
-  do_peering_event(evt, rctx);
-}
-
 void PG::do_peering_event(PGPeeringEventRef evt, RecoveryCtx *rctx)
 {
   dout(10) << __func__ << ": " << evt->get_desc() << dendl;
