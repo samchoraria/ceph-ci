@@ -213,7 +213,6 @@ OSDService::OSDService(OSD *osd) :
   logger(osd->logger),
   recoverystate_perf(osd->recoverystate_perf),
   monc(osd->monc),
-  peering_wq(osd->peering_wq),
   recovery_gen_wq("recovery_gen_wq", cct->_conf->osd_recovery_thread_timeout,
 		  &osd->disk_tp),
   class_handler(osd->class_handler),
@@ -1683,11 +1682,6 @@ void OSDService::enqueue_front(OpQueueItem&& qi)
   osd->op_shardedwq.queue_front(std::move(qi));
 }
 
-void OSDService::queue_for_peering(PG *pg)
-{
-  peering_wq.queue(pg);
-}
-
 void OSDService::queue_for_snap_trim(PG *pg)
 {
   dout(10) << "queueing " << *pg << " for snaptrim" << dendl;
@@ -1953,9 +1947,6 @@ OSD::OSD(CephContext *cct_, ObjectStore *store_,
   trace_endpoint("0.0.0.0", 0, "osd"),
   asok_hook(NULL),
   osd_compat(get_osd_compat_set()),
-  peering_tp(cct, "OSD::peering_tp", "tp_peering",
-	     cct->_conf->osd_peering_wq_threads,
-	     "osd_peering_tp_threads"),
   osd_op_tp(cct, "OSD::osd_op_tp", "tp_osd_tp",
 	    get_num_op_threads()),
   disk_tp(cct, "OSD::disk_tp", "tp_osd_disk", cct->_conf->osd_disk_threads, "osd_disk_threads"),
@@ -1983,11 +1974,6 @@ OSD::OSD(CephContext *cct_, ObjectStore *store_,
     cct->_conf->osd_op_thread_timeout,
     cct->_conf->osd_op_thread_suicide_timeout,
     &osd_op_tp),
-  peering_wq(
-    this,
-    cct->_conf->osd_op_thread_timeout,
-    cct->_conf->osd_op_thread_suicide_timeout,
-    &peering_tp),
   map_lock("OSD::map_lock"),
   pg_map_lock("OSD::pg_map_lock"),
   last_pg_create_epoch(0),
@@ -2602,7 +2588,6 @@ int OSD::init()
   monc->set_log_client(&log_client);
   update_log_config();
 
-  peering_tp.start();
   osd_op_tp.start();
   disk_tp.start();
   command_tp.start();
@@ -2668,7 +2653,6 @@ int OSD::init()
 
   dout(10) << "ensuring pgs have consumed prior maps" << dendl;
   consume_map();
-  peering_wq.drain();
 
   dout(0) << "done with init, starting boot process" << dendl;
 
@@ -3331,11 +3315,6 @@ int OSD::shutdown()
   heartbeat_lock.Unlock();
   heartbeat_thread.join();
 
-  peering_tp.drain();
-  peering_wq.clear();
-  peering_tp.stop();
-  dout(10) << "osd tp stopped" << dendl;
-
   osd_op_tp.drain();
   osd_op_tp.stop();
   dout(10) << "op sharded tp stopped" << dendl;
@@ -3436,8 +3415,6 @@ int OSD::shutdown()
   objecter_messenger->shutdown();
   hb_front_server_messenger->shutdown();
   hb_back_server_messenger->shutdown();
-
-  peering_wq.clear();
 
   return r;
 }
@@ -3745,10 +3722,10 @@ void OSD::add_newly_split_pg(PG *pg, PG::RecoveryCtx *rctx)
   dout(10) << "Adding newly split pg " << *pg << dendl;
   pg->handle_loaded(rctx);
   pg->queue_null(e, e);
-  map<spg_t, list<PG::CephPeeringEvtRef> >::iterator to_wake =
+  map<spg_t, list<PGPeeringEventRef> >::iterator to_wake =
     peering_wait_for_split.find(pg->pg_id);
   if (to_wake != peering_wait_for_split.end()) {
-    for (list<PG::CephPeeringEvtRef>::iterator i =
+    for (list<PGPeeringEventRef>::iterator i =
 	   to_wake->second.begin();
 	 i != to_wake->second.end();
 	 ++i) {
@@ -3974,7 +3951,7 @@ int OSD::handle_pg_peering_evt(
   const pg_history_t& orig_history,
   const PastIntervals& pi,
   epoch_t epoch,
-  PG::CephPeeringEvtRef evt)
+  PGPeeringEventRef evt)
 {
   if (service.splitting(pgid)) {
     peering_wait_for_split[pgid].push_back(evt);
@@ -7304,6 +7281,17 @@ void OSD::handle_osd_map(MOSDMap *m)
     skip_maps = true;
   }
 
+  // wait for pgs to catch up
+  {
+    epoch_t num = last - first + 1;
+    if (cct->_conf->osd_map_cache_size > num &&
+	cct->_conf->osd_map_cache_size < last) {
+      epoch_t min = last - cct->_conf->osd_map_cache_size + 1;
+      dout(10) << __func__ << " waiting for pgs to consume " << min << dendl;
+      service.wait_min_pg_epoch(min);
+    }
+  }
+
   ObjectStore::Transaction t;
   uint64_t txn_size = 0;
 
@@ -7664,8 +7652,8 @@ void OSD::_committed_osd_maps(epoch_t first, epoch_t last, MOSDMap *m)
     maybe_update_heartbeat_peers();
 
   if (!is_active()) {
-    dout(10) << " not yet active; waiting for peering wq to drain" << dendl;
-    peering_wq.drain();
+    dout(10) << " not yet active; waiting for peering work to drain" << dendl;
+    service.wait_min_pg_epoch(last);
   } else {
     activate_map();
   }
@@ -7759,7 +7747,7 @@ void OSD::check_osdmap_features()
   }
 }
 
-bool OSD::advance_pg(
+void OSD::advance_pg(
   epoch_t osd_epoch, PG *pg,
   ThreadPool::TPHandle &handle,
   PG::RecoveryCtx *rctx,
@@ -7769,27 +7757,14 @@ bool OSD::advance_pg(
   epoch_t next_epoch = pg->get_osdmap()->get_epoch() + 1;
   OSDMapRef lastmap = pg->get_osdmap();
 
-  if (lastmap->get_epoch() == osd_epoch)
-    return true;
   assert(lastmap->get_epoch() < osd_epoch);
 
-  epoch_t min_epoch = service.get_min_pg_epoch();
-  epoch_t max;
-  if (min_epoch) {
-    max = min_epoch + cct->_conf->osd_map_max_advance;
-  } else {
-    max = next_epoch + cct->_conf->osd_map_max_advance;
-  }
-
   for (;
-       next_epoch <= osd_epoch && next_epoch <= max;
+       next_epoch <= osd_epoch;
        ++next_epoch) {
     OSDMapRef nextmap = service.try_get_map(next_epoch);
     if (!nextmap) {
       dout(20) << __func__ << " missing map " << next_epoch << dendl;
-      // make sure max is bumped up so that we can get past any
-      // gap in maps
-      max = MAX(max, next_epoch + cct->_conf->osd_map_max_advance);
       continue;
     }
 
@@ -7821,13 +7796,6 @@ bool OSD::advance_pg(
   }
   service.pg_update_epoch(pg->pg_id, lastmap->get_epoch());
   pg->handle_activate_map(rctx);
-  if (next_epoch <= osd_epoch) {
-    dout(10) << __func__ << " advanced to max " << max
-	     << " past min epoch " << min_epoch
-	     << " ... will requeue " << *pg << dendl;
-    return false;
-  }
-  return true;
 }
 
 void OSD::consume_map()
@@ -8211,8 +8179,8 @@ void OSD::handle_pg_create(OpRequestRef op)
           history,
           pi,
           osdmap->get_epoch(),
-          PG::CephPeeringEvtRef(
-	    new PG::CephPeeringEvt(
+          PGPeeringEventRef(
+	    new PGPeeringEvent(
 	      osdmap->get_epoch(),
 	      osdmap->get_epoch(),
 	      PG::NullEvt()))
@@ -8452,8 +8420,8 @@ void OSD::handle_pg_notify(OpRequestRef op)
       spg_t(it->first.info.pgid.pgid, it->first.to),
       it->first.info.history, it->second,
       it->first.query_epoch,
-      PG::CephPeeringEvtRef(
-	new PG::CephPeeringEvt(
+      PGPeeringEventRef(
+	new PGPeeringEvent(
 	  it->first.epoch_sent, it->first.query_epoch,
 	  PG::MNotifyRec(pg_shard_t(from, it->first.from), it->first,
           op->get_req()->get_connection()->get_features())))
@@ -8483,8 +8451,8 @@ void OSD::handle_pg_log(OpRequestRef op)
   handle_pg_peering_evt(
     spg_t(m->get_pgid().pgid, m->to),
     m->info.history, m->past_intervals, m->get_epoch(),
-    PG::CephPeeringEvtRef(
-      new PG::CephPeeringEvt(
+    PGPeeringEventRef(
+      new PGPeeringEvent(
 	m->get_epoch(), m->get_query_epoch(),
 	PG::MLogRec(pg_shard_t(from, m->from), m)))
     );
@@ -8516,8 +8484,8 @@ void OSD::handle_pg_info(OpRequestRef op)
     handle_pg_peering_evt(
       spg_t(p->first.info.pgid.pgid, p->first.to),
       p->first.info.history, p->second, p->first.epoch_sent,
-      PG::CephPeeringEvtRef(
-	new PG::CephPeeringEvt(
+      PGPeeringEventRef(
+	new PGPeeringEvent(
 	  p->first.epoch_sent, p->first.query_epoch,
 	  PG::MInfoRec(
 	    pg_shard_t(
@@ -8566,16 +8534,16 @@ void OSD::handle_pg_backfill_reserve(OpRequestRef op)
   if (!require_same_or_newer_map(op, m->query_epoch, false))
     return;
 
-  PG::CephPeeringEvtRef evt;
+  PGPeeringEventRef evt;
   if (m->type == MBackfillReserve::REQUEST) {
-    evt = PG::CephPeeringEvtRef(
-      new PG::CephPeeringEvt(
+    evt = PGPeeringEventRef(
+      new PGPeeringEvent(
 	m->query_epoch,
 	m->query_epoch,
 	PG::RequestBackfillPrio(m->priority)));
   } else if (m->type == MBackfillReserve::GRANT) {
-    evt = PG::CephPeeringEvtRef(
-      new PG::CephPeeringEvt(
+    evt = PGPeeringEventRef(
+      new PGPeeringEvent(
 	m->query_epoch,
 	m->query_epoch,
 	PG::RemoteBackfillReserved()));
@@ -8585,26 +8553,26 @@ void OSD::handle_pg_backfill_reserve(OpRequestRef op)
     //                                  (for older peers)
     //      and also replica -> primary "i revoke your reservation"
     //                                  (for older peers)
-    evt = PG::CephPeeringEvtRef(
-      new PG::CephPeeringEvt(
+    evt = PGPeeringEventRef(
+      new PGPeeringEvent(
 	m->query_epoch,
 	m->query_epoch,
 	PG::RemoteReservationRejected()));
   } else if (m->type == MBackfillReserve::RELEASE) {
-    evt = PG::CephPeeringEvtRef(
-      new PG::CephPeeringEvt(
+    evt = PGPeeringEventRef(
+      new PGPeeringEvent(
 	m->query_epoch,
 	m->query_epoch,
 	PG::RemoteReservationCanceled()));
   } else if (m->type == MBackfillReserve::TOOFULL) {
-    evt = PG::CephPeeringEvtRef(
-      new PG::CephPeeringEvt(
+    evt = PGPeeringEventRef(
+      new PGPeeringEvent(
 	m->query_epoch,
 	m->query_epoch,
 	PG::RemoteReservationRevokedTooFull()));
   } else if (m->type == MBackfillReserve::REVOKE) {
-    evt = PG::CephPeeringEvtRef(
-      new PG::CephPeeringEvt(
+    evt = PGPeeringEventRef(
+      new PGPeeringEvent(
 	m->query_epoch,
 	m->query_epoch,
 	PG::RemoteReservationRevoked()));
@@ -8637,28 +8605,28 @@ void OSD::handle_pg_recovery_reserve(OpRequestRef op)
   if (!require_same_or_newer_map(op, m->query_epoch, false))
     return;
 
-  PG::CephPeeringEvtRef evt;
+  PGPeeringEventRef evt;
   if (m->type == MRecoveryReserve::REQUEST) {
-    evt = PG::CephPeeringEvtRef(
-      new PG::CephPeeringEvt(
+    evt = PGPeeringEventRef(
+      new PGPeeringEvent(
 	m->query_epoch,
 	m->query_epoch,
 	PG::RequestRecoveryPrio(m->priority)));
   } else if (m->type == MRecoveryReserve::GRANT) {
-    evt = PG::CephPeeringEvtRef(
-      new PG::CephPeeringEvt(
+    evt = PGPeeringEventRef(
+      new PGPeeringEvent(
 	m->query_epoch,
 	m->query_epoch,
 	PG::RemoteRecoveryReserved()));
   } else if (m->type == MRecoveryReserve::RELEASE) {
-    evt = PG::CephPeeringEvtRef(
-      new PG::CephPeeringEvt(
+    evt = PGPeeringEventRef(
+      new PGPeeringEvent(
 	m->query_epoch,
 	m->query_epoch,
 	PG::RecoveryDone()));
   } else if (m->type == MRecoveryReserve::REVOKE) {
-    evt = PG::CephPeeringEvtRef(
-      new PG::CephPeeringEvt(
+    evt = PGPeeringEventRef(
+      new PGPeeringEvent(
 	m->query_epoch,
 	m->query_epoch,
 	PG::DeferRecovery(0.0)));
@@ -8745,8 +8713,8 @@ void OSD::handle_pg_query(OpRequestRef op)
 
     if (service.splitting(pgid)) {
       peering_wait_for_split[pgid].push_back(
-	PG::CephPeeringEvtRef(
-	  new PG::CephPeeringEvt(
+	PGPeeringEventRef(
+	  new PGPeeringEvent(
 	    it->second.epoch_sent, it->second.epoch_sent,
 	    PG::MQuery(pg_shard_t(from, it->second.from),
 		       it->second, it->second.epoch_sent))));
@@ -9142,6 +9110,32 @@ void OSD::enqueue_op(spg_t pg, OpRequestRef& op, epoch_t epoch)
       epoch));
 }
 
+void OSD::enqueue_peering_evt(PG *pg, PGPeeringEventRef evt)
+{
+  dout(15) << __func__ << " " << pg->get_pgid() << " " << evt->get_desc() << dendl;
+  op_shardedwq.queue(
+    OpQueueItem(
+      unique_ptr<OpQueueItem::OpQueueable>(new PGPeeringItem(pg->get_pgid(), evt)),
+      10,
+      cct->_conf->osd_peering_op_priority,
+      utime_t(),
+      0,
+      evt->get_epoch_sent()));
+}
+
+void OSD::enqueue_peering_evt_front(PG *pg, PGPeeringEventRef evt)
+{
+  dout(15) << __func__ << " " << pg->get_pgid() << " " << evt->get_desc() << dendl;
+  op_shardedwq.queue_front(
+    OpQueueItem(
+      unique_ptr<OpQueueItem::OpQueueable>(new PGPeeringItem(pg->get_pgid(), evt)),
+      10,
+      cct->_conf->osd_peering_op_priority,
+      utime_t(),
+      0,
+      evt->get_epoch_sent()));
+}
+
 /*
  * NOTE: dequeue called in worker thread, with pg lock
  */
@@ -9216,49 +9210,35 @@ struct C_CompleteSplits : public Context {
   }
 };
 
-void OSD::process_peering_events(
-  const list<PG*> &pgs,
-  ThreadPool::TPHandle &handle
-  )
+void OSD::dequeue_peering_evt(
+  PG *pg,
+  PGPeeringEventRef evt,
+  ThreadPool::TPHandle& handle)
 {
-  bool need_up_thru = false;
-  epoch_t same_interval_since = 0;
-  OSDMapRef curmap;
-  PG::RecoveryCtx rctx = create_context();
-  rctx.handle = &handle;
-  for (list<PG*>::const_iterator i = pgs.begin();
-       i != pgs.end();
-       ++i) {
-    set<PGRef> split_pgs;
-    PG *pg = *i;
-    pg->lock_suspend_timeout(handle);
-    curmap = service.get_osdmap();
-    if (pg->is_deleting()) {
-      pg->unlock();
-      continue;
-    }
-    if (!advance_pg(curmap->get_epoch(), pg, handle, &rctx, &split_pgs)) {
-      // we need to requeue the PG explicitly since we didn't actually
-      // handle an event
-      peering_wq.queue(pg);
-    } else {
-      pg->process_peering_event(&rctx);
-    }
-    need_up_thru = pg->get_need_up_thru() || need_up_thru;
-    same_interval_since = MAX(pg->get_same_interval_since(),
-			      same_interval_since);
-    if (!split_pgs.empty()) {
-      rctx.on_applied->add(new C_CompleteSplits(this, split_pgs));
-      split_pgs.clear();
-    }
-    dispatch_context_transaction(rctx, pg, &handle);
+  if (pg->is_deleting()) {
     pg->unlock();
+    return;
   }
-  if (need_up_thru)
-    queue_want_up_thru(same_interval_since);
-  dispatch_context(rctx, 0, curmap, &handle);
+  auto curmap = service.get_osdmap();
+  PG::RecoveryCtx rctx = create_context();
+  set<PGRef> split_pgs;
+  if (curmap->get_epoch() > pg->get_osdmap()->get_epoch()) {
+    advance_pg(curmap->get_epoch(), pg, handle, &rctx, &split_pgs);
+  }
+  pg->do_peering_event(evt, &rctx);
+  auto need_up_thru = pg->get_need_up_thru();
+  auto same_interval_since = pg->get_same_interval_since();
+  if (!split_pgs.empty()) {
+    rctx.on_applied->add(new C_CompleteSplits(this, split_pgs));
+    split_pgs.clear();
+ }
+  dispatch_context_transaction(rctx, pg, &handle);
+  pg->unlock();
 
-  service.send_pg_temp();
+  if (need_up_thru) {
+    queue_want_up_thru(same_interval_since);
+  }
+  dispatch_context(rctx, 0, curmap, &handle);
 }
 
 // --------------------------------
@@ -9643,21 +9623,6 @@ int OSD::init_op_flags(OpRequestRef& op)
   return 0;
 }
 
-void OSD::PeeringWQ::_dequeue(list<PG*> *out) {
-  for (list<PG*>::iterator i = peering_queue.begin();
-      i != peering_queue.end() &&
-      out->size() < osd->cct->_conf->osd_peering_wq_batch_size;
-      ) {
-        if (in_use.count(*i)) {
-          ++i;
-        } else {
-          out->push_back(*i);
-          peering_queue.erase(i++);
-        }
-  }
-  in_use.insert(out->begin(), out->end());
-}
-
 
 // =============================================================
 
@@ -9975,8 +9940,6 @@ void OSD::ShardedOpWQ::_process(uint32_t thread_index, heartbeat_handle_d *hb)
     tracepoint(osd, opwq_process_finish, reqid.name._type,
         reqid.name._num, reqid.tid, reqid.inc);
   }
-
-  pg->unlock();
 }
 
 void OSD::ShardedOpWQ::_enqueue(OpQueueItem&& item) {

@@ -632,8 +632,6 @@ OPTION(osd_inject_failure_on_pg_removal, OPT_BOOL)
 OPTION(osd_max_markdown_period , OPT_INT)
 OPTION(osd_max_markdown_count, OPT_INT)
 
-OPTION(osd_peering_wq_threads, OPT_INT)
-OPTION(osd_peering_wq_batch_size, OPT_U64)
 OPTION(osd_op_pq_max_tokens_per_priority, OPT_U64)
 OPTION(osd_op_pq_min_cost, OPT_U64)
 OPTION(osd_disk_threads, OPT_INT)
@@ -875,6 +873,7 @@ OPTION(mon_rocksdb_options, OPT_STR)
  */
 OPTION(osd_client_op_priority, OPT_U32)
 OPTION(osd_recovery_op_priority, OPT_U32)
+OPTION(osd_peering_op_priority, OPT_U32)
 
 OPTION(osd_snap_trim_priority, OPT_U32)
 OPTION(osd_snap_trim_cost, OPT_U32) // set default cost equal to 1MB io
