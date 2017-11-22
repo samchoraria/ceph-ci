@@ -974,15 +974,12 @@ cdef class LibCephFS(object):
                                        <const char*>_inbuf, _inbuf_len,
                                        &_outbuf, &_outbuf_len,
                                        &_outs, &_outs_len)
-            if ret == 0:
-                my_outs = decode_cstr(_outs[:_outs_len])
-                my_outbuf = _outbuf[:_outbuf_len]
-                if _outs_len:
-                    ceph_buffer_free(_outs)
-                if _outbuf_len:
-                    ceph_buffer_free(_outbuf)
-                return (ret, my_outbuf, my_outs)
-            else:
-                return (ret, b"", "")
+            my_outs = decode_cstr(_outs[:_outs_len])
+            my_outbuf = _outbuf[:_outbuf_len]
+            if _outs_len:
+                ceph_buffer_free(_outs)
+            if _outbuf_len:
+                ceph_buffer_free(_outbuf)
+            return (ret, my_outbuf, my_outs)
         finally:
             free(_cmd)
