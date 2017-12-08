@@ -1436,6 +1436,8 @@ OPTION(rgw_md_log_max_shards, OPT_INT, 64) // max shards for metadata log
 OPTION(rgw_num_zone_opstate_shards, OPT_INT, 128) // max shards for keeping inter-region copy progress info
 OPTION(rgw_opstate_ratelimit_sec, OPT_INT, 30) // min time between opstate updates on a single upload (0 for disabling ratelimit)
 OPTION(rgw_curl_wait_timeout_ms, OPT_INT, 1000) // timeout for certain curl calls
+OPTION(rgw_curl_low_speed_limit, OPT_INT, 1024) // low speed limit for certain curl calls
+OPTION(rgw_curl_low_speed_time, OPT_INT, 30) // low speed time for certain curl calls
 OPTION(rgw_copy_obj_progress, OPT_BOOL, true) // should dump progress during long copy operations?
 OPTION(rgw_copy_obj_progress_every_bytes, OPT_INT, 1024 * 1024) // min bytes between copy progress output
 OPTION(rgw_obj_tombstone_cache_size, OPT_INT, 1000) // how many objects in tombstone cache, which is used in multi-zone sync to keep
