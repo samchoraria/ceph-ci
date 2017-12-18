@@ -354,6 +354,7 @@ namespace buffer CEPH_BUFFER_API {
     unsigned _len;
     unsigned _memcopy_count; //the total of memcopy using rebuild().
     ptr append_buffer;  // where i put small appends.
+    int _mempool_unused = -1;
 
   public:
     class iterator;
