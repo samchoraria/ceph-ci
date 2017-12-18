@@ -161,8 +161,7 @@ namespace mempool {
   f(osdmap_mapping)		      \
   f(pgmap)			      \
   f(mds_co)			      \
-  f(unittest_1)			      \
-  f(unittest_2)
+  f(unittest_1)
 
 
 // give them integer ids
