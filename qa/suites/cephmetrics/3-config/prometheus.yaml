@@ -1,0 +1,7 @@
+meta:
+- desc: "use the prometheus backend"
+
+overrides:
+   ceph_ansible:
+     vars:
+       backend: prometheus
