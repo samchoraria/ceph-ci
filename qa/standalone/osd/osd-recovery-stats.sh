@@ -22,7 +22,7 @@ function run() {
     shift
 
     # Fix port????
-    export CEPH_MON="127.0.0.1:7106" # git grep '\<7106\>' : there must be only one
+    export CEPH_MON="127.0.0.1:7115" # git grep '\<7115\>' : there must be only one
     export CEPH_ARGS
     CEPH_ARGS+="--fsid=$(uuidgen) --auth-supported=none "
     CEPH_ARGS+="--mon-host=$CEPH_MON "
@@ -62,13 +62,13 @@ function check() {
     local misplaced_start=$5
     local misplaced_end=$6
 
-    # Check 3rd line at start because of false backfill starts
+    # Check 3rd line at start because of false recovery starts
     FIRST=$(grep "pg[[]${PG}.*recovering.*_update_calc_stats degraded " $log | head -3 | tail -1 | sed "s/.* \([0-9]*\)$/\1/")
     below_margin $FIRST $degraded_start || return 1
     LAST=$(grep "pg[[]${PG}.*recovering.*_update_calc_stats degraded " $log | tail -1 | sed "s/.* \([0-9]*\)$/\1/")
     above_margin $LAST $degraded_end || return 1
 
-    # Check 3rd line at start because of false backfill starts
+    # Check 3rd line at start because of false recovery starts
     FIRST=$(grep "pg[[]${PG}.*recovering.*_update_calc_stats misplaced " $log | head -3 | tail -1 | sed "s/.* \([0-9]*\)$/\1/")
     below_margin $FIRST $misplaced_start || return 1
     LAST=$(grep "pg[[]${PG}.*recovering.*_update_calc_stats misplaced " $log | tail -1 | sed "s/.* \([0-9]*\)$/\1/")
@@ -115,13 +115,13 @@ function do_recovery_out1() {
     # Only 2 OSDs so only 1 not primary
     local otherosd=$(get_not_primary $poolname obj1)
 
-    CEPH_ARGS= ceph --admin-daemon $(get_asok_path osd.$primary) set_recovery_delay 10
+    ceph osd set norecover
     kill $(cat $dir/osd.${otherosd}.pid)
     ceph osd down osd.${otherosd}
     ceph osd out osd.${otherosd}
-    sleep 10
-    CEPH_ARGS= ceph --admin-daemon $(get_asok_path osd.$primary) set_recovery_delay 0
-    sleep 15
+    ceph osd unset norecover
+    ceph tell osd.$(get_primary $poolname obj1) debug kick_recovery_wq 0
+    sleep 2
 
     wait_for_clean || return 1
 
@@ -177,12 +177,12 @@ function TEST_recovery_sizeup() {
     # Only 2 OSDs so only 1 not primary
     local otherosd=$(get_not_primary $poolname obj1)
 
-    CEPH_ARGS= ceph --admin-daemon $(get_asok_path osd.$primary) set_recovery_delay 10
+    ceph osd set norecover
     ceph osd out osd.$primary osd.$otherosd
     ceph osd pool set test size 4
-    sleep 10
-    CEPH_ARGS= ceph --admin-daemon $(get_asok_path osd.$primary) set_recovery_delay 0
-    sleep 15
+    ceph osd unset norecover
+    ceph tell osd.$(get_primary $poolname obj1) debug kick_recovery_wq 0
+    sleep 2
 
     wait_for_clean || return 1
 
@@ -194,7 +194,7 @@ function TEST_recovery_sizeup() {
     check $PG $log $degraded 0 0 0 || return 1
 
     # This is the value of set into MISSING_ON_PRIMARY
-    FIRST=$(grep "pg[[]${PG}.*recovering.*_update_calc_stats missing shard $primary " $log | head -1 | sed "s/.* \([0-9]*\)$/\1/")
+    FIRST=$(grep "pg[[]${PG}.*recovering.*_update_calc_stats missing shard $primary " $log | head -3 | tail -1 | sed "s/.* \([0-9]*\)$/\1/")
     below_margin $FIRST $objects || return 1
     LAST=$(grep "pg[[]${PG}.*recovering.*_update_calc_stats missing shard $primary " $log | tail -1 | sed "s/.* \([0-9]*\)$/\1/")
     above_margin $LAST 0 || return 1
@@ -237,16 +237,16 @@ function TEST_recovery_sizedown() {
     # Only 2 OSDs so only 1 not primary
     local allosds=$(get_osds $poolname obj1)
 
-    CEPH_ARGS= ceph --admin-daemon $(get_asok_path osd.$primary) set_recovery_delay 10
+    ceph osd set norecover
     for osd in $allosds
     do
         ceph osd out osd.$osd
     done
 
     ceph osd pool set test size 2
-    sleep 10
-    CEPH_ARGS= ceph --admin-daemon $(get_asok_path osd.$primary) set_recovery_delay 0
-    sleep 15
+    ceph osd unset norecover
+    ceph tell osd.$(get_primary $poolname obj1) debug kick_recovery_wq 0
+    sleep 2
 
     wait_for_clean || return 1
 
@@ -258,7 +258,7 @@ function TEST_recovery_sizedown() {
     check $PG $log $degraded 0 0 0 || return 1
 
     # This is the value of set into MISSING_ON_PRIMARY
-    FIRST=$(grep "pg[[]${PG}.*recovering.*_update_calc_stats missing shard $primary " $log | head -1 | sed "s/.* \([0-9]*\)$/\1/")
+    FIRST=$(grep "pg[[]${PG}.*recovering.*_update_calc_stats missing shard $primary " $log | head -3 | tail -1 | sed "s/.* \([0-9]*\)$/\1/")
     below_margin $FIRST $objects || return 1
     LAST=$(grep "pg[[]${PG}.*recovering.*_update_calc_stats missing shard $primary " $log | tail -1 | sed "s/.* \([0-9]*\)$/\1/")
     above_margin $LAST 0 || return 1
@@ -295,6 +295,7 @@ function TEST_recovery_undersized() {
     local primary=$(get_primary $poolname obj1)
     local PG=$(get_pg $poolname obj1)
 
+    ceph osd set norecover
     # Mark any osd not the primary (only 1 replica so also has no replica)
     for i in 0 1 2
     do
@@ -306,7 +307,10 @@ function TEST_recovery_undersized() {
       break
     done
     ceph osd pool set test size 3
-    sleep 10
+    ceph osd unset norecover
+    ceph tell osd.$(get_primary $poolname obj1) debug kick_recovery_wq 0
+    sleep 2
+    flush_pg_stats
 
     # Wait for recovery to finish
     # Can't use wait_for_clean() because state goes from active+recovering+undersized+degraded
@@ -329,10 +333,10 @@ function TEST_recovery_undersized() {
     primary=$(get_primary $poolname obj1)
 
     local degraded=$(expr $objects \* 2)
-    FIRST=$(grep "pg[[]${PG}.*recovering.*_update_calc_stats degraded " $dir/osd.${primary}.log | head -1 | sed "s/.* \([0-9]*\)$/\1/")
-    [ "$FIRST" = $degraded ] || return 1
+    FIRST=$(grep "pg[[]${PG}.*recovering.*_update_calc_stats degraded " $dir/osd.${primary}.log | head -3 | tail -1 | sed "s/.* \([0-9]*\)$/\1/")
+    below_margin $FIRST $degraded || return 1
     LAST=$(grep "pg[[]${PG}.*recovering.*_update_calc_stats degraded " $dir/osd.${primary}.log | tail -1 | sed "s/.* \([0-9]*\)$/\1/")
-    [ "$LAST" = $objects ] || return 1
+    above_margin $LAST $objects || return 1
 
     delete_pool $poolname
     kill_daemons $dir || return 1
@@ -370,7 +374,7 @@ function TEST_recovery_erasure_remapped() {
     local PG=$(get_pg $poolname obj1)
     local otherosd=$(get_not_primary $poolname obj1)
 
-    CEPH_ARGS= ceph --admin-daemon $(get_asok_path osd.$primary) set_recovery_delay 10
+    ceph osd set norecover
     kill $(cat $dir/osd.${otherosd}.pid)
     ceph osd down osd.${otherosd}
     ceph osd out osd.${otherosd}
@@ -389,9 +393,9 @@ function TEST_recovery_erasure_remapped() {
       ceph osd out osd.$i
       break
     done
-    sleep 10
-    CEPH_ARGS= ceph --admin-daemon $(get_asok_path osd.$primary) set_recovery_delay 0
-    sleep 15
+    ceph osd unset norecover
+    ceph tell osd.$(get_primary $poolname obj1) debug kick_recovery_wq 0
+    sleep 2
 
     wait_for_clean || return 1
 
