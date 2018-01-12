@@ -22,7 +22,7 @@ function run() {
     shift
 
     # Fix port????
-    export CEPH_MON="127.0.0.1:7106" # git grep '\<7106\>' : there must be only one
+    export CEPH_MON="127.0.0.1:7114" # git grep '\<7114\>' : there must be only one
     export CEPH_ARGS
     CEPH_ARGS+="--fsid=$(uuidgen) --auth-supported=none "
     CEPH_ARGS+="--mon-host=$CEPH_MON "
@@ -309,13 +309,13 @@ function TEST_backfill_out2() {
     local primary=$(get_primary $poolname obj1)
     local otherosd=$(get_not_primary $poolname obj1)
 
-    CEPH_ARGS= ceph --admin-daemon $(get_asok_path osd.$primary) set_recovery_delay 10
+    ceph osd set norecover
     ceph osd pool set $poolname size 3
     ceph osd out osd.${otherosd}
     ceph osd out osd.${primary}
-    sleep 10
-    CEPH_ARGS= ceph --admin-daemon $(get_asok_path osd.$primary) set_recovery_delay 0
-    sleep 15
+    ceph osd unset norecover
+    ceph tell osd.$(get_primary $poolname obj1) debug kick_recovery_wq 0
+    sleep 2
 
     wait_for_clean || return 1
 
@@ -365,13 +365,13 @@ function TEST_backfill_sizeup4_allout() {
     local primary=$(get_primary $poolname obj1)
     local otherosd=$(get_not_primary $poolname obj1)
 
-    CEPH_ARGS= ceph --admin-daemon $(get_asok_path osd.$primary) set_recovery_delay 10
+    ceph osd set norecover
     ceph osd out osd.$otherosd
     ceph osd out osd.$primary
     ceph osd pool set $poolname size 4
-    sleep 10
-    CEPH_ARGS= ceph --admin-daemon $(get_asok_path osd.$primary) set_recovery_delay 0
-    sleep 15
+    ceph osd unset norecover
+    ceph tell osd.$(get_primary $poolname obj1) debug kick_recovery_wq 0
+    sleep 2
 
     wait_for_clean || return 1
 
@@ -416,7 +416,7 @@ function TEST_backfill_remapped() {
     local primary=$(get_primary $poolname obj1)
     local otherosd=$(get_not_primary $poolname obj1)
 
-    CEPH_ARGS= ceph --admin-daemon $(get_asok_path osd.$primary) set_recovery_delay 10
+    ceph osd set norecover
     ceph osd out osd.${otherosd}
     for i in $(get_osds $poolname obj1)
     do
@@ -429,9 +429,9 @@ function TEST_backfill_remapped() {
     done
     ceph osd out osd.${primary}
     ceph osd pool set $poolname size 2
-    sleep 10
-    CEPH_ARGS= ceph --admin-daemon $(get_asok_path osd.$primary) set_recovery_delay 0
-    sleep 15
+    ceph osd unset norecover
+    ceph tell osd.$(get_primary $poolname obj1) debug kick_recovery_wq 0
+    sleep 2
 
     wait_for_clean || return 1
 
@@ -482,14 +482,14 @@ function TEST_backfill_ec_all_out() {
     # Remember primary during the backfill
     local primary=$(get_primary $poolname obj1)
 
-    CEPH_ARGS= ceph --admin-daemon $(get_asok_path osd.$primary) set_recovery_delay 10
+    ceph osd set norecover
     for o in $(get_osds $poolname obj1)
     do
         ceph osd out osd.$o
     done
-    sleep 10
-    CEPH_ARGS= ceph --admin-daemon $(get_asok_path osd.$primary) set_recovery_delay 0
-    sleep 15
+    ceph osd unset norecover
+    ceph tell osd.$(get_primary $poolname obj1) debug kick_recovery_wq 0
+    sleep 2
 
     wait_for_clean || return 1
 
@@ -535,11 +535,11 @@ function TEST_backfill_ec_prim_out() {
     # Remember primary during the backfill
     local primary=$(get_primary $poolname obj1)
 
-    CEPH_ARGS= ceph --admin-daemon $(get_asok_path osd.$primary) set_recovery_delay 10
+    ceph osd set norecover
     ceph osd out osd.$primary
-    sleep 10
-    CEPH_ARGS= ceph --admin-daemon $(get_asok_path osd.$primary) set_recovery_delay 0
-    sleep 15
+    ceph osd unset norecover
+    ceph tell osd.$(get_primary $poolname obj1) debug kick_recovery_wq 0
+    sleep 2
 
     wait_for_clean || return 1
 
@@ -588,18 +588,17 @@ function TEST_backfill_ec_down_all_out() {
     local otherosd=$(get_not_primary $poolname obj1)
     local allosds=$(get_osds $poolname obj1)
 
-    CEPH_ARGS= ceph --admin-daemon $(get_asok_path osd.$primary) set_recovery_delay 10
+    ceph osd set norecover
     kill $(cat $dir/osd.${otherosd}.pid)
     ceph osd down osd.${otherosd}
     for o in $allosds
     do
         ceph osd out osd.$o
     done
-    sleep 10
-    CEPH_ARGS= ceph --admin-daemon $(get_asok_path osd.$primary) set_recovery_delay 0
-    sleep 15
-
-    ceph pg dump pgs
+    ceph osd unset norecover
+    ceph tell osd.$(get_primary $poolname obj1) debug kick_recovery_wq 0
+    sleep 2
+    flush_pg_stats
 
     # Wait for recovery to finish
     # Can't use wait_for_clean() because state goes from active+undersized+degraded+remapped+backfilling
@@ -676,15 +675,13 @@ function TEST_backfill_ec_down_out() {
     local primary=$(get_primary $poolname obj1)
     local otherosd=$(get_not_primary $poolname obj1)
 
-    CEPH_ARGS= ceph --admin-daemon $(get_asok_path osd.$primary) set_recovery_delay 10
+    ceph osd set norecover
     kill $(cat $dir/osd.${otherosd}.pid)
     ceph osd down osd.${otherosd}
     ceph osd out osd.${otherosd}
-    sleep 10
-    CEPH_ARGS= ceph --admin-daemon $(get_asok_path osd.$primary) set_recovery_delay 0
-    sleep 15
-
-    ceph pg dump pgs
+    ceph osd unset norecover
+    ceph tell osd.$(get_primary $poolname obj1) debug kick_recovery_wq 0
+    sleep 2
 
     wait_for_clean || return 1
 
