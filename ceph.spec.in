@@ -185,7 +185,7 @@ BuildRequires:  rdma-core-devel
 Requires:	systemd
 BuildRequires:  boost-random
 BuildRequires:	btrfs-progs
-BuildRequires:	nss-devel
+BuildRequires:	cryptopp-devel
 BuildRequires:	keyutils-libs-devel
 BuildRequires:	libibverbs-devel
 BuildRequires:  openldap-devel

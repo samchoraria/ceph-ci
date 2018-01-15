@@ -345,7 +345,7 @@ set(CMAKE_REQUIRED_LIBRARIES ${CURL_LIBRARIES})
 CHECK_SYMBOL_EXISTS(curl_multi_wait curl/curl.h HAVE_CURL_MULTI_WAIT)
 
 # nss or cryptopp?
-option(WITH_NSS "Use NSS crypto and SSL implementations" ON)
+option(WITH_NSS "Use NSS crypto and SSL implementations" OFF)
 if (${WITH_NSS})
   find_package(NSS REQUIRED)
     set(USE_NSS 1)
