@@ -577,6 +577,7 @@ void PrimaryLogPG::maybe_kick_recovery(
   const hobject_t &soid)
 {
   eversion_t v;
+  bool work_started = false;
   if (!missing_loc.needs_recovery(soid, &v))
     return;
 
@@ -593,7 +594,7 @@ void PrimaryLogPG::maybe_kick_recovery(
     } else if (missing_loc.is_deleted(soid)) {
       prep_object_replica_deletes(soid, v, h);
     } else {
-      prep_object_replica_pushes(soid, v, h);
+      prep_object_replica_pushes(soid, v, h, &work_started);
     }
     pgbackend->run_recovery_op(h, cct->_conf->osd_client_op_priority);
   }
@@ -11969,6 +11970,7 @@ bool PrimaryLogPG::start_recovery_ops(
   uint64_t& started = *ops_started;
   started = 0;
   bool work_in_progress = false;
+  bool recovery_started = false;
   assert(is_primary());
   assert(is_peered());
   assert(!is_deleting());
@@ -11996,7 +11998,7 @@ bool PrimaryLogPG::start_recovery_ops(
   if (num_missing == num_unfound) {
     // All of the missing objects we have are unfound.
     // Recover the replicas.
-    started = recover_replicas(max, handle);
+    started = recover_replicas(max, handle, &recovery_started);
   }
   if (!started) {
     // We still have missing objects that we should grab from replicas.
@@ -12004,10 +12006,10 @@ bool PrimaryLogPG::start_recovery_ops(
   }
   if (!started && num_unfound != get_num_unfound()) {
     // second chance to recovery replicas
-    started = recover_replicas(max, handle);
+    started = recover_replicas(max, handle, &recovery_started);
   }
 
-  if (started)
+  if (started || recovery_started)
     work_in_progress = true;
 
   bool deferred_backfill = false;
@@ -12321,7 +12323,8 @@ int PrimaryLogPG::prep_object_replica_deletes(
 
 int PrimaryLogPG::prep_object_replica_pushes(
   const hobject_t& soid, eversion_t v,
-  PGBackend::RecoveryHandle *h)
+  PGBackend::RecoveryHandle *h,
+  bool *work_started)
 {
   assert(is_primary());
   dout(10) << __func__ << ": on " << soid << dendl;
@@ -12336,6 +12339,7 @@ int PrimaryLogPG::prep_object_replica_pushes(
   if (!obc->get_recovery_read()) {
     dout(20) << "recovery delayed on " << soid
 	     << "; could not get rw_manager lock" << dendl;
+    *work_started = true;
     return 0;
   } else {
     dout(20) << "recovery got recovery read lock on " << soid
@@ -12366,7 +12370,8 @@ int PrimaryLogPG::prep_object_replica_pushes(
   return 1;
 }
 
-uint64_t PrimaryLogPG::recover_replicas(uint64_t max, ThreadPool::TPHandle &handle)
+uint64_t PrimaryLogPG::recover_replicas(uint64_t max, ThreadPool::TPHandle &handle,
+  bool *work_started)
 {
   dout(10) << __func__ << "(" << max << ")" << dendl;
   uint64_t started = 0;
@@ -12457,7 +12462,7 @@ uint64_t PrimaryLogPG::recover_replicas(uint64_t max, ThreadPool::TPHandle &hand
 
       dout(10) << __func__ << ": recover_object_replicas(" << soid << ")" << dendl;
       map<hobject_t,pg_missing_item>::const_iterator r = m.get_items().find(soid);
-      started += prep_object_replica_pushes(soid, r->second.need, h);
+      started += prep_object_replica_pushes(soid, r->second.need, h, work_started);
     }
   }
 
