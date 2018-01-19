@@ -1548,7 +1548,7 @@ bool PG::choose_acting(pg_shard_t &auth_log_shard_id,
     for (map<pg_shard_t, pg_info_t>::iterator p = all_info.begin();
          p != all_info.end();
          ++p) {
-      dout(10) << __func__ << "all_info osd." << p->first << " " << p->second << dendl;
+      dout(10) << __func__ << " all_info osd." << p->first << " " << p->second << dendl;
     }
   }
 
@@ -7559,10 +7559,14 @@ PG::RecoveryState::Recovered::Recovered(my_context ctx)
   // adjust acting set?  (e.g. because backfill completed...)
   bool history_les_bound = false;
   if (pg->acting != pg->up && !pg->choose_acting(auth_log_shard,
-						 true, &history_les_bound))
+						 true, &history_les_bound)) {
     assert(pg->want_acting.size());
+  } else if (!pg->async_recovery_targets.empty()) {
+    pg->choose_acting(auth_log_shard, true, &history_les_bound);
+  }
 
-  if (context< Active >().all_replicas_activated)
+  if (context< Active >().all_replicas_activated  &&
+      pg->async_recovery_targets.empty())
     post_event(GoClean());
 }
 
