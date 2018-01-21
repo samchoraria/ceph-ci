@@ -779,6 +779,7 @@ void PGMapDigest::dump_pool_stats_full(
       f->open_object_section("pool");
       f->dump_string("name", pool_name);
       f->dump_int("id", pool_id);
+      f->dump_float("raw_used_rate", raw_used_rate);
       f->open_object_section("stats");
     } else {
       tbl << pool_name
@@ -889,6 +890,8 @@ void PGMapDigest::dump_object_stat_sum(
       f->dump_int("wr", sum.num_wr);
       f->dump_int("wr_bytes", sum.num_wr_kb * 1024ull);
       f->dump_int("raw_bytes_used", sum.num_bytes * raw_used_rate * curr_object_copies_rate);
+      f->dump_float("raw_used_rate", raw_used_rate);
+      f->dump_float("curr_object_copies_rate", curr_object_copies_rate);
     }
   } else {
     tbl << stringify(si_t(sum.num_bytes));
