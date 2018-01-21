@@ -892,6 +892,8 @@ void PGMapDigest::dump_object_stat_sum(
       f->dump_int("raw_bytes_used", sum.num_bytes * raw_used_rate * curr_object_copies_rate);
       f->dump_float("raw_used_rate", raw_used_rate);
       f->dump_float("curr_object_copies_rate", curr_object_copies_rate);
+      f->dump_int("num_object_copies", sum.num_object_copies);
+      f->dump_int("num_objects_degraded", sum.num_objects_degraded);
     }
   } else {
     tbl << stringify(si_t(sum.num_bytes));
