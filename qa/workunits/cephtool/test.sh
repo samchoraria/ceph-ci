@@ -2362,6 +2362,7 @@ function test_mon_cephdf_commands()
   # "rados ls" goes straight to osd, but "ceph df" is served by mon. so we need
   # to sync mon with osd
   flush_pg_stats
+  wait_for_health_ok
   local jq_filter='.pools | .[] | select(.name == "cephdf_for_test") | .stats'
   ceph df detail --format=json-pretty | tee /tmp/$$
   cal_raw_used_size=`cat /tmp/$$ | jq "$jq_filter.raw_bytes_used"`
