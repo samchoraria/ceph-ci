@@ -2367,7 +2367,8 @@ function test_mon_cephdf_commands()
   cal_raw_used_size=`cat /tmp/$$ | jq "$jq_filter.raw_bytes_used"`
   raw_used_size=`cat /tmp/$$ | jq "$jq_filter.bytes_used * 2"`
   rm -f /tmp/$$
-
+  ceph osd dump -f json-pretty
+  
   ceph osd pool delete cephdf_for_test cephdf_for_test --yes-i-really-really-mean-it
   rm ./cephdf_for_test
 
