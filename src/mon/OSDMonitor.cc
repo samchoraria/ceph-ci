@@ -5451,7 +5451,7 @@ bool OSDMonitor::erasure_code_profile_in_use(
   for (map<int64_t, pg_pool_t>::const_iterator p = pools.begin();
        p != pools.end();
        ++p) {
-    if (p->second.erasure_code_profile == profile && p->second.is_erasure()) {
+    if (p->second.erasure_code_profile == profile) {
       *ss << osdmap.pool_name[p->first] << " ";
       found = true;
     }
@@ -5842,11 +5842,7 @@ int OSDMonitor::prepare_new_pool(string& name, uint64_t auid,
   pi->set_pgp_num(pgp_num);
   pi->last_change = pending_inc.epoch;
   pi->auid = auid;
-  if (pool_type == pg_pool_t::TYPE_ERASURE) {
-      pi->erasure_code_profile = erasure_code_profile;
-  } else {
-      pi->erasure_code_profile = "";
-  }
+  pi->erasure_code_profile = erasure_code_profile;
   pi->stripe_width = stripe_width;
   pi->cache_target_dirty_ratio_micro =
     g_conf->osd_pool_default_cache_target_dirty_ratio * 1000000;
