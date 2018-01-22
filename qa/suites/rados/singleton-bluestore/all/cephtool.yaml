@@ -6,10 +6,11 @@ roles:
   - osd.0
   - osd.1
   - osd.2
+  - osd.3
   - client.0
 openstack:
   - volumes: # attached to each instance
-      count: 3
+      count: 4
       size: 10 # GB
 tasks:
 - install:
