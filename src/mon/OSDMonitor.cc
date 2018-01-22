@@ -7029,6 +7029,7 @@ done:
     }
 
     bool implicit_ruleset_creation = false;
+    int64_t expected_num_objects = 0;
     string ruleset_name;
     cmd_getval(g_ceph_context, cmdmap, "ruleset", ruleset_name);
     string erasure_code_profile;
@@ -7066,9 +7067,25 @@ done:
 	  ruleset_name = poolstr;
 	}
       }
+      cmd_getval(g_ceph_context, cmdmap, "expected_num_objects",
+                 expected_num_objects, int64_t(0));
     } else {
       //NOTE:for replicated pool,cmd_map will put ruleset_name to erasure_code_profile field
-      ruleset_name = erasure_code_profile;
+      if (erasure_code_profile != "") { // cmd is from CLI
+        if (ruleset_name != "") {
+          string interr;
+          expected_num_objects = strict_strtoll(ruleset_name.c_str(), 10, &interr);
+          if (interr.length()) {
+            ss << "error parsing integer value '" << ruleset_name << "': " << interr;
+            err = -EINVAL;
+            goto reply;
+          }
+        }
+        ruleset_name = erasure_code_profile;
+      } else { // cmd is well-formed
+        cmd_getval(g_ceph_context, cmdmap, "expected_num_objects",
+                   expected_num_objects, int64_t(0));
+      }
     }
 
     if (!implicit_ruleset_creation && ruleset_name != "") {
@@ -7082,8 +7099,6 @@ done:
 	goto reply;
     }
 
-    int64_t expected_num_objects;
-    cmd_getval(g_ceph_context, cmdmap, "expected_num_objects", expected_num_objects, int64_t(0));
     if (expected_num_objects < 0) {
       ss << "'expected_num_objects' must be non-negative";
       err = -EINVAL;
