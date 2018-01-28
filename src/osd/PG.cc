@@ -2847,6 +2847,7 @@ void PG::_update_calc_stats()
       acting_source_objects.insert(make_pair(missing, pg_whoami));
     }
     info.stats.stats.sum.num_objects_missing_on_primary = missing;
+    dout(10) << __func__ << " initial missing_target_objects size = " << missing_target_objects.size() << dendl;
 
     // All other peers
     for (auto& peer : peer_info) {
@@ -2876,6 +2877,9 @@ void PG::_update_calc_stats()
     }
 
     if (pool.info.is_replicated()) {
+      dout(10) << __func__ << " target = " << target << dendl;
+      dout(10) << __func__ << " missing_target_objects size = " << missing_target_objects.size() << dendl;
+      dout(10) << __func__ << " missing_target_objects = " << missing_target_objects << dendl;
       // Add to missing_target_objects up to target elements (num_objects missing)
       assert(target >= missing_target_objects.size());
       unsigned needed = target - missing_target_objects.size();
@@ -5394,6 +5398,7 @@ bool PG::append_log_entries_update_missing(
   assert(entries.begin()->version > info.last_update);
 
   PGLogEntryHandler rollbacker{this, &t};
+  dout(10) << __func__ << " info.last_backfill " << info.last_backfill << dendl;
   bool invalidate_stats =
     pg_log.append_new_log_entries(info.last_backfill,
 				  info.last_backfill_bitwise,
@@ -5425,6 +5430,8 @@ void PG::merge_new_log_entries(
        i != acting_recovery_backfill.end();
        ++i) {
     pg_shard_t peer(*i);
+    dout(10) << __func__ << " peer_missing before for peer " << peer << " = " << peer_missing[peer].get_items() << dendl;
+    dout(10) << __func__ << " peer_info before for peer " << peer << " = " << peer_info[peer] << dendl;
     if (peer == pg_whoami) continue;
     assert(peer_missing.count(peer));
     assert(peer_info.count(peer));
@@ -5443,6 +5450,8 @@ void PG::merge_new_log_entries(
     pinfo.last_update = info.last_update;
     pinfo.stats.stats_invalid = pinfo.stats.stats_invalid || invalidate_stats;
     rebuild_missing = rebuild_missing || invalidate_stats;
+    dout(10) << __func__ << " peer_missing after for peer " << peer << " = " << peer_missing[peer].get_items() << dendl;
+    dout(10) << __func__ << " peer_info after for peer " << peer << " = " << peer_info[peer] << dendl;
   }
 
   if (!rebuild_missing) {
