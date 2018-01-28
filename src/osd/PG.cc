@@ -2944,6 +2944,7 @@ void PG::_update_calc_stats()
                << " missing " << missing
                << dendl;
     }
+    dout(10) << __func__ << " initial missing_target_objects size = " << missing_target_objects.size() << dendl;
 
     // All other peers
     for (auto& peer : peer_info) {
@@ -3048,6 +3049,9 @@ void PG::_update_calc_stats()
     // Handle undersized case
     if (pool.info.is_replicated()) {
       // Add to missing_target_objects
+      dout(10) << __func__ << " target = " << target << dendl;
+      dout(10) << __func__ << " missing_target_objects size = " << missing_target_objects.size() << dendl;
+      dout(10) << __func__ << " missing_target_objects = " << missing_target_objects << dendl;
       assert(target >= missing_target_objects.size());
       unsigned needed = target - missing_target_objects.size();
       if (needed)
@@ -5587,6 +5591,8 @@ void PG::merge_new_log_entries(
        i != acting_recovery_backfill.end();
        ++i) {
     pg_shard_t peer(*i);
+    dout(10) << __func__ << " peer_missing before for peer " << peer << " = " << peer_missing[peer].get_items() << dendl;
+    dout(10) << __func__ << " peer_info before for peer " << peer << " = " << peer_info[peer] << dendl;
     if (peer == pg_whoami) continue;
     assert(peer_missing.count(peer));
     assert(peer_info.count(peer));
@@ -5605,6 +5611,8 @@ void PG::merge_new_log_entries(
     pinfo.last_update = info.last_update;
     pinfo.stats.stats_invalid = pinfo.stats.stats_invalid || invalidate_stats;
     rebuild_missing = rebuild_missing || invalidate_stats;
+    dout(10) << __func__ << " peer_missing after for peer " << peer << " = " << peer_missing[peer].get_items() << dendl;
+    dout(10) << __func__ << " peer_info after for peer " << peer << " = " << peer_info[peer] << dendl;
   }
 
   if (!rebuild_missing) {
