@@ -1152,6 +1152,7 @@ public:
 	  }
 	}
       }
+      ldpp_dout(dpp, 20) << " missing " << missing.get_items() << dendl;
     }
     return invalidate_stats;
   }
