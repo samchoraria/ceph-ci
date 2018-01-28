@@ -5425,6 +5425,8 @@ void PG::merge_new_log_entries(
        i != acting_recovery_backfill.end();
        ++i) {
     pg_shard_t peer(*i);
+    dout(10) << __func__ << " peer_missing before for peer " << peer << " = " << peer_missing[peer].get_items() << dendl;
+    dout(10) << __func__ << " peer_info before for peer " << peer << " = " << peer_info[peer] << dendl;
     if (peer == pg_whoami) continue;
     assert(peer_missing.count(peer));
     assert(peer_info.count(peer));
@@ -5443,6 +5445,8 @@ void PG::merge_new_log_entries(
     pinfo.last_update = info.last_update;
     pinfo.stats.stats_invalid = pinfo.stats.stats_invalid || invalidate_stats;
     rebuild_missing = rebuild_missing || invalidate_stats;
+    dout(10) << __func__ << " peer_missing before for peer " << peer << " = " << peer_missing[peer].get_items() << dendl;
+    dout(10) << __func__ << " peer_info before for peer " << peer << " = " << peer_info[peer] << dendl;
   }
 
   if (!rebuild_missing) {
