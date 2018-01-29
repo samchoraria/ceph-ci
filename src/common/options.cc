@@ -5225,6 +5225,10 @@ std::vector<Option> get_rgw_options() {
         "The mime types file is needed in Swift when uploading an object. If object's "
         "content type is not specified, RGW will use data from this file to assign "
         "a content type to the object."),
+    
+    Option("rgw_gc_threads", Option::TYPE_INT, Option::LEVEL_ADVANCED)
+        .set_default(3)
+        .set_description("The number of threads in gc process thread pool"),
 
     Option("rgw_gc_max_objs", Option::TYPE_INT, Option::LEVEL_ADVANCED)
     .set_default(32)
