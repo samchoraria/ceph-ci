@@ -3378,7 +3378,8 @@ void RGWPutObj::execute()
     goto done;
   }
 
-  if (copy_source && !copy_source_range) {
+  if ((! copy_source.empty()) &&
+      (!copy_source_range)) {
     rgw_obj_key obj_key(copy_source_object_name, copy_source_version_id);
     rgw_obj obj(copy_source_bucket_info.bucket, obj_key.name);
 
