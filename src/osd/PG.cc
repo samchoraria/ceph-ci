@@ -2856,6 +2856,7 @@ void PG::_update_calc_stats()
       if (!acting_recovery_backfill.count(peer.first)) {
 	continue;
       }
+      if (peer.first == pg_whoami) continue;
       missing = 0;
       // Backfill targets always track num_objects accurately
       // all other peers track missing accurately.
