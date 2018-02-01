@@ -584,6 +584,7 @@ void ECBackend::continue_recovery_op(
       // read completed, start write
       assert(op.xattrs.size());
       assert(op.returned_data.size());
+      dout(10) << __func__ << " op.returned_data= " << op.returned_data << " size= " << op.returned_data.size() << dendl;
       op.state = RecoveryOp::WRITING;
       ObjectRecoveryProgress after_progress = op.recovery_progress;
       after_progress.data_recovered_to += op.extent_requested.second;
@@ -602,7 +603,14 @@ void ECBackend::continue_recovery_op(
 	PushOp &pop = m->pushes[*mi].back();
 	pop.soid = op.hoid;
 	pop.version = op.v;
+	dout(10) << __func__ << " shard= " << mi->shard << dendl;
+	dout(10) << __func__ << " op.returned_data[mi->shard]= " << op.returned_data[mi->shard] << dendl;
 	pop.data = op.returned_data[mi->shard];
+	dout(10) << __func__ << " lhs= " << pop.data.length() << dendl;
+        dout(10) << __func__ << " rhs= " <<
+          sinfo.aligned_logical_offset_to_chunk_offset(
+            after_progress.data_recovered_to -
+            op.recovery_progress.data_recovered_to) << dendl;
 	dout(10) << __func__ << ": before_progress=" << op.recovery_progress
 		 << ", after_progress=" << after_progress
 		 << ", pop.data.length()=" << pop.data.length()
