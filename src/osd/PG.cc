@@ -3448,6 +3448,8 @@ void PG::add_log_entry(const pg_log_entry_t& e, bool applied)
     info.last_user_version = e.user_version;
 
   // log mutation
+  dout(10) << __func__ << " get_can_rollback_to() = " << pg_log.get_can_rollback_to() << dendl;
+  dout(10) << __func__ << " head = " << pg_log.get_head() << dendl;
   pg_log.add(e, applied);
   dout(10) << "add_log_entry " << e << dendl;
 }
