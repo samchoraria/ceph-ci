@@ -80,7 +80,7 @@ class DeterministicOpSequence : public TestObjectStoreState {
   virtual void _do_write_and_clone_range(coll_t coll, hobject_t& orig_obj,
       hobject_t& new_obj, uint64_t srcoff, uint64_t srclen,
       uint64_t dstoff, bufferlist& bl);
-  virtual void _do_coll_move(coll_t orig_coll, coll_t new_coll, hobject_t& obj);
+  virtual void _do_coll_move(coll_t cid, hobject_t& orig_obj, hobject_t& new_obj);
   virtual void _do_coll_create(coll_t cid, uint32_t pg_num, uint64_t num_objs);
 
   int _gen_coll_id(rngen_t& gen);
@@ -90,8 +90,6 @@ class DeterministicOpSequence : public TestObjectStoreState {
  private:
   bool _prepare_clone(rngen_t& gen, coll_t& coll_ret,
       hobject_t& orig_obj_ret, hobject_t& new_obj_ret);
-  bool _prepare_colls(rngen_t& gen,
-      coll_entry_t* &orig_coll, coll_entry_t* &new_coll);
 };
 
 
