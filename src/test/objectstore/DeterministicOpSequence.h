@@ -88,8 +88,13 @@ class DeterministicOpSequence : public TestObjectStoreState {
   void _print_status(int seq, int op);
 
  private:
-  bool _prepare_clone(rngen_t& gen, coll_t& coll_ret,
-      hobject_t& orig_obj_ret, hobject_t& new_obj_ret);
+  bool _prepare_clone(
+    rngen_t& gen,
+    coll_entry_t **entry_ret,
+    int *orig_obj_id,
+    hobject_t *orig_obj_ret,
+    int *new_obj_id,
+    hobject_t *new_obj_ret);
 };
 
 
