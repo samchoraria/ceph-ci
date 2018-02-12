@@ -202,14 +202,18 @@ int RGWListBucket_ObjStore_SWIFT::get_params()
   marker = s->info.args.get("marker");
   end_marker = s->info.args.get("end_marker");
   max_keys = s->info.args.get("limit");
+
+  // non-standard
+  s->info.args.get_bool("allow_unordered", &allow_unordered, false);
+
+  delimiter = s->info.args.get("delimiter");
+
   op_ret = parse_max_keys();
   if (op_ret < 0) {
     return op_ret;
   }
   if (max > default_max)
     return -ERR_PRECONDITION_FAILED;
-
-  delimiter = s->info.args.get("delimiter");
 
   string path_args;
   if (s->info.args.exists("path")) { // should handle empty path
@@ -246,7 +250,10 @@ void RGWListBucket_ObjStore_SWIFT::send_response()
   dump_start(s);
   dump_container_metadata(s, bucket);
 
-  s->formatter->open_array_section_with_attrs("container", FormatterAttrs("name", s->bucket.name.c_str(), NULL));
+  s->formatter->open_array_section_with_attrs("container",
+					      FormatterAttrs("name",
+							     s->bucket.name.c_str(),
+							     NULL));
 
   while (iter != objs.end() || pref_iter != common_prefixes.end()) {
     bool do_pref = false;
@@ -267,7 +274,7 @@ void RGWListBucket_ObjStore_SWIFT::send_response()
     else
       do_pref = true;
 
-    if (do_objs && (marker.empty() || marker < key)) {
+    if (do_objs && (allow_unordered || marker.empty() || marker < key)) {
       if (key.name.compare(path) == 0)
         goto next;
 
@@ -293,29 +300,35 @@ void RGWListBucket_ObjStore_SWIFT::send_response()
       s->formatter->close_section();
     }
 
-    if (do_pref &&  (marker.empty() || pref_iter->first.compare(marker.name) > 0)) {
+    if (do_pref &&
+	(marker.empty() || pref_iter->first.compare(marker.name) > 0)) {
       const string& name = pref_iter->first;
-      if (name.compare(delimiter) == 0)
+      if (name.compare(delimiter) == 0) {
         goto next;
+      }
 
-        s->formatter->open_object_section_with_attrs("subdir", FormatterAttrs("name", name.c_str(), NULL));
+      s->formatter->open_object_section_with_attrs("subdir",
+						   FormatterAttrs("name",
+								  name.c_str(),
+								  NULL));
 
-        /* swift is a bit inconsistent here */
-        switch (s->format) {
-          case RGW_FORMAT_XML:
-            s->formatter->dump_string("name", name);
-            break;
-          default:
-            s->formatter->dump_string("subdir", name);
-        }
-        s->formatter->close_section();
+      /* swift is a bit inconsistent here */
+      switch (s->format) {
+      case RGW_FORMAT_XML:
+	s->formatter->dump_string("name", name);
+	break;
+      default:
+	s->formatter->dump_string("subdir", name);
+      }
+      s->formatter->close_section();
     }
-next:
+
+  next:
     if (do_objs)
       ++iter;
     else
       ++pref_iter;
-  }
+  } // while
 
   s->formatter->close_section();
 
@@ -337,7 +350,7 @@ next:
   }
 
   rgw_flush_formatter_and_reset(s, s->formatter);
-}
+} // RGWListBucket_ObjStore_SWIFT::send_response
 
 static void dump_container_metadata(struct req_state *s, RGWBucketEnt& bucket)
 {

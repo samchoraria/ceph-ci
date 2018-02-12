@@ -91,17 +91,19 @@ Syntax
 Parameters
 ~~~~~~~~~~
 
++-----------------+-----------+-----------------------------------------------------------------------------------------------------+
+| Name                | Type      | Description                                                           |
++=================+===========+=====================================================================================================+
+| ``prefix``          | String    | Only returns objects that contain the specified prefix.                                         |
 +-----------------+-----------+-----------------------------------------------------------------------+
-| Name            | Type      | Description                                                           |
-+=================+===========+=======================================================================+
-| ``prefix``      | String    | Only returns objects that contain the specified prefix.               |
+| ``delimiter``       | String    | The delimiter between the prefix and the rest of the object name.                               |
 +-----------------+-----------+-----------------------------------------------------------------------+
-| ``delimiter``   | String    | The delimiter between the prefix and the rest of the object name.     |
+| ``marker``          | String    | A beginning index for the list of objects returned.                                             |
 +-----------------+-----------+-----------------------------------------------------------------------+
-| ``marker``      | String    | A beginning index for the list of objects returned.                   |
+| ``max-keys``        | Integer   | The maximum number of keys to return. Default is 1000.                                          |
 +-----------------+-----------+-----------------------------------------------------------------------+
-| ``max-keys``    | Integer   | The maximum number of keys to return. Default is 1000.                |
-+-----------------+-----------+-----------------------------------------------------------------------+
+| ``allow-unordered`` | Boolean   | Non-standard extension. Allows results to be returned unordered. Cannot be used with delimiter. |
++-----------------+-----------+-----------------------------------------------------------------------------------------------------+
 
 
 HTTP Response

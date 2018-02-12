@@ -306,8 +306,8 @@ public:
     buckets_size_rounded = 0;
   }
 
-  int verify_permission();
-  void execute();
+  virtual int verify_permission();
+  virtual void execute();
 
   virtual int get_params() = 0;
   virtual void send_response_begin(bool has_buckets) = 0;
@@ -321,7 +321,7 @@ public:
   virtual const string name() { return "list_buckets"; }
   virtual RGWOpType get_type() { return RGW_OP_LIST_BUCKETS; }
   virtual uint32_t op_mask() { return RGW_OP_TYPE_READ; }
-};
+}; // class RGWListBuckets
 
 class RGWGetUsage : public RGWOp {
 protected:
@@ -391,6 +391,7 @@ protected:
 
   int default_max;
   bool is_truncated;
+  bool allow_unordered;
 
   int shard_id;
 
@@ -398,7 +399,8 @@ protected:
 
 public:
   RGWListBucket() : list_versions(false), max(0),
-                    default_max(0), is_truncated(false), shard_id(-1) {}
+                    default_max(0), is_truncated(false),
+		    allow_unordered(false), shard_id(-1) {}
   int verify_permission();
   void pre_exec();
   void execute();

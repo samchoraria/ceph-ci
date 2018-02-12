@@ -545,9 +545,11 @@ int rgw_remove_bucket(RGWRados *store, rgw_bucket& bucket, bool delete_children)
   RGWRados::Bucket::List list_op(&target);
 
   list_op.params.list_versions = true;
+  list_op.params.allow_unordered = true;
 
   if (delete_children) {
     int max = 1000;
+    // since no delimiter is provided, common_prefixes will not be used
     ret = list_op.list_objects(max, &objs, &common_prefixes, NULL);
     if (ret < 0)
       return ret;
@@ -561,6 +563,7 @@ int rgw_remove_bucket(RGWRados *store, rgw_bucket& bucket, bool delete_children)
       }
       objs.clear();
 
+      // since no delimiter is provided, common_prefixes will not be used
       ret = list_op.list_objects(max, &objs, &common_prefixes, NULL);
       if (ret < 0)
         return ret;
@@ -1142,9 +1145,10 @@ int RGWBucket::check_object_index(RGWBucketAdminOpState& op_state,
   while (is_truncated) {
     map<string, RGWObjEnt> result;
 
-    int r = store->cls_bucket_list(bucket, RGW_NO_SHARD, marker, prefix, 1000, true,
-                                   result, &is_truncated, &marker,
-                                   bucket_object_check_filter);
+    int r = store->cls_bucket_list_ordered(bucket, RGW_NO_SHARD,
+					   marker, prefix, 1000, true,
+					   result, &is_truncated, &marker,
+					   bucket_object_check_filter);
     if (r == -ENOENT) {
       break;
     } else if (r < 0 && r != -ENOENT) {

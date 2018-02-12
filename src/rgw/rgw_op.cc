@@ -1834,6 +1834,13 @@ void RGWListBucket::execute()
   if (op_ret < 0)
     return;
 
+  if (allow_unordered && !delimiter.empty()) {
+    ldout(s->cct, 0) <<
+      "ERROR: unordered bucket listing requested with a delimiter" << dendl;
+    op_ret = -EINVAL;
+    return;
+  }
+
   if (need_container_stats()) {
     map<string, RGWBucketEnt> m;
     m[s->bucket.name] = RGWBucketEnt();
@@ -1855,6 +1862,7 @@ void RGWListBucket::execute()
   list_op.params.marker = marker;
   list_op.params.end_marker = end_marker;
   list_op.params.list_versions = list_versions;
+  list_op.params.allow_unordered = allow_unordered;
 
   op_ret = list_op.list_objects(max, &objs, &common_prefixes, &is_truncated);
   if (op_ret >= 0) {

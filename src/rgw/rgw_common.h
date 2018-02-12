@@ -279,8 +279,7 @@ class NameVal
 };
 
 /** Stores the XML arguments associated with the HTTP request in req_state*/
-class RGWHTTPArgs
-{
+class RGWHTTPArgs {
   string str, empty_str;
   map<string, string> val_map;
   map<string, string> sys_val_map;
@@ -334,7 +333,7 @@ class RGWHTTPArgs
       val_map[iter->first] = iter->second;
     }
   }
-};
+}; // RGWHTTPArgs
 
 class RGWConf;
 

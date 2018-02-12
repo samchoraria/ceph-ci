@@ -2485,11 +2485,23 @@ public:
                        ceph::real_time& removed_mtime, /* mtime of removed object */
                        list<rgw_obj_key> *remove_objs);
       int cancel();
-    };
+    }; // class UpdateIndex
 
-    struct List {
+    class List {
+    protected:
       RGWRados::Bucket *target;
       rgw_obj_key next_marker;
+
+      int list_objects_ordered(int64_t max,
+			       std::vector<RGWObjEnt> *result,
+			       std::map<string, bool> *common_prefixes,
+			       bool *is_truncated);
+      int list_objects_unordered(int64_t max,
+				 std::vector<RGWObjEnt> *result,
+				 std::map<string, bool> *common_prefixes,
+				 bool *is_truncated);
+
+    public:
 
       struct Params {
         string prefix;
@@ -2500,19 +2512,36 @@ public:
         bool enforce_ns;
         RGWAccessListFilter *filter;
         bool list_versions;
+	bool allow_unordered;
 
-        Params() : enforce_ns(true), filter(NULL), list_versions(false) {}
+        Params() :
+	  enforce_ns(true),
+	  filter(NULL),
+	  list_versions(false),
+	  allow_unordered(false)
+	{}
       } params;
 
-    public:
       explicit List(RGWRados::Bucket *_target) : target(_target) {}
 
-      int list_objects(int max, vector<RGWObjEnt> *result, map<string, bool> *common_prefixes, bool *is_truncated);
+      inline int list_objects(int64_t max,
+			      vector<RGWObjEnt> *result,
+			      map<string, bool> *common_prefixes,
+			      bool *is_truncated) {
+	if (params.allow_unordered) {
+	  return list_objects_unordered(max, result, common_prefixes,
+					is_truncated);
+	} else {
+	  return list_objects_ordered(max, result, common_prefixes,
+				      is_truncated);
+	}
+      }
+
       rgw_obj_key& get_next_marker() {
         return next_marker;
       }
-    };
-  };
+    }; // class List
+  }; // class Bucket
 
   /** Write/overwrite an object to the bucket storage. */
   virtual int put_system_obj_impl(rgw_obj& obj, uint64_t size, ceph::real_time *mtime,
@@ -2910,10 +2939,20 @@ public:
                            ceph::real_time& removed_mtime, list<rgw_obj_key> *remove_objs, uint16_t bilog_flags);
   int cls_obj_complete_cancel(BucketShard& bs, string& tag, rgw_obj& obj, uint16_t bilog_flags);
   int cls_obj_set_bucket_tag_timeout(rgw_bucket& bucket, uint64_t timeout);
-  int cls_bucket_list(rgw_bucket& bucket, int shard_id, rgw_obj_key& start, const string& prefix,
-                      uint32_t num_entries, bool list_versions, map<string, RGWObjEnt>& m,
-                      bool *is_truncated, rgw_obj_key *last_entry,
-                      bool (*force_check_filter)(const string&  name) = NULL);
+  int cls_bucket_list_ordered(rgw_bucket& bucket, int shard_id,
+			      rgw_obj_key& start, const string& prefix,
+			      uint32_t num_entries, bool list_versions,
+			      map<string, RGWObjEnt>& m,
+			      bool *is_truncated,
+			      rgw_obj_key *last_entry,
+			      bool (*force_check_filter)(const string& name) = nullptr);
+  int cls_bucket_list_unordered(rgw_bucket& bucket,
+				int shard_id,
+				rgw_obj_key& start, const string& prefix,
+				uint32_t num_entries, bool list_versions,
+				vector<RGWObjEnt>& ent_list,
+				bool *is_truncated, rgw_obj_key *last_entry,
+				bool (*force_check_filter)(const string& name) = nullptr);
   int cls_bucket_head(rgw_bucket& bucket, int shard_id, map<string, struct rgw_bucket_dir_header>& headers, map<int, string> *bucket_instance_ids = NULL);
   int cls_bucket_head_async(rgw_bucket& bucket, int shard_id, RGWGetDirHeader_CB *ctx, int *num_aio);
   int list_bi_log_entries(rgw_bucket& bucket, int shard_id, string& marker, uint32_t max, std::list<rgw_bi_log_entry>& result, bool *truncated);
