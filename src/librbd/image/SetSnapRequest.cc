@@ -34,8 +34,6 @@ template <typename I>
 SetSnapRequest<I>::~SetSnapRequest() {
   assert(!m_writes_blocked);
   delete m_refresh_parent;
-  delete m_object_map;
-  delete m_exclusive_lock;
 }
 
 template <typename I>
@@ -70,7 +68,7 @@ void SetSnapRequest<I>::send_init_exclusive_lock() {
   CephContext *cct = m_image_ctx.cct;
   ldout(cct, 10) << __func__ << dendl;
 
-  m_exclusive_lock = ExclusiveLock<I>::create(m_image_ctx);
+  m_exclusive_lock = m_image_ctx.create_exclusive_lock();
 
   using klass = SetSnapRequest<I>;
   Context *ctx = create_context_callback<
@@ -162,6 +160,9 @@ template <typename I>
 Context *SetSnapRequest<I>::handle_shut_down_exclusive_lock(int *result) {
   CephContext *cct = m_image_ctx.cct;
   ldout(cct, 10) << __func__ << ": r=" << *result << dendl;
+
+  m_image_ctx.destroy_exclusive_lock(m_exclusive_lock);
+  m_exclusive_lock = nullptr;
 
   if (*result < 0) {
     lderr(cct) << "failed to shut down exclusive lock: "
@@ -264,7 +265,8 @@ Context *SetSnapRequest<I>::send_open_object_map(int *result) {
   using klass = SetSnapRequest<I>;
   Context *ctx = create_context_callback<
     klass, &klass::handle_open_object_map>(this);
-  m_object_map = ObjectMap<I>::create(m_image_ctx, m_snap_id);
+  m_object_map = m_image_ctx.create_object_map(m_snap_id);
+
   m_object_map->open(ctx);
   return nullptr;
 }
@@ -277,7 +279,7 @@ Context *SetSnapRequest<I>::handle_open_object_map(int *result) {
   if (*result < 0) {
     lderr(cct) << "failed to open object map: " << cpp_strerror(*result)
                << dendl;
-    delete m_object_map;
+    m_image_ctx.destroy_object_map(m_object_map);
     m_object_map = nullptr;
   }
 
@@ -337,6 +339,9 @@ int SetSnapRequest<I>::apply() {
     }
   } else {
     std::swap(m_image_ctx.exclusive_lock, m_exclusive_lock);
+    if (m_exclusive_lock) {
+      m_image_ctx.destroy_exclusive_lock(m_exclusive_lock, false);
+    }
     m_image_ctx.snap_unset();
   }
 
@@ -345,6 +350,10 @@ int SetSnapRequest<I>::apply() {
   }
 
   std::swap(m_object_map, m_image_ctx.object_map);
+  if (m_object_map) {
+    m_image_ctx.destroy_object_map(m_object_map, false);
+  }
+
   return 0;
 }
 

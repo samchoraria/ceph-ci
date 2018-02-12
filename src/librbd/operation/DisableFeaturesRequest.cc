@@ -381,7 +381,7 @@ Context *DisableFeaturesRequest<I>::handle_close_journal(int *result) {
   }
 
   assert(m_journal != nullptr);
-  delete m_journal;
+  this->m_image_ctx.destroy_journal(m_journal);
   m_journal = nullptr;
 
   send_remove_journal();

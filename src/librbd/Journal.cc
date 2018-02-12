@@ -324,7 +324,8 @@ std::ostream &operator<<(std::ostream &os,
 
 template <typename I>
 Journal<I>::Journal(I &image_ctx)
-  : m_image_ctx(image_ctx), m_journaler(NULL),
+  : RefCountedRequest<I>(image_ctx),
+    m_image_ctx(image_ctx), m_journaler(NULL),
     m_lock("Journal<I>::m_lock"), m_state(STATE_UNINITIALIZED),
     m_error_result(0), m_replay_handler(this), m_close_pending(false),
     m_event_lock("Journal<I>::m_event_lock"), m_event_tid(0),
@@ -341,19 +342,6 @@ Journal<I>::Journal(I &image_ctx)
                                cct->_conf->get_val<int64_t>("rbd_op_thread_timeout"),
                                thread_pool_singleton);
   ImageCtx::get_timer_instance(cct, &m_timer, &m_timer_lock);
-}
-
-template <typename I>
-Journal<I>::~Journal() {
-  if (m_work_queue != nullptr) {
-    m_work_queue->drain();
-    delete m_work_queue;
-  }
-
-  assert(m_state == STATE_UNINITIALIZED || m_state == STATE_CLOSED);
-  assert(m_journaler == NULL);
-  assert(m_journal_replay == NULL);
-  assert(m_wait_for_state_contexts.empty());
 }
 
 template <typename I>
@@ -563,6 +551,10 @@ void Journal<I>::open(Context *on_finish) {
   ldout(cct, 20) << this << " " << __func__ << dendl;
 
   on_finish = create_async_context_callback(m_image_ctx, on_finish);
+  on_finish = new FunctionContext([this, on_finish](int r) {
+      this->get();
+      on_finish->complete(r);
+    });
 
   Mutex::Locker locker(m_lock);
   assert(m_state == STATE_UNINITIALIZED);
@@ -576,6 +568,10 @@ void Journal<I>::close(Context *on_finish) {
   ldout(cct, 20) << this << " " << __func__ << dendl;
 
   on_finish = create_async_context_callback(m_image_ctx, on_finish);
+  on_finish = new FunctionContext([this, on_finish](int r) {
+      this->put();
+      on_finish->complete(r);
+    });
 
   Mutex::Locker locker(m_lock);
   while (m_listener_notify) {

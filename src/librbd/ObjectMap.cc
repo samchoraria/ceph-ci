@@ -34,8 +34,9 @@ namespace librbd {
 
 template <typename I>
 ObjectMap<I>::ObjectMap(I &image_ctx, uint64_t snap_id)
-  : m_image_ctx(image_ctx), m_snap_id(snap_id),
-    m_update_guard(new UpdateGuard(m_image_ctx.cct)) {
+  : RefCountedRequest<I>(image_ctx),
+  m_image_ctx(image_ctx), m_snap_id(snap_id),
+  m_update_guard(new UpdateGuard(m_image_ctx.cct)) {
 }
 
 template <typename I>
@@ -125,6 +126,12 @@ bool ObjectMap<I>::update_required(const ceph::BitVector<2>::Iterator& it,
 
 template <typename I>
 void ObjectMap<I>::open(Context *on_finish) {
+  on_finish = new FunctionContext([this, on_finish](int r) {
+      if (r == 0) {
+        this->get();
+      }
+      on_finish->complete(r);
+    });
   auto req = object_map::RefreshRequest<I>::create(
     m_image_ctx, &m_object_map, m_snap_id, on_finish);
   req->send();
@@ -132,6 +139,10 @@ void ObjectMap<I>::open(Context *on_finish) {
 
 template <typename I>
 void ObjectMap<I>::close(Context *on_finish) {
+  on_finish = new FunctionContext([this, on_finish](int r) {
+      this->put();
+      on_finish->complete(r);
+    });
   if (m_snap_id != CEPH_NOSNAP) {
     m_image_ctx.op_work_queue->queue(on_finish, 0);
     return;

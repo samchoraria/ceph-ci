@@ -144,7 +144,7 @@ template<typename I>
 void RemoveRequest<I>::handle_exclusive_lock_force(int r) {
   ldout(m_cct, 20) << "r=" << r << dendl;
 
-  delete m_exclusive_lock;
+  m_image_ctx->destroy_exclusive_lock(m_exclusive_lock);
   m_exclusive_lock = nullptr;
 
   if (r < 0) {

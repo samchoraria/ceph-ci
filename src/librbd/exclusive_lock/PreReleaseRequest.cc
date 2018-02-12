@@ -253,7 +253,8 @@ void PreReleaseRequest<I>::handle_close_journal(int r) {
     lderr(cct) << "failed to close journal: " << cpp_strerror(r) << dendl;
   }
 
-  delete m_journal;
+  m_image_ctx.destroy_journal(m_journal);
+  m_journal = nullptr;
 
   send_close_object_map();
 }
@@ -286,7 +287,7 @@ void PreReleaseRequest<I>::handle_close_object_map(int r) {
 
   // object map shouldn't return errors
   assert(r == 0);
-  delete m_object_map;
+  m_image_ctx.destroy_object_map(m_object_map);
 
   send_unlock();
 }

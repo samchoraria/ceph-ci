@@ -1118,13 +1118,31 @@ struct C_InvalidateCache : public Context {
   ExclusiveLock<ImageCtx> *ImageCtx::create_exclusive_lock() {
     return new ExclusiveLock<ImageCtx>(*this);
   }
+  void ImageCtx::destroy_exclusive_lock(ExclusiveLock<ImageCtx> *exclusive_lock,
+                                        bool closed) {
+    if (!closed) {
+      delete exclusive_lock;
+    } else {
+      exclusive_lock->put();
+    }
+  }
 
   ObjectMap<ImageCtx> *ImageCtx::create_object_map(uint64_t snap_id) {
     return new ObjectMap<ImageCtx>(*this, snap_id);
   }
+  void ImageCtx::destroy_object_map(ObjectMap<ImageCtx> *object_map, bool closed) {
+    if (!closed) {
+      delete object_map;
+    } else {
+      object_map->put();
+    }
+  }
 
   Journal<ImageCtx> *ImageCtx::create_journal() {
     return new Journal<ImageCtx>(*this);
+   }
+  void ImageCtx::destroy_journal(Journal<ImageCtx> *journal) {
+    journal->put();
   }
 
   void ImageCtx::set_image_name(const std::string &image_name) {

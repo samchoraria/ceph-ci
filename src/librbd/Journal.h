@@ -14,6 +14,7 @@
 #include "journal/JournalMetadataListener.h"
 #include "journal/ReplayEntry.h"
 #include "journal/ReplayHandler.h"
+#include "librbd/RefCountedRequest.h"
 #include "librbd/Utils.h"
 #include "librbd/journal/Types.h"
 #include "librbd/journal/TypeTraits.h"
@@ -40,7 +41,7 @@ namespace io { struct ObjectRequestHandle; }
 namespace journal { template <typename> class Replay; }
 
 template <typename ImageCtxT = ImageCtx>
-class Journal {
+class Journal : public RefCountedRequest<ImageCtxT> {
 public:
   /**
    * @verbatim
@@ -93,7 +94,6 @@ public:
   typedef std::list<io::ObjectRequestHandle *> IOObjectRequests;
 
   Journal(ImageCtxT &image_ctx);
-  ~Journal();
 
   static bool is_journal_supported(ImageCtxT &image_ctx);
   static int create(librados::IoCtx &io_ctx, const std::string &image_id,
@@ -171,6 +171,24 @@ public:
 
   inline ContextWQ *get_work_queue() {
     return m_work_queue;
+  }
+
+protected:
+  // ensure nothing using class resources (called just before
+  // the class object is deleted). nothing special is done here
+  // expect for checking that we are in a sane state before
+  // getting detroyed.
+  void wait_for_completion() override {
+    if (m_work_queue != nullptr) {
+      m_work_queue->drain();
+      delete m_work_queue;
+    }
+
+    Mutex::Locker locker(m_lock);
+    assert(m_state == STATE_UNINITIALIZED || m_state == STATE_CLOSED);
+    assert(m_journaler == NULL);
+    assert(m_journal_replay == NULL);
+    assert(m_wait_for_state_contexts.empty());
   }
 
 private:

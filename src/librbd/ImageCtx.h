@@ -323,8 +323,13 @@ namespace librbd {
                         bool thread_safe);
 
     ExclusiveLock<ImageCtx> *create_exclusive_lock();
+    void destroy_exclusive_lock(ExclusiveLock<ImageCtx> *exclusive_lock, bool closed=true);
+
     ObjectMap<ImageCtx> *create_object_map(uint64_t snap_id);
+    void destroy_object_map(ObjectMap<ImageCtx> *object_map, bool closed=true);
+
     Journal<ImageCtx> *create_journal();
+    void destroy_journal(Journal<ImageCtx> *journal);
 
     void clear_pending_completions();
 

@@ -897,7 +897,7 @@ Context *RefreshRequest<I>::handle_v2_open_object_map(int *result) {
   if (*result < 0) {
     lderr(cct) << "failed to open object map: " << cpp_strerror(*result)
                << dendl;
-    delete m_object_map;
+    m_image_ctx.destroy_object_map(m_object_map);
     m_object_map = nullptr;
   }
 
@@ -990,7 +990,7 @@ Context *RefreshRequest<I>::handle_v2_shut_down_exclusive_lock(int *result) {
   }
 
   assert(m_exclusive_lock != nullptr);
-  delete m_exclusive_lock;
+  m_image_ctx.destroy_exclusive_lock(m_exclusive_lock);
   m_exclusive_lock = nullptr;
 
   return send_v2_close_journal();
@@ -1025,7 +1025,7 @@ Context *RefreshRequest<I>::handle_v2_close_journal(int *result) {
   }
 
   assert(m_journal != nullptr);
-  delete m_journal;
+  m_image_ctx.destroy_journal(m_journal);
   m_journal = nullptr;
 
   assert(m_blocked_writes);
@@ -1059,7 +1059,7 @@ Context *RefreshRequest<I>::handle_v2_close_object_map(int *result) {
 
   assert(*result == 0);
   assert(m_object_map != nullptr);
-  delete m_object_map;
+  m_image_ctx.destroy_object_map(m_object_map);
   m_object_map = nullptr;
 
   return send_flush_aio();
@@ -1215,7 +1215,7 @@ void RefreshRequest<I>::apply() {
         std::swap(m_exclusive_lock, m_image_ctx.exclusive_lock);
       }
       if (!m_image_ctx.test_features(RBD_FEATURE_JOURNALING,
-                                     m_image_ctx.snap_lock)) {
+                                     m_image_ctx.snap_lock)){
         if (!m_image_ctx.clone_copy_on_read && m_image_ctx.journal != nullptr) {
           m_image_ctx.io_work_queue->set_require_lock(io::DIRECTION_READ,
                                                       false);

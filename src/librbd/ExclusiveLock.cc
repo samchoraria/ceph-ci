@@ -27,7 +27,8 @@ using ML = ManagedLock<I>;
 
 template <typename I>
 ExclusiveLock<I>::ExclusiveLock(I &image_ctx)
-  : ML<I>(image_ctx.md_ctx, image_ctx.op_work_queue, image_ctx.header_oid,
+  : RefCountedRequest<I>(image_ctx),
+    ML<I>(image_ctx.md_ctx, image_ctx.op_work_queue, image_ctx.header_oid,
           image_ctx.image_watcher, managed_lock::EXCLUSIVE,
           image_ctx.blacklist_on_break_lock,
           image_ctx.blacklist_expire_seconds),
@@ -100,6 +101,10 @@ void ExclusiveLock<I>::init(uint64_t features, Context *on_init) {
     ML<I>::set_state_initializing();
   }
 
+  on_init = new FunctionContext([this, on_init](int r) {
+      this->get();
+      on_init->complete(r);
+    });
   m_image_ctx.io_work_queue->block_writes(new C_InitComplete(this, features,
                                                              on_init));
 }
@@ -108,6 +113,10 @@ template <typename I>
 void ExclusiveLock<I>::shut_down(Context *on_shut_down) {
   ldout(m_image_ctx.cct, 10) << dendl;
 
+  on_shut_down = new FunctionContext([this, on_shut_down](int r) {
+      this->put();
+      on_shut_down->complete(r);
+    });
   ML<I>::shut_down(on_shut_down);
 
   // if stalled in request state machine -- abort

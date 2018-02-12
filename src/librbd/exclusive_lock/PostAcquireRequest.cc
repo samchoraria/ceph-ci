@@ -197,6 +197,7 @@ void PostAcquireRequest<I>::handle_close_journal(int r) {
     lderr(cct) << "failed to close journal: " << cpp_strerror(r) << dendl;
   }
 
+  m_image_ctx.destroy_journal(m_journal);
   send_close_object_map();
 }
 
@@ -227,7 +228,7 @@ void PostAcquireRequest<I>::handle_open_object_map(int r) {
     lderr(cct) << "failed to open object map: " << cpp_strerror(r) << dendl;
 
     r = 0;
-    delete m_object_map;
+    m_image_ctx.destroy_object_map(m_object_map);
     m_object_map = nullptr;
   }
 
@@ -256,6 +257,8 @@ void PostAcquireRequest<I>::handle_close_object_map(int r) {
   CephContext *cct = m_image_ctx.cct;
   ldout(cct, 10) << "r=" << r << dendl;
 
+  m_image_ctx.destroy_object_map(m_object_map);
+
   // object map should never result in an error
   assert(r == 0);
   revert();
@@ -282,9 +285,6 @@ void PostAcquireRequest<I>::revert() {
   RWLock::WLocker snap_locker(m_image_ctx.snap_lock);
   m_image_ctx.object_map = nullptr;
   m_image_ctx.journal = nullptr;
-
-  delete m_object_map;
-  delete m_journal;
 
   assert(m_error_result < 0);
 }

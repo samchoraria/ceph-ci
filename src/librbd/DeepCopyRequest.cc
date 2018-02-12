@@ -263,7 +263,10 @@ void DeepCopyRequest<I>::handle_refresh_object_map(int r) {
     RWLock::WLocker snap_locker(m_dst_image_ctx->snap_lock);
     std::swap(m_dst_image_ctx->object_map, m_object_map);
   }
-  delete m_object_map;
+
+  if (m_object_map) {
+    m_dst_image_ctx->destroy_object_map(m_object_map, false);
+  }
 
   send_copy_metadata();
 }

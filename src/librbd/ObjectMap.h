@@ -8,6 +8,7 @@
 #include "include/fs_types.h"
 #include "include/rbd/object_map_types.h"
 #include "common/bit_vector.hpp"
+#include "librbd/RefCountedRequest.h"
 #include "librbd/Utils.h"
 #include <boost/optional.hpp>
 
@@ -23,7 +24,7 @@ struct BlockGuardCell;
 class ImageCtx;
 
 template <typename ImageCtxT = ImageCtx>
-class ObjectMap {
+class ObjectMap : public RefCountedRequest<ImageCtxT> {
 public:
   static ObjectMap *create(ImageCtxT &image_ctx, uint64_t snap_id) {
     return new ObjectMap(image_ctx, snap_id);
