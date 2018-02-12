@@ -75,6 +75,7 @@ namespace operation {
 
 using ::testing::_;
 using ::testing::InSequence;
+using ::testing::Invoke;
 using ::testing::Return;
 using ::testing::WithArg;
 
@@ -112,6 +113,16 @@ public:
     if (mock_image_ctx.object_map != nullptr) {
       EXPECT_CALL(mock_object_map, rollback(_, _))
                     .WillOnce(WithArg<1>(CompleteContext(0, mock_image_ctx.image_ctx->op_work_queue)));
+    }
+  }
+
+  void expect_destroy_object_map(MockOperationImageCtx &mock_image_ctx,
+                                 MockObjectMap *mock_object_map) {
+    if (mock_object_map != nullptr) {
+      EXPECT_CALL(mock_image_ctx, destroy_object_map(mock_object_map, false))
+        .WillOnce(WithoutArgs(Invoke([this, mock_object_map]() {
+                delete mock_object_map;
+              })));
     }
   }
 
@@ -202,6 +213,7 @@ TEST_F(TestMockOperationSnapshotRollbackRequest, Success) {
   expect_rollback_object_map(mock_image_ctx, *mock_object_map);
   expect_rollback(mock_image_ctx, 0);
   expect_refresh_object_map(mock_image_ctx, *mock_object_map);
+  expect_destroy_object_map(mock_image_ctx, mock_image_ctx.object_map);
   expect_invalidate_cache(mock_image_ctx, 0);
   expect_commit_op_event(mock_image_ctx, 0);
   expect_unblock_writes(mock_image_ctx);
@@ -247,6 +259,7 @@ TEST_F(TestMockOperationSnapshotRollbackRequest, SkipResize) {
   expect_rollback_object_map(mock_image_ctx, *mock_object_map);
   expect_rollback(mock_image_ctx, 0);
   expect_refresh_object_map(mock_image_ctx, *mock_object_map);
+  expect_destroy_object_map(mock_image_ctx, mock_image_ctx.object_map);
   expect_invalidate_cache(mock_image_ctx, 0);
   expect_commit_op_event(mock_image_ctx, 0);
   expect_unblock_writes(mock_image_ctx);
@@ -320,6 +333,7 @@ TEST_F(TestMockOperationSnapshotRollbackRequest, InvalidateCacheError) {
   expect_rollback_object_map(mock_image_ctx, *mock_object_map);
   expect_rollback(mock_image_ctx, 0);
   expect_refresh_object_map(mock_image_ctx, *mock_object_map);
+  expect_destroy_object_map(mock_image_ctx, mock_image_ctx.object_map);
   expect_invalidate_cache(mock_image_ctx, -EINVAL);
   expect_commit_op_event(mock_image_ctx, -EINVAL);
   expect_unblock_writes(mock_image_ctx);

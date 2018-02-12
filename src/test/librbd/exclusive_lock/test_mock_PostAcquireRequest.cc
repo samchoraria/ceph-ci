@@ -131,6 +131,14 @@ public:
                   .WillOnce(CompleteContext(0, mock_image_ctx.image_ctx->op_work_queue));
   }
 
+  void expect_destroy_object_map(MockTestImageCtx &mock_image_ctx,
+                                 MockObjectMap *mock_object_map) {
+    EXPECT_CALL(mock_image_ctx, destroy_object_map(mock_object_map))
+      .WillOnce(WithoutArgs(Invoke([this, mock_object_map]() {
+          delete mock_object_map;
+            })));
+  }
+
   void expect_create_journal(MockTestImageCtx &mock_image_ctx,
                              MockJournal *mock_journal) {
     EXPECT_CALL(mock_image_ctx, create_journal())
@@ -147,6 +155,13 @@ public:
                             MockJournal &mock_journal) {
     EXPECT_CALL(mock_journal, close(_))
                   .WillOnce(CompleteContext(0, mock_image_ctx.image_ctx->op_work_queue));
+  }
+
+  void expect_destroy_journal(MockTestImageCtx &mock_image_ctx, MockJournal *mock_journal) {
+    EXPECT_CALL(mock_image_ctx, destroy_journal(mock_journal))
+      .WillOnce(WithoutArgs(Invoke([this, mock_journal]() {
+          delete mock_journal;
+            })));
   }
 
   void expect_get_journal_policy(MockTestImageCtx &mock_image_ctx,
@@ -391,7 +406,9 @@ TEST_F(TestMockExclusiveLockPostAcquireRequest, JournalError) {
   expect_handle_prepare_lock_complete(mock_image_ctx);
   expect_open_journal(mock_image_ctx, *mock_journal, -EINVAL);
   expect_close_journal(mock_image_ctx, *mock_journal);
+  expect_destroy_journal(mock_image_ctx, mock_journal);
   expect_close_object_map(mock_image_ctx, *mock_object_map);
+  expect_destroy_object_map(mock_image_ctx, mock_object_map);
 
   C_SaferCond acquire_ctx;
   C_SaferCond ctx;
@@ -431,7 +448,9 @@ TEST_F(TestMockExclusiveLockPostAcquireRequest, AllocateJournalTagError) {
   expect_get_journal_policy(mock_image_ctx, mock_journal_policy);
   expect_allocate_journal_tag(mock_image_ctx, mock_journal_policy, -EPERM);
   expect_close_journal(mock_image_ctx, *mock_journal);
+  expect_destroy_journal(mock_image_ctx, mock_journal);
   expect_close_object_map(mock_image_ctx, *mock_object_map);
+  expect_destroy_object_map(mock_image_ctx, mock_object_map);
 
   C_SaferCond acquire_ctx;
   C_SaferCond ctx;
@@ -458,6 +477,7 @@ TEST_F(TestMockExclusiveLockPostAcquireRequest, OpenObjectMapError) {
   expect_test_features(mock_image_ctx, RBD_FEATURE_OBJECT_MAP, true);
   expect_create_object_map(mock_image_ctx, mock_object_map);
   expect_open_object_map(mock_image_ctx, *mock_object_map, -EFBIG);
+  expect_destroy_object_map(mock_image_ctx, mock_object_map);
 
   MockJournal mock_journal;
   MockJournalPolicy mock_journal_policy;

@@ -88,10 +88,25 @@ public:
                   .WillOnce(CompleteContext(r, mock_image_ctx.image_ctx->op_work_queue));
   }
 
+  void expect_destroy_journal(MockImageCtx &mock_image_ctx, MockJournal *mock_journal) {
+    EXPECT_CALL(mock_image_ctx, destroy_journal(mock_journal))
+      .WillOnce(WithoutArgs(Invoke([this, mock_journal]() {
+          delete mock_journal;
+            })));
+  }
+
   void expect_close_object_map(MockImageCtx &mock_image_ctx,
                                MockObjectMap &mock_object_map) {
     EXPECT_CALL(mock_object_map, close(_))
                   .WillOnce(CompleteContext(0, mock_image_ctx.image_ctx->op_work_queue));
+  }
+
+  void expect_destroy_object_map(MockImageCtx &mock_image_ctx,
+                                 MockObjectMap *mock_object_map) {
+    EXPECT_CALL(mock_image_ctx, destroy_object_map(mock_object_map))
+      .WillOnce(WithoutArgs(Invoke([this, mock_object_map]() {
+          delete mock_object_map;
+            })));
   }
 
   void expect_invalidate_cache(MockImageCtx &mock_image_ctx, bool purge,
@@ -148,10 +163,12 @@ TEST_F(TestMockExclusiveLockPreReleaseRequest, Success) {
   MockJournal *mock_journal = new MockJournal();
   mock_image_ctx.journal = mock_journal;
   expect_close_journal(mock_image_ctx, *mock_journal, -EINVAL);
+  expect_destroy_journal(mock_image_ctx, mock_journal);
 
   MockObjectMap *mock_object_map = new MockObjectMap();
   mock_image_ctx.object_map = mock_object_map;
   expect_close_object_map(mock_image_ctx, *mock_object_map);
+  expect_destroy_object_map(mock_image_ctx, mock_object_map);
 
   expect_handle_prepare_lock_complete(mock_image_ctx);
 
@@ -182,6 +199,7 @@ TEST_F(TestMockExclusiveLockPreReleaseRequest, SuccessJournalDisabled) {
   MockObjectMap *mock_object_map = new MockObjectMap();
   mock_image_ctx.object_map = mock_object_map;
   expect_close_object_map(mock_image_ctx, *mock_object_map);
+  expect_destroy_object_map(mock_image_ctx, mock_object_map);
 
   expect_handle_prepare_lock_complete(mock_image_ctx);
 
@@ -238,10 +256,12 @@ TEST_F(TestMockExclusiveLockPreReleaseRequest, Blacklisted) {
   MockJournal *mock_journal = new MockJournal();
   mock_image_ctx.journal = mock_journal;
   expect_close_journal(mock_image_ctx, *mock_journal, -EBLACKLISTED);
+  expect_destroy_journal(mock_image_ctx, mock_journal);
 
   MockObjectMap *mock_object_map = new MockObjectMap();
   mock_image_ctx.object_map = mock_object_map;
   expect_close_object_map(mock_image_ctx, *mock_object_map);
+  expect_destroy_object_map(mock_image_ctx, mock_object_map);
 
   expect_handle_prepare_lock_complete(mock_image_ctx);
 

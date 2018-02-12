@@ -193,6 +193,14 @@ public:
         }));
   }
 
+  void expect_destroy_object_map(librbd::MockTestImageCtx &mock_image_ctx,
+                                 librbd::MockObjectMap *mock_object_map) {
+    EXPECT_CALL(mock_image_ctx, destroy_object_map(mock_object_map, false))
+      .WillOnce(WithoutArgs(Invoke([this, mock_object_map]() {
+          delete mock_object_map;
+            })));
+  }
+
   void expect_copy_snapshots(
       MockSnapshotCopyRequest &mock_snapshot_copy_request, int r) {
     EXPECT_CALL(mock_snapshot_copy_request, send())
@@ -219,6 +227,7 @@ public:
     expect_start_op(*mock_image_ctx.exclusive_lock);
     expect_create_object_map(mock_image_ctx, mock_object_map);
     expect_open_object_map(mock_image_ctx, *mock_object_map);
+    expect_destroy_object_map(mock_image_ctx, mock_object_map);
   }
 
   void expect_copy_metadata(MockMetadataCopyRequest &mock_metadata_copy_request,

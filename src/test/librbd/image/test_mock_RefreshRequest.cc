@@ -282,6 +282,14 @@ public:
                                   CompleteContext(r, mock_image_ctx.image_ctx->op_work_queue)));
   }
 
+  void expect_destroy_exclusive_lock(MockRefreshImageCtx &mock_image_ctx,
+                                     MockExclusiveLock *mock_exclusive_lock) {
+    EXPECT_CALL(mock_image_ctx, destroy_exclusive_lock(mock_exclusive_lock))
+      .WillOnce(WithoutArgs(Invoke([this, mock_exclusive_lock]() {
+              delete mock_exclusive_lock;
+            })));
+  }
+
   void expect_init_layout(MockRefreshImageCtx &mock_image_ctx) {
     EXPECT_CALL(mock_image_ctx, init_layout());
   }
@@ -347,6 +355,13 @@ public:
                   .WillOnce(CompleteContext(r, mock_image_ctx.image_ctx->op_work_queue));
   }
 
+  void expect_destroy_journal(MockRefreshImageCtx &mock_image_ctx, MockJournal *mock_journal) {
+    EXPECT_CALL(mock_image_ctx, destroy_journal(mock_journal))
+      .WillOnce(WithoutArgs(Invoke([this, mock_journal]() {
+          delete mock_journal;
+            })));
+  }
+
   void expect_open_object_map(MockRefreshImageCtx &mock_image_ctx,
                               MockObjectMap *mock_object_map, int r) {
     EXPECT_CALL(mock_image_ctx, create_object_map(_))
@@ -359,6 +374,14 @@ public:
                                MockObjectMap &mock_object_map, int r) {
     EXPECT_CALL(mock_object_map, close(_))
                   .WillOnce(CompleteContext(r, mock_image_ctx.image_ctx->op_work_queue));
+  }
+
+  void expect_destroy_object_map(MockRefreshImageCtx &mock_image_ctx,
+                                 MockObjectMap *mock_object_map) {
+    EXPECT_CALL(mock_image_ctx, destroy_object_map(mock_object_map))
+      .WillOnce(WithoutArgs(Invoke([this, mock_object_map]() {
+          delete mock_object_map;
+            })));
   }
 
   void expect_get_snap_id(MockRefreshImageCtx &mock_image_ctx,
@@ -759,6 +782,7 @@ TEST_F(TestMockImageRefreshRequest, DisableExclusiveLock) {
   expect_get_group(mock_image_ctx, 0);
   expect_refresh_parent_is_required(mock_refresh_parent_request, false);
   expect_shut_down_exclusive_lock(mock_image_ctx, *mock_exclusive_lock, 0);
+  expect_destroy_exclusive_lock(mock_image_ctx, mock_exclusive_lock);
 
   C_SaferCond ctx;
   MockRefreshRequest *req = new MockRefreshRequest(mock_image_ctx, false, false, &ctx);
@@ -1009,6 +1033,7 @@ TEST_F(TestMockImageRefreshRequest, DisableJournal) {
     expect_set_require_lock(mock_image_ctx, librbd::io::DIRECTION_READ, false);
   }
   expect_close_journal(mock_image_ctx, *mock_journal, 0);
+  expect_destroy_journal(mock_image_ctx, mock_journal);
   expect_unblock_writes(mock_image_ctx);
 
   C_SaferCond ctx;
@@ -1143,6 +1168,7 @@ TEST_F(TestMockImageRefreshRequest, DisableObjectMap) {
   expect_get_group(mock_image_ctx, 0);
   expect_refresh_parent_is_required(mock_refresh_parent_request, false);
   expect_close_object_map(mock_image_ctx, *mock_object_map, 0);
+  expect_destroy_object_map(mock_image_ctx, mock_object_map);
 
   C_SaferCond ctx;
   MockRefreshRequest *req = new MockRefreshRequest(mock_image_ctx, false, false, &ctx);
@@ -1185,6 +1211,7 @@ TEST_F(TestMockImageRefreshRequest, OpenObjectMapError) {
   expect_get_group(mock_image_ctx, 0);
   expect_refresh_parent_is_required(mock_refresh_parent_request, false);
   expect_open_object_map(mock_image_ctx, mock_object_map, -EFBIG);
+  expect_destroy_object_map(mock_image_ctx, mock_object_map);
 
   C_SaferCond ctx;
   MockRefreshRequest *req = new MockRefreshRequest(mock_image_ctx, false, false, &ctx);

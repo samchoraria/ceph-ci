@@ -203,8 +203,15 @@ struct MockImageCtx {
   MOCK_METHOD1(cancel_async_requests, void(Context*));
 
   MOCK_METHOD0(create_exclusive_lock, MockExclusiveLock*());
+  MOCK_METHOD1(destroy_exclusive_lock, void(MockExclusiveLock *));
+  MOCK_METHOD2(destroy_exclusive_lock, void(MockExclusiveLock *, bool));
+
   MOCK_METHOD1(create_object_map, MockObjectMap*(uint64_t));
+  MOCK_METHOD1(destroy_object_map, void(MockObjectMap *));
+  MOCK_METHOD2(destroy_object_map, void(MockObjectMap *, bool));
+
   MOCK_METHOD0(create_journal, MockJournal*());
+  MOCK_METHOD1(destroy_journal, void(MockJournal *));
 
   MOCK_METHOD0(notify_update, void());
   MOCK_METHOD1(notify_update, void(Context *));

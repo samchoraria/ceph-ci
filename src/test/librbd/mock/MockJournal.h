@@ -44,6 +44,11 @@ struct MockJournal {
     s_instance = this;
   }
 
+  void get() {
+  }
+  void put() {
+  }
+
   MOCK_CONST_METHOD0(is_journal_ready, bool());
   MOCK_CONST_METHOD0(is_journal_replaying, bool());
   MOCK_CONST_METHOD0(is_journal_appending, bool());

@@ -16,6 +16,11 @@ struct MockObjectMap {
   MOCK_METHOD1(open, void(Context *on_finish));
   MOCK_METHOD1(close, void(Context *on_finish));
 
+  void get() {
+  }
+  void put() {
+  }
+
   MOCK_METHOD3(aio_resize, void(uint64_t new_size, uint8_t default_object_state,
                                 Context *on_finish));
 

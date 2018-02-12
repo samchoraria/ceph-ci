@@ -254,6 +254,14 @@ public:
 	  }));
   }
 
+  void expect_destroy_journal(MockOperationImageCtx &mock_image_ctx,
+                                 MockJournal *mock_journal) {
+      EXPECT_CALL(mock_image_ctx, destroy_journal(mock_journal))
+        .WillOnce(WithoutArgs(Invoke([this, mock_journal]() {
+                delete mock_journal;
+              })));
+  }
+
   void expect_remove_journal_request_send(
     MockOperationImageCtx &mock_image_ctx,
     MockRemoveJournalRequest &mock_remove_journal_request, int r) {
@@ -319,6 +327,7 @@ TEST_F(TestMockOperationDisableFeaturesRequest, All) {
     expect_disable_mirror_request_send(mock_image_ctx,
                                        mock_disable_mirror_request, 0);
     expect_close_journal(mock_image_ctx, 0);
+    expect_destroy_journal(mock_image_ctx, mock_journal);
     expect_remove_journal_request_send(mock_image_ctx,
                                        mock_remove_journal_request, 0);
   }
@@ -462,6 +471,7 @@ TEST_F(TestMockOperationDisableFeaturesRequest, Mirroring) {
   expect_disable_mirror_request_send(mock_image_ctx,
                                      mock_disable_mirror_request, 0);
   expect_close_journal(mock_image_ctx, 0);
+  expect_destroy_journal(mock_image_ctx, mock_journal);
   expect_remove_journal_request_send(mock_image_ctx,
                                      mock_remove_journal_request, 0);
   expect_notify_update(mock_image_ctx);
@@ -505,6 +515,7 @@ TEST_F(TestMockOperationDisableFeaturesRequest, MirroringError) {
   expect_disable_mirror_request_send(mock_image_ctx,
                                      mock_disable_mirror_request, -EINVAL);
   expect_close_journal(mock_image_ctx, 0);
+  expect_destroy_journal(mock_image_ctx, mock_journal);
   expect_remove_journal_request_send(mock_image_ctx,
                                      mock_remove_journal_request, 0);
   expect_notify_update(mock_image_ctx);
