@@ -6632,7 +6632,7 @@ int Client::_readlink(Inode *in, char *buf, size_t size)
 
 int Client::_getattr(Inode *in, int mask, const UserPerm& perms, bool force)
 {
-  bool yes = in->caps_issued_mask(mask);
+  bool yes = in->caps_issued_mask(mask, true);
 
   ldout(cct, 10) << __func__ << " mask " << ccap_string(mask) << " issued=" << yes << dendl;
   if (yes && !force)
@@ -10610,7 +10610,7 @@ int Client::ll_getattrx(Inode *in, struct ceph_statx *stx, unsigned int want,
   int res = 0;
   unsigned mask = statx_to_mask(flags, want);
 
-  if (mask && !in->caps_issued_mask(mask))
+  if (mask && !in->caps_issued_mask(mask, true))
     res = _ll_getattr(in, mask, perms);
 
   if (res == 0)
