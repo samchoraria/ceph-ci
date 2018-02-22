@@ -1501,7 +1501,7 @@ void PG::choose_async_recovery_replicated(const map<pg_shard_t, pg_info_t> &all_
 
   dout(20) << __func__ << " candidates by cost are: " << candidates_by_cost
            << dendl;
-
+  if (want->size() == candidates_by_cost.size()) return;
   // take out as many osds as we can for async recovery, in order of cost
   for (auto weighted_shard : candidates_by_cost) {
     pg_shard_t cur_shard = weighted_shard.second;
