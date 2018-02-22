@@ -6682,7 +6682,47 @@ int BlueStore::_do_read(
       bufferlist& compressed_bl = *p++;
       if (_verify_csum(o, &bptr->get_blob(), 0, compressed_bl,
 		       b2r_it->second.front().logical_offset) < 0) {
-	return -EIO;
+        if (op_flags & 0x8000) {
+          derr << __func__ << " retried read failed, giving up" << dendl;
+          const bluestore_blob_t &blob = bptr->get_blob();
+          int bad;
+          uint64_t bad_csum;
+          blob.verify_csum(0, compressed_bl, &bad, &bad_csum);
+          bad = 0;
+          bad_csum = 0x12345678;
+          PExtentVector pex;
+          blob.map(
+              bad,
+              blob.get_csum_chunk_size(),
+              [&](uint64_t offset, uint64_t length) {
+            pex.emplace_back(bluestore_pextent_t(offset, length));
+            return 0;
+          });
+          bufferlist bad_bl;
+          bad_bl.substr_of(compressed_bl, bad, blob.get_csum_chunk_size());
+          ostringstream ss;
+          ss << "Data from _do_read:" << std::endl;
+          bad_bl.hexdump(ss, true);
+          derr << ss.str() << dendl;
+
+          ostringstream ss1;
+          bufferlist read_directly;
+          int r = -2;
+          if (pex.size() == 1) {
+            r = bdev->read(pex[0].offset, pex[0].length, &read_directly, &ioc, false);
+          }
+          ss1 << "Data from device " << pex << " res=" << r << std::endl;
+          read_directly.hexdump(ss1, true);
+          derr << ss1.str() << dendl;
+          return -EIO;
+        } else {
+          derr << __func__ << " failed checksum, retrying read " << dendl;
+          int r = _do_read(c, o, offset, length, bl, op_flags | 0x8000);
+          if (r != - EIO) {
+            derr << __func__ << " retried read succeeds" << dendl;
+          }
+          return r;
+        }
       }
       bufferlist raw_bl;
       r = _decompress(compressed_bl, &raw_bl);
@@ -6700,7 +6740,47 @@ int BlueStore::_do_read(
       for (auto& reg : b2r_it->second) {
 	if (_verify_csum(o, &bptr->get_blob(), reg.r_off, reg.bl,
 			 reg.logical_offset) < 0) {
-	  return -EIO;
+	  if (op_flags & 0x8000) {
+	    derr << __func__ << " retried read failed, giving up" << dendl;
+	    const bluestore_blob_t &blob = bptr->get_blob();
+	    int bad;
+	    uint64_t bad_csum;
+	    blob.verify_csum(reg.r_off, reg.bl, &bad, &bad_csum);
+	    bad = 0;
+	    bad_csum = 0x12345678;
+	    PExtentVector pex;
+	    blob.map(
+	        bad,
+	        blob.get_csum_chunk_size(),
+	        [&](uint64_t offset, uint64_t length) {
+	      pex.emplace_back(bluestore_pextent_t(offset, length));
+	      return 0;
+	    });
+	    bufferlist bad_bl;
+	    bad_bl.substr_of(reg.bl, bad, blob.get_csum_chunk_size());
+	    ostringstream ss;
+	    ss << "Data from _do_read:" << std::endl;
+	    bad_bl.hexdump(ss, true);
+	    derr << ss.str() << dendl;
+
+	    ostringstream ss1;
+	    bufferlist read_directly;
+	    int r = -2;
+	    if (pex.size() == 1) {
+	      r = bdev->read(pex[0].offset, pex[0].length, &read_directly, &ioc, false);
+	    }
+	    ss1 << "Data from device " << pex << " res=" << r << std::endl;
+	    read_directly.hexdump(ss1, true);
+	    derr << ss1.str() << dendl;
+	    return -EIO;
+	  } else {
+	    derr << __func__ << " failed checksum, retrying read " << dendl;
+	    int r = _do_read(c, o, offset, length, bl, op_flags | 0x8000);
+	    if (r != - EIO) {
+	      derr << __func__ << " retried read succeeds" << dendl;
+	    }
+	    return r;
+	  }
 	}
 	if (buffered) {
 	  bptr->shared_blob->bc.did_read(bptr->shared_blob->get_cache(),
