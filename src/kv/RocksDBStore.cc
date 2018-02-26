@@ -34,6 +34,8 @@ using std::string;
 #undef dout_prefix
 #define dout_prefix *_dout << "rocksdb: "
 
+static constexpr bool paranoid_mode = true;
+
 static rocksdb::SliceParts prepare_sliceparts(const bufferlist &bl,
 					      vector<rocksdb::Slice> *slices)
 {
@@ -498,6 +500,65 @@ void RocksDBStore::get_statistics(Formatter *f)
   }
 }
 
+struct  RocksParanoidHandler : public rocksdb::WriteBatch::Handler {
+  RocksParanoidHandler(CephContext* const cct,
+                       rocksdb::DB* const db)
+    : cct(cct),
+      db(db) {
+  }
+
+  CephContext* cct;
+  rocksdb::DB* db;
+
+  static std::string pretty_binary_string(const std::string& in) {
+    return RocksDBStore::RocksWBHandler::pretty_binary_string(in);
+  }
+
+  void Put(const rocksdb::Slice& key,
+           const rocksdb::Slice& value) override {
+    std::string stored_value;
+    const rocksdb::Status s = \
+      db->Get(rocksdb::ReadOptions(), key, &stored_value);
+
+    if (!s.ok()) {
+      const std::string prefix = key.ToString().substr(0,1);
+      const std::string key_to_decode = \
+        key.ToString().substr(2, std::string::npos);
+      const uint64_t size = value.ToString().size();
+
+      dout(-1) << "ROCKSDB CORRUPTION during Put("
+               << "prefix=" << prefix << ", key="
+               << pretty_binary_string(key_to_decode)
+               << ", value::size=" << size << ")" << dendl;
+      ceph_abort_msg(cct, s.ToString());
+    }
+  }
+
+  void Merge(const rocksdb::Slice& key,
+             const rocksdb::Slice& value) override {
+    std::string stored_value;
+    const rocksdb::Status s = \
+      db->Get(rocksdb::ReadOptions(), key, &stored_value);
+
+    if (!s.ok()) {
+      const std::string prefix = key.ToString().substr(0,1);
+      const std::string key_to_decode = \
+        key.ToString().substr(2, std::string::npos);
+      const uint64_t size = value.ToString().size();
+
+      dout(-1) << "ROCKSDB CORRUPTION during Merge("
+               << "prefix=" << prefix << ", key="
+               << pretty_binary_string(key_to_decode)
+               << ", value::size=" << size << ")" << dendl;
+      ceph_abort_msg(cct, s.ToString());
+    }
+  }
+
+  bool Continue() override {
+    return true;
+  }
+};
+
 int RocksDBStore::submit_transaction(KeyValueDB::Transaction t)
 {
   utime_t start = ceph_clock_now();
@@ -523,6 +584,10 @@ int RocksDBStore::submit_transaction(KeyValueDB::Transaction t)
     _t->bat.Iterate(&rocks_txc);
     derr << __func__ << " error: " << s.ToString() << " code = " << s.code()
          << " Rocksdb transaction: " << rocks_txc.seen << dendl;
+  }
+  if (s.ok() && paranoid_mode) {
+    RocksParanoidHandler rocks_write_verifier(cct, db);
+    _t->bat.Iterate(&rocks_write_verifier);
   }
   utime_t lat = ceph_clock_now() - start;
 
@@ -577,6 +642,10 @@ int RocksDBStore::submit_transaction_sync(KeyValueDB::Transaction t)
     _t->bat.Iterate(&rocks_txc);
     derr << __func__ << " error: " << s.ToString() << " code = " << s.code()
          << " Rocksdb transaction: " << rocks_txc.seen << dendl;
+  }
+  if (s.ok() && paranoid_mode) {
+    RocksParanoidHandler rocks_write_verifier(cct, db);
+    _t->bat.Iterate(&rocks_write_verifier);
   }
   utime_t lat = ceph_clock_now() - start;
 
