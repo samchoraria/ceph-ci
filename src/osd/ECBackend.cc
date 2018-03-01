@@ -1935,8 +1935,9 @@ bool ECBackend::try_reads_to_commit()
       trans.find(i->shard);
     assert(iter != trans.end());
     bool should_send = get_parent()->should_send_op(*i, op->hoid);
+    bool is_incomplete = parent->get_shard_info().find(*i)->second.is_incomplete();
     const pg_stat_t &stats =
-      should_send ?
+      (should_send || !is_incomplete) ?
       get_info().stats :
       parent->get_shard_info().find(*i)->second.stats;
 
