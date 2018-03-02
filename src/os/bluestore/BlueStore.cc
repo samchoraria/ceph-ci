@@ -19,6 +19,8 @@
 
 #include "include/cpp-btree/btree_set.h"
 
+#include "my_unordered_map.h"
+
 #include "BlueStore.h"
 #include "os/kv.h"
 #include "include/compat.h"
@@ -1511,6 +1513,28 @@ void BlueStore::BufferSpace::split(Cache* cache, size_t pos, BlueStore::BufferSp
 BlueStore::OnodeRef BlueStore::OnodeSpace::add(const ghobject_t& oid, OnodeRef o)
 {
   std::lock_guard<std::recursive_mutex> l(cache->lock);
+  {
+    static uint64_t cnt{0};
+    cnt++;
+    if (cnt == 1000) {
+      cnt = 0;
+      size_t buckets = onode_map._M_h._M_bucket_count;
+      ldout(cache->cct,0) << "BUCKET COUNT=" <<  buckets << dendl;
+      size_t* sums = new size_t[buckets];
+      memset(sums, 0, sizeof(size_t)*buckets);
+      for (auto it = onode_map.begin(); it != onode_map.end(); it++) {
+        auto __code = onode_map._M_h.hash_function()(it->first);
+        std::size_t index = onode_map._M_h._M_bucket_index(it->first, __code);
+        sums[index] ++;
+      }
+      size_t max = 0;
+      for (size_t i=0; i<buckets; i++)
+        if (sums[i]>max)
+          max = sums[i];
+      ldout(cache->cct,0) << "BUCKET MAX=" << max << dendl;
+      delete sums;
+    }
+  }
   auto p = onode_map.find(oid);
   if (p != onode_map.end()) {
     ldout(cache->cct, 30) << __func__ << " " << oid << " " << o
