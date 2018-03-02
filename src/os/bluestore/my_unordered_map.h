@@ -1,0 +1,33 @@
+#ifndef _GLIBCXX_UNORDERED_MAP
+#define _GLIBCXX_UNORDERED_MAP 1
+
+#pragma GCC system_header
+
+#if __cplusplus < 201103L
+# include <bits/c++0x_warning.h>
+#else
+
+#include <utility>
+#include <type_traits>
+#include <initializer_list>
+#include <tuple>
+#include <bits/allocator.h>
+#include <ext/alloc_traits.h>
+#include <ext/aligned_buffer.h>
+#include <bits/stl_function.h> // equal_to, _Identity, _Select1st
+#include <bits/functional_hash.h>
+#include "hashtable.h"
+#include "unordered_map.h"
+#include <bits/range_access.h>
+
+#ifdef _GLIBCXX_DEBUG
+# include <debug/unordered_map>
+#endif
+
+#ifdef _GLIBCXX_PROFILE
+# include <profile/unordered_map>
+#endif
+
+#endif // C++11
+
+#endif // _GLIBCXX_UNORDERED_MAP
