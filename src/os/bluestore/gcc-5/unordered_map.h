@@ -98,6 +98,7 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
     class unordered_map
     {
       typedef __umap_hashtable<_Key, _Tp, _Hash, _Pred, _Alloc>  _Hashtable;
+    public:
       _Hashtable _M_h;
 
     public:
