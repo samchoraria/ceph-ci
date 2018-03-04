@@ -4,8 +4,19 @@
 #include <unordered_map>
 #undef _HASHTABLE_H
 #undef _UNORDERED_MAP_H
-#include "hashtable.h"
-#include "unordered_map.h"
+#if __GNUC__ == 7
+#include "gcc-7/hashtable.h"
+#include "gcc-7/unordered_map.h"
+#elif __GNUC__ == 6
+#error not handled gcc 6
+#elif __GNUC__ == 5
+#error not handled gcc 5
+#elif __GNUC__ == 4
+#include "gcc-4/hashtable.h"
+#include "gcc-4/unordered_map.h"
+#else
+#error compiler not handled
+#endif
 
 #if 0
 #ifndef _GLIBCXX_UNORDERED_MAP
