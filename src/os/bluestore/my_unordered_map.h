@@ -1,3 +1,13 @@
+
+#define _UNORDERED_MAP_H
+#define _HASHTABLE_H 1
+#include <unordered_map>
+#undef _HASHTABLE_H
+#undef _UNORDERED_MAP_H
+#include "hashtable.h"
+#include "unordered_map.h"
+
+#if 0
 #ifndef _GLIBCXX_UNORDERED_MAP
 #define _GLIBCXX_UNORDERED_MAP 1
 
@@ -31,3 +41,4 @@
 #endif // C++11
 
 #endif // _GLIBCXX_UNORDERED_MAP
+#endif
