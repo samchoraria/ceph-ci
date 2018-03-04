@@ -8,7 +8,8 @@
 #include "gcc-7/hashtable.h"
 #include "gcc-7/unordered_map.h"
 #elif __GNUC__ == 6
-#error not handled gcc 6
+#include "gcc-7/hashtable.h"
+#include "gcc-7/unordered_map.h"
 #elif __GNUC__ == 5
 #include "gcc-5/hashtable.h"
 #include "gcc-5/unordered_map.h"
