@@ -1519,7 +1519,6 @@ BlueStore::OnodeRef BlueStore::OnodeSpace::add(const ghobject_t& oid, OnodeRef o
     if (cnt == 1000) {
       cnt = 0;
       size_t buckets = onode_map._M_h._M_bucket_count;
-      ldout(cache->cct,0) << "BUCKET COUNT=" <<  buckets << dendl;
       size_t* sums = new size_t[buckets];
       memset(sums, 0, sizeof(size_t)*buckets);
       for (auto it = onode_map.begin(); it != onode_map.end(); it++) {
@@ -1531,7 +1530,9 @@ BlueStore::OnodeRef BlueStore::OnodeSpace::add(const ghobject_t& oid, OnodeRef o
       for (size_t i=0; i<buckets; i++)
         if (sums[i]>max)
           max = sums[i];
-      ldout(cache->cct,0) << "BUCKET MAX=" << max << dendl;
+      ldout(cache->cct,0) << "ONODE_MAP elements=" << onode_map.size() <<
+          " BUCKET count=" <<  buckets <<
+          " BUCKET max=" << max << dendl;
       delete sums;
     }
   }
