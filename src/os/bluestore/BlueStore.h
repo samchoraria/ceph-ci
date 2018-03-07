@@ -1303,13 +1303,17 @@ public:
   struct OnodeSpace {
   private:
     struct ghobject_hash_helper_t : public ghobject_t {
-      uint32_t obj_hash;
+      size_t obj_hash;
 
       ghobject_hash_helper_t(const ghobject_t& o)
         : ghobject_t(o) {
         static std::hash<object_t> H;
-        static std::hash<ghobject_t> I;
-        this->obj_hash = H(o.hobj.oid) ^ I(o);
+        const std::string key = o.hobj.get_key();
+        size_t hash;
+        hash = rjhash<uint64_t>{}(H(o.hobj.oid) << 32 | ceph_str_hash_rjenkins(key.c_str(), key.length()));
+        hash = rjhash<uint64_t>{}(hash ^ ((uint64_t)o.shard_id.id << 32 | o.hobj.get_hash()));
+        hash = rjhash<uint64_t>{}(hash ^ o.generation ^ o.hobj.snap);
+        obj_hash = hash;
       }
     };
 
