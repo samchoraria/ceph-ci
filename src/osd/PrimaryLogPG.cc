@@ -646,9 +646,27 @@ bool PrimaryLogPG::is_degraded_or_backfilling_object(const hobject_t& soid)
   return false;
 }
 
+bool PrimaryLogPG::is_degraded_on_async_recovery_target(const hobject_t& soid)
+{
+  for (set<pg_shard_t>::iterator i = acting_recovery_backfill.begin();
+       i != acting_recovery_backfill.end();
+       ++i) {
+    if (*i == get_primary()) continue;
+    pg_shard_t peer = *i;
+    auto peer_missing_entry = peer_missing.find(peer);
+    if (peer_missing_entry != peer_missing.end() &&
+        peer_missing_entry->second.get_items().count(soid) &&
+        async_recovery_targets.count(peer)) {
+      dout(10) << __func__ << " " << soid << dendl;
+      return true;
+    }
+  }
+  return false;
+}
+
 void PrimaryLogPG::wait_for_degraded_object(const hobject_t& soid, OpRequestRef op)
 {
-  assert(is_degraded_or_backfilling_object(soid));
+  assert(is_degraded_or_backfilling_object(soid) || is_degraded_on_async_recovery_target(soid));
 
   maybe_kick_recovery(soid);
   waiting_for_degraded_object[soid].push_back(op);
@@ -7521,6 +7539,16 @@ int PrimaryLogPG::_rollback_to(OpContext *ctx, ceph_osd_op& op)
   dout(10) << "_rollback_to " << soid << " snapid " << snapid << dendl;
 
   ObjectContextRef rollback_to;
+  int r = check_for_missing_clone(
+    hobject_t(soid.oid, soid.get_key(), snapid, soid.get_hash(), info.pgid.pool(),
+              soid.get_namespace()),
+    &rollback_to, false, false, &missing_oid);
+  if (r == -EAGAIN) {
+    assert(is_degraded_on_async_recovery_target(missing_oid));
+    block_write_on_degraded_snap(missing_oid, ctx->op);
+    return r;
+  }
+
   int ret = find_object_context(
     hobject_t(soid.oid, soid.get_key(), snapid, soid.get_hash(), info.pgid.pool(),
 	      soid.get_namespace()),
@@ -7532,11 +7560,6 @@ int PrimaryLogPG::_rollback_to(OpContext *ctx, ceph_osd_op& op)
 	     << missing_oid << " (requested snapid: ) " << snapid << dendl;
     block_write_on_degraded_snap(missing_oid, ctx->op);
     return ret;
-  }
-  if(is_degraded_or_backfilling_object(soid)) {
-    dout(10) << __func__ << " " << soid << " is a degraded or backfilling object" << dendl;
-    block_write_on_degraded_snap(soid, ctx->op);
-    return -EAGAIN;
   }
   {
     ObjectContextRef promote_obc;
@@ -10802,6 +10825,15 @@ int PrimaryLogPG::find_object_context(const hobject_t& oid,
     return -EAGAIN;
   }
 
+  if (is_degraded_on_async_recovery_target(soid)) {
+    dout(20) << __func__ << " " << soid << " missing on async_recovery_target "
+             << dendl;
+    if (pmissing)
+      *pmissing = soid;
+    put_snapset_context(ssc);
+    return -EAGAIN;
+  }
+
   ObjectContextRef obc = get_object_context(soid, false);
   if (!obc || !obc->obs.exists) {
     if (pmissing)
@@ -10843,6 +10875,154 @@ int PrimaryLogPG::find_object_context(const hobject_t& oid,
 	     << "] does not contain " << oid.snap << " -- DNE" << dendl;
     return -ENOENT;
   }
+}
+
+int PrimaryLogPG::check_for_missing_clone(const hobject_t& oid,
+				      ObjectContextRef *pobc,
+				      bool can_create,
+				      bool map_snapid_to_clone,
+				      hobject_t *pmissing)
+{
+  FUNCTRACE(cct);
+  assert(oid.pool == static_cast<int64_t>(info.pgid.pool()));
+  // want the head?
+  if (oid.snap == CEPH_NOSNAP) {
+    ObjectContextRef obc = get_object_context(oid, can_create);
+    if (!obc) {
+      if (pmissing)
+        *pmissing = oid;
+      return -ENOENT;
+    }
+    dout(10) << __func__ << " " << oid
+       << " @" << oid.snap
+       << " oi=" << obc->obs.oi
+       << dendl;
+    *pobc = obc;
+
+    return 0;
+  }
+
+  hobject_t head = oid.get_head();
+
+  // we want a snap
+  if (!map_snapid_to_clone && pool.info.is_removed_snap(oid.snap)) {
+    dout(10) << __func__ << " snap " << oid.snap << " is removed" << dendl;
+    return -ENOENT;
+  }
+
+  SnapSetContext *ssc = get_snapset_context(oid, can_create);
+  if (!ssc || !(ssc->exists || can_create)) {
+    dout(20) << __func__ << " " << oid << " no snapset" << dendl;
+    if (pmissing)
+      *pmissing = head;  // start by getting the head
+    if (ssc)
+      put_snapset_context(ssc);
+    return -ENOENT;
+  }
+
+  if (map_snapid_to_clone) {
+    dout(10) << __func__ << " " << oid << " @" << oid.snap
+	     << " snapset " << ssc->snapset
+	     << " map_snapid_to_clone=true" << dendl;
+    if (oid.snap > ssc->snapset.seq) {
+      // already must be readable
+      ObjectContextRef obc = get_object_context(head, false);
+      dout(10) << __func__ << " " << oid << " @" << oid.snap
+	       << " snapset " << ssc->snapset
+	       << " maps to head" << dendl;
+      *pobc = obc;
+      put_snapset_context(ssc);
+      return (obc && obc->obs.exists) ? 0 : -ENOENT;
+    } else {
+      vector<snapid_t>::const_iterator citer = std::find(
+	ssc->snapset.clones.begin(),
+	ssc->snapset.clones.end(),
+	oid.snap);
+      if (citer == ssc->snapset.clones.end()) {
+	dout(10) << __func__ << " " << oid << " @" << oid.snap
+		 << " snapset " << ssc->snapset
+		 << " maps to nothing" << dendl;
+	put_snapset_context(ssc);
+	return -ENOENT;
+      }
+
+      dout(10) << __func__ << " " << oid << " @" << oid.snap
+	       << " snapset " << ssc->snapset
+	       << " maps to " << oid << dendl;
+
+      if (pg_log.get_missing().is_missing(oid)) {
+	dout(10) << __func__ << " " << oid << " @" << oid.snap
+		 << " snapset " << ssc->snapset
+		 << " " << oid << " is missing" << dendl;
+	if (pmissing)
+	  *pmissing = oid;
+	put_snapset_context(ssc);
+	return -EAGAIN;
+      }
+
+      ObjectContextRef obc = get_object_context(oid, false);
+      if (!obc || !obc->obs.exists) {
+	dout(10) << __func__ << " " << oid << " @" << oid.snap
+		 << " snapset " << ssc->snapset
+		 << " " << oid << " is not present" << dendl;
+	if (pmissing)
+	  *pmissing = oid;
+	put_snapset_context(ssc);
+	return -ENOENT;
+      }
+      dout(10) << __func__ << " " << oid << " @" << oid.snap
+	       << " snapset " << ssc->snapset
+	       << " " << oid << " HIT" << dendl;
+      *pobc = obc;
+      put_snapset_context(ssc);
+      return 0;
+    }
+    ceph_abort(); //unreachable
+  }
+
+  dout(10) << __func__ << " " << oid << " @" << oid.snap
+	   << " snapset " << ssc->snapset << dendl;
+
+  // head?
+  if (oid.snap > ssc->snapset.seq) {
+    ObjectContextRef obc = get_object_context(head, false);
+    dout(10) << __func__ << " " << head
+	     << " want " << oid.snap << " > snapset seq " << ssc->snapset.seq
+	     << " -- HIT " << obc->obs
+	     << dendl;
+    if (!obc->ssc)
+      obc->ssc = ssc;
+    else {
+      assert(ssc == obc->ssc);
+      put_snapset_context(ssc);
+    }
+    *pobc = obc;
+    return 0;
+  }
+
+  // which clone would it be?
+  unsigned k = 0;
+  while (k < ssc->snapset.clones.size() &&
+	 ssc->snapset.clones[k] < oid.snap)
+    k++;
+  if (k == ssc->snapset.clones.size()) {
+    dout(10) << __func__ << " no clones with last >= oid.snap "
+	     << oid.snap << " -- DNE" << dendl;
+    put_snapset_context(ssc);
+    return -ENOENT;
+  }
+  hobject_t soid(oid.oid, oid.get_key(), ssc->snapset.clones[k], oid.get_hash(),
+		 info.pgid.pool(), oid.get_namespace());
+
+  if (is_degraded_on_async_recovery_target(soid)) {
+    dout(20) << __func__ << " " << soid << " missing on async_recovery_target "
+             << dendl;
+    if (pmissing)
+      *pmissing = soid;
+    put_snapset_context(ssc);
+    return -EAGAIN;
+  }
+  return 0;
 }
 
 void PrimaryLogPG::object_context_destructor_callback(ObjectContext *obc)

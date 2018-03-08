@@ -978,6 +978,11 @@ protected:
 			  bool can_create,
 			  bool map_snapid_to_clone=false,
 			  hobject_t *missing_oid=NULL);
+  int check_for_missing_clone(const hobject_t& oid,
+                              ObjectContextRef *pobc,
+                              bool can_create,
+                              bool map_snapid_to_clone=false,
+                              hobject_t *missing_oid=NULL);
 
   void add_object_context_to_pg_stat(ObjectContextRef obc, pg_stat_t *stat);
 
@@ -1779,6 +1784,7 @@ public:
   void wait_for_all_missing(OpRequestRef op);
 
   bool is_degraded_or_backfilling_object(const hobject_t& oid);
+  bool is_degraded_on_async_recovery_target(const hobject_t& soid);
   void wait_for_degraded_object(const hobject_t& oid, OpRequestRef op);
 
   void block_write_on_full_cache(
