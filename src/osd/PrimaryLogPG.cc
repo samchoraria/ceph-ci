@@ -7533,10 +7533,20 @@ int PrimaryLogPG::_rollback_to(OpContext *ctx, ceph_osd_op& op)
     block_write_on_degraded_snap(missing_oid, ctx->op);
     return ret;
   }
-  if(is_degraded_or_backfilling_object(soid)) {
-    dout(10) << __func__ << " " << soid << " is a degraded or backfilling object" << dendl;
-    block_write_on_degraded_snap(soid, ctx->op);
-    return -EAGAIN;
+  for (set<pg_shard_t>::iterator i = acting_recovery_backfill.begin();
+       i != acting_recovery_backfill.end();
+       ++i) {
+    if (*i == get_primary()) continue;
+    pg_shard_t peer = *i;
+    auto peer_missing_entry = peer_missing.find(peer);
+    if (peer_missing_entry != peer_missing.end() &&
+        peer_missing_entry->second.get_items().count(soid) &&
+        async_recovery_targets.count(peer)) {
+      dout(10) << __func__ << " " << soid
+	       << " is a degraded object in async_recovery_targets" << dendl;
+      block_write_on_degraded_snap(soid, ctx->op);
+      return -EAGAIN;
+    }
   }
   {
     ObjectContextRef promote_obc;
