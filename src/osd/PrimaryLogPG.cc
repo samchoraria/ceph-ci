@@ -646,9 +646,27 @@ bool PrimaryLogPG::is_degraded_or_backfilling_object(const hobject_t& soid)
   return false;
 }
 
+bool PrimaryLogPG::is_degraded_on_async_recovery_target(const hobject_t& soid)
+{
+  for (set<pg_shard_t>::iterator i = acting_recovery_backfill.begin();
+       i != acting_recovery_backfill.end();
+       ++i) {
+    if (*i == get_primary()) continue;
+    pg_shard_t peer = *i;
+    auto peer_missing_entry = peer_missing.find(peer);
+    if (peer_missing_entry != peer_missing.end() &&
+        peer_missing_entry->second.get_items().count(soid) &&
+        async_recovery_targets.count(peer)) {
+      dout(10) << __func__ << " " << soid << dendl;
+      return true;
+    }
+  }
+  return false;
+}
+
 void PrimaryLogPG::wait_for_degraded_object(const hobject_t& soid, OpRequestRef op)
 {
-  assert(is_degraded_or_backfilling_object(soid));
+  assert(is_degraded_or_backfilling_object(soid) || is_degraded_on_async_recovery_target(soid));
 
   maybe_kick_recovery(soid);
   waiting_for_degraded_object[soid].push_back(op);
@@ -7527,16 +7545,11 @@ int PrimaryLogPG::_rollback_to(OpContext *ctx, ceph_osd_op& op)
     &rollback_to, false, false, &missing_oid);
   if (ret == -EAGAIN) {
     /* clone must be missing */
-    assert(is_degraded_or_backfilling_object(missing_oid));
+    assert(is_degraded_or_backfilling_object(missing_oid) || is_degraded_on_async_recovery_target(missing_oid));
     dout(20) << "_rollback_to attempted to roll back to a missing or backfilling clone "
 	     << missing_oid << " (requested snapid: ) " << snapid << dendl;
     block_write_on_degraded_snap(missing_oid, ctx->op);
     return ret;
-  }
-  if(is_degraded_or_backfilling_object(soid)) {
-    dout(10) << __func__ << " " << soid << " is a degraded or backfilling object" << dendl;
-    block_write_on_degraded_snap(soid, ctx->op);
-    return -EAGAIN;
   }
   {
     ObjectContextRef promote_obc;
@@ -10796,6 +10809,15 @@ int PrimaryLogPG::find_object_context(const hobject_t& oid,
   if (pg_log.get_missing().is_missing(soid)) {
     dout(20) << __func__ << " " << soid << " missing, try again later"
 	     << dendl;
+    if (pmissing)
+      *pmissing = soid;
+    put_snapset_context(ssc);
+    return -EAGAIN;
+  }
+
+  if (is_degraded_on_async_recovery_target(soid)) {
+    dout(20) << __func__ << " " << soid << " missing on async_recovery_target "
+             << dendl;
     if (pmissing)
       *pmissing = soid;
     put_snapset_context(ssc);
