@@ -14301,6 +14301,8 @@ void PrimaryLogPG::scrub_snapshot_metadata(
 	++stat.num_objects_omap;
       if (oi->is_cache_pinned())
 	++stat.num_objects_pinned;
+      if (oi->has_manifest())
+	++stat.num_objects_manifest;
     }
 
     // Check for any problems while processing clones
