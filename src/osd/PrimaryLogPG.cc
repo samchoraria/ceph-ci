@@ -435,7 +435,7 @@ void PrimaryLogPG::on_global_recover(
   map<hobject_t, ObjectContextRef>::iterator i = recovering.find(soid);
   assert(i != recovering.end());
 
-  if (!is_delete) {
+  if (i->second && i->second->rwstate.recovery_read_marker) {
     // recover missing won't have had an obc, but it gets filled in
     // during on_local_recover
     assert(i->second);
@@ -12342,9 +12342,24 @@ int PrimaryLogPG::prep_object_replica_deletes(
   assert(is_primary());
   dout(10) << __func__ << ": on " << soid << dendl;
 
+  ObjectContextRef obc = get_object_context(soid, false);
+  if (obc) {
+    if (!obc->get_recovery_read()) {
+      dout(20) << "replica delete delayed on " << soid
+	       << "; could not get rw_manager lock" << dendl;
+      return 0;
+    } else {
+      dout(20) << "replica delete got recovery read lock on " << soid
+	       << dendl;
+    }
+  }
+
   start_recovery_op(soid);
   assert(!recovering.count(soid));
-  recovering.insert(make_pair(soid, ObjectContextRef()));
+  if (!obc)
+    recovering.insert(make_pair(soid, ObjectContextRef()));
+  else
+    recovering.insert(make_pair(soid, obc));
 
   pgbackend->recover_delete_object(soid, v, h);
   return 1;
