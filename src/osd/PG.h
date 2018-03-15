@@ -782,6 +782,14 @@ protected:
 	_inc_count(p->second);
       }
     }
+
+    void clear_location(const hobject_t &hoid) {
+      auto p = missing_loc.find(hoid);
+      if (p != missing_loc.end()) {
+        missing_loc.erase(p);
+      }
+    }
+
     void add_active_missing(const pg_missing_t &missing) {
       for (map<hobject_t, pg_missing_item>::const_iterator i =
 	     missing.get_items().begin();
