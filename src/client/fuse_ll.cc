@@ -136,7 +136,7 @@ static int getgroups_cb(void *handle, gid_t **sgids)
   return getgroups(req, sgids);
 }
 
-static int get_fuse_groups(UserPerm& perms, fuse_req_t req)
+static void get_fuse_groups(UserPerm& perms, fuse_req_t req)
 {
   if (g_conf->get_val<bool>("fuse_set_user_groups")) {
     gid_t *gids = NULL;
