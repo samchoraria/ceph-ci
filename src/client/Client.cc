@@ -8706,7 +8706,7 @@ int64_t Client::_read(Fh *f, int64_t offset, uint64_t size, bufferlist *bl)
   loff_t start_pos = offset;
 
   if (in->inline_version == 0) {
-    int r = _getattr(in, CEPH_STAT_CAP_INLINE_DATA, f->actor_perms, true);
+    r = _getattr(in, CEPH_STAT_CAP_INLINE_DATA, f->actor_perms, true);
     if (r < 0) {
       goto done;
     }
