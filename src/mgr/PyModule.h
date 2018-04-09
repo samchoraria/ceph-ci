@@ -19,6 +19,9 @@
 #include <string>
 #include "common/Mutex.h"
 #include <memory>
+#include <boost/optional.hpp>
+
+class MonClient;
 
 std::string handle_pyerror();
 
@@ -66,6 +69,8 @@ private:
   std::vector<ModuleCommand> commands;
 
 public:
+  static std::string config_prefix;
+
   SafeThreadState pMyThreadState;
   PyObject *pClass = nullptr;
   PyObject *pStandbyClass = nullptr;
@@ -140,4 +145,10 @@ public:
   PyModuleConfig(PyModuleConfig &mconfig);
   
   ~PyModuleConfig();
+
+  void set_config(
+    MonClient *monc,
+    const std::string &module_name,
+    const std::string &key, const boost::optional<std::string>& val);
+
 };
