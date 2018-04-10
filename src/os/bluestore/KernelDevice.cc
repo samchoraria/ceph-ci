@@ -643,7 +643,7 @@ int KernelDevice::aio_write(
   if (aio && dio && !buffered) {
     ioc->pending_aios.push_back(aio_t(ioc, fd_direct));
     ++ioc->num_pending;
-    aio_t& aio = ioc->pending_aios.back();
+    auto paio = ioc->pending_aios.rbegin();
     if (cct->_conf->bdev_inject_crash &&
 	rand() % cct->_conf->bdev_inject_crash == 0) {
       derr << __func__ << " bdev_inject_crash: dropping io 0x" << std::hex
@@ -651,16 +651,35 @@ int KernelDevice::aio_write(
 	   << dendl;
       // generate a real io so that aio_wait behaves properly, but make it
       // a read instead of write, and toss the result.
-      aio.pread(off, len);
+      paio->pread(off, len);
       ++injecting_crash;
     } else {
-      bl.prepare_iov(&aio.iov);
-      dout(30) << aio << dendl;
-      aio.bl.claim_append(bl);
-      aio.pwritev(off, len);
+      vector<iovec> iov;
+      bl.prepare_iov(&iov);
+      uint64_t aio_len = 0, prev_len = 0;
+      for (unsigned i = 0; i < iov.size(); ++i) {
+        if (aio_len + iov[i].iov_len > RW_IO_MAX) {
+          //if aio len will be longer than max io len 0x7FFFF000, add a new aio
+          paio->bl.claim_append(bl);
+          paio->pwritev(off + prev_len, aio_len);
+          dout(30) << *paio << dendl;
+          dout(1) << __func__ << " 0x" << std::hex << off << "~" << len
+	    << std::dec << " aio split " << &(*paio) << dendl;
+          prev_len += aio_len;
+          ioc->pending_aios.push_back(aio_t(ioc, fd_direct));
+          ++ioc->num_pending;
+          paio = ioc->pending_aios.rbegin();
+          aio_len = 0;
+        }
+        aio_len += iov[i].iov_len;
+        paio->iov.push_back(iov[i]);
+      }
+      paio->bl.claim_append(bl);
+      paio->pwritev(off + prev_len, aio_len);
     }
+    dout(30) << *paio << dendl;
     dout(5) << __func__ << " 0x" << std::hex << off << "~" << len
-	    << std::dec << " aio " << &aio << dendl;
+	    << std::dec << " aio " << &(*paio) << dendl;
   } else
 #endif
   {

@@ -68,6 +68,11 @@
 struct xio_reg_mem;
 class XioDispatchHook;
 #endif
+
+#ifndef RW_IO_MAX
+#define RW_IO_MAX 0x7FFFF000
+#endif
+
 class deleter;
 
 namespace ceph {
@@ -893,9 +898,20 @@ namespace buffer CEPH_BUFFER_API {
       piov->resize(_buffers.size());
       unsigned n = 0;
       for (auto& p : _buffers) {
-	(*piov)[n].iov_base = (void *)p.c_str();
-	(*piov)[n].iov_len = p.length();
-	++n;
+        uint64_t len = p.length();
+        if (len > RW_IO_MAX) {
+          //Rarely come in this condition
+          piov->resize(piov->size() + len / RW_IO_MAX + 1);
+        }
+        while (len > RW_IO_MAX) {
+          (*piov)[n].iov_base = (void *)(p.c_str() + p.length() - len);
+          (*piov)[n].iov_len = RW_IO_MAX;
+          ++n;
+          len -= RW_IO_MAX;
+        }
+        (*piov)[n].iov_base = (void *)(p.c_str() + p.length() - len);
+        (*piov)[n].iov_len = len;
+        ++n;
       }
     }
     uint32_t crc32c(uint32_t crc) const;
