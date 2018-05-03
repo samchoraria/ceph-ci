@@ -1462,16 +1462,16 @@ void PG::calc_replicated_acting(
   }
 }
 
-bool PG::recoverable_and_ge_min_size(const vector<int> &want) const
+bool PG::is_recoverable_with_targets(const vector<int> &targets) const
 {
   unsigned num_want_acting = 0;
   set<pg_shard_t> have;
-  for (int i = 0; i < (int)want.size(); ++i) {
-    if (want[i] != CRUSH_ITEM_NONE) {
+  for (int i = 0; i < (int)targets.size(); ++i) {
+    if (targets[i] != CRUSH_ITEM_NONE) {
       ++num_want_acting;
       have.insert(
         pg_shard_t(
-          want[i],
+          targets[i],
           pool.info.is_erasure() ? shard_id_t(i) : shard_id_t::NO_SHARD));
     }
   }
@@ -1530,7 +1530,7 @@ void PG::choose_async_recovery_ec(const map<pg_shard_t, pg_info_t> &all_info,
     pg_shard_t cur_shard = rit->second;
     vector<int> candidate_want(*want);
     candidate_want[cur_shard.shard.id] = CRUSH_ITEM_NONE;
-    if (recoverable_and_ge_min_size(candidate_want)) {
+    if (is_recoverable_with_targets(candidate_want)) {
       want->swap(candidate_want);
       async_recovery->insert(cur_shard);
     }
@@ -1666,7 +1666,7 @@ bool PG::choose_acting(pg_shard_t &auth_log_shard_id,
       ss);
   dout(10) << ss.str() << dendl;
 
-  if (!recoverable_and_ge_min_size(want)) {
+  if (!is_recoverable_with_targets(want)) {
     want_acting.clear();
     return false;
   }
