@@ -1005,6 +1005,7 @@ void ReplicatedBackend::do_repop(OpRequestRef op)
   assert(m->map_epoch >= get_info().history.same_interval_since);
 
   dout(30) << __func__ << " missing before " << get_parent()->get_log().get_missing().get_items() << dendl;
+  // XXX: Why not check return value
   parent->maybe_preempt_replica_scrub(soid);
 
   int ackerosd = m->get_source().num();

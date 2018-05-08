@@ -1622,6 +1622,7 @@ public:
 
     // chunky scrub
     hobject_t start, end;    // [start,end)
+    hobject_t max_end;       // Largest end that may have been sent to replicas
     eversion_t subset_last_update;
 
     // chunky scrub state

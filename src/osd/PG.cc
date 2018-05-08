@@ -4568,6 +4568,11 @@ int PG::build_scrub_map_chunk(
     ScrubMap for_meta_scrub;
     scrubber.cleaned_meta_map.insert(map);
     scrubber.clean_meta_map(for_meta_scrub);
+#if 0
+    // HACK: Don't preempt if meta_map has entries waiting for the next chunk
+    if (!scrubber.cleaned_meta_map.objects.empty())
+      scrub_can_preempt = false;
+#endif
     _scan_snaps(for_meta_scrub);
   }
 
@@ -4669,6 +4674,7 @@ void PG::replica_scrub(
   scrubber.replica_scrub_start = msg->min_epoch;
   scrubber.start = msg->start;
   scrubber.end = msg->end;
+  scrubber.max_end = msg->end;
   scrubber.deep = msg->deep;
   scrubber.epoch_start = info.history.same_interval_since;
   if (msg->priority) {
@@ -4860,7 +4866,8 @@ void PG::chunky_scrub(ThreadPool::TPHandle &handle)
 
   while (!done) {
     dout(20) << "scrub state " << Scrubber::state_string(scrubber.state)
-	     << " [" << scrubber.start << "," << scrubber.end << ")" << dendl;
+	     << " [" << scrubber.start << "," << scrubber.end << ")"
+	     << " max_end" << scrubber.max_end << dendl;
 
     switch (scrubber.state) {
       case PG::Scrubber::INACTIVE:
@@ -4979,6 +4986,8 @@ void PG::chunky_scrub(ThreadPool::TPHandle &handle)
 	    break;
 	  }
 	  scrubber.end = candidate_end;
+	  if (scrubber.end > scrubber.max_end)
+	    scrubber.max_end = scrubber.end;
         }
 
         // walk the log to find the latest update that affects our chunk
@@ -5188,6 +5197,7 @@ void PG::chunky_scrub(ThreadPool::TPHandle &handle)
 	scrubber.replica_scrubmap_pos = ScrubMapBuilder();
 	scrubber.start = hobject_t();
 	scrubber.end = hobject_t();
+	scrubber.max_end = hobject_t();
 	done = true;
 	break;
 
@@ -5196,7 +5206,8 @@ void PG::chunky_scrub(ThreadPool::TPHandle &handle)
     }
   }
   dout(20) << "scrub final state " << Scrubber::state_string(scrubber.state)
-	   << " [" << scrubber.start << "," << scrubber.end << ")" << dendl;
+	   << " [" << scrubber.start << "," << scrubber.end << ")"
+	   << " max_end" << scrubber.max_end << dendl;
 }
 
 bool PG::write_blocked_by_scrub(const hobject_t& soid)
@@ -5205,6 +5216,10 @@ bool PG::write_blocked_by_scrub(const hobject_t& soid)
     return false;
   }
   if (scrub_can_preempt) {
+    // Snaptrim is not allowed during scrub and eviction is
+    // blocked based on scrubber.max_end.  We should never get
+    // here with a snapshot.
+    assert(!soid.is_snap());
     if (!scrub_preempted) {
       dout(10) << __func__ << " " << soid << " preempted" << dendl;
       scrub_preempted = true;
@@ -5218,8 +5233,8 @@ bool PG::write_blocked_by_scrub(const hobject_t& soid)
 
 bool PG::range_intersects_scrub(const hobject_t &start, const hobject_t& end)
 {
-  // does [start, end] intersect [scrubber.start, scrubber.end)
-  return (start < scrubber.end &&
+  // does [start, end] intersect [scrubber.start, scrubber.max_end)
+  return (start < scrubber.max_end &&
 	  end >= scrubber.start);
 }
 
@@ -5338,6 +5353,11 @@ void PG::scrub_compare_maps()
 
   ScrubMap for_meta_scrub;
   scrubber.clean_meta_map(for_meta_scrub);
+#if 0
+  // HACK: Don't preempt if meta_map has entries waiting for the next chunk
+  if (!scrubber.cleaned_meta_map.objects.empty())
+    scrub_can_preempt = false;
+#endif
 
   // ok, do the pg-type specific scrubbing
   scrub_snapshot_metadata(for_meta_scrub, missing_digest);
@@ -8153,6 +8173,7 @@ boost::statechart::result PG::RecoveryState::Active::react(const QueryState& q)
     q.f->dump_string("scrubber.state", Scrubber::state_string(pg->scrubber.state));
     q.f->dump_stream("scrubber.start") << pg->scrubber.start;
     q.f->dump_stream("scrubber.end") << pg->scrubber.end;
+    q.f->dump_stream("scrubber.max_end") << pg->scrubber.max_end;
     q.f->dump_stream("scrubber.subset_last_update") << pg->scrubber.subset_last_update;
     q.f->dump_bool("scrubber.deep", pg->scrubber.deep);
     {
