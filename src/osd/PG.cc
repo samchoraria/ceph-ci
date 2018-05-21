@@ -7025,6 +7025,14 @@ void PG::RecoveryState::Backfilling::cancel_backfill()
 }
 
 boost::statechart::result
+PG::RecoveryState::Backfilling::react(const Backfilled &c)
+{
+  PG *pg = context< RecoveryMachine >().pg;
+  pg->osd->local_reserver.cancel_reservation(pg->info.pgid);
+  return transit<Recovered>();
+}
+
+boost::statechart::result
 PG::RecoveryState::Backfilling::react(const DeferBackfill &c)
 {
   PG *pg = context< RecoveryMachine >().pg;
