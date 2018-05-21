@@ -7029,6 +7029,8 @@ PG::RecoveryState::Backfilling::react(const Backfilled &c)
 {
   PG *pg = context< RecoveryMachine >().pg;
   pg->osd->local_reserver.cancel_reservation(pg->info.pgid);
+  // no reservations should be in progress
+  assert(!pg->osd->is_recovery_active());
   return transit<Recovered>();
 }
 
