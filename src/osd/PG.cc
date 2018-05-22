@@ -7005,10 +7005,9 @@ PG::RecoveryState::Backfilling::Backfilling(my_context ctx)
   pg->publish_stats_to_osd();
 }
 
-void PG::RecoveryState::Backfilling::cancel_backfill()
+void PG::RecoveryState::Backfilling::backfill_release_reservations()
 {
   PG *pg = context< RecoveryMachine >().pg;
-  pg->osd->local_reserver.cancel_reservation(pg->info.pgid);
 
   for (set<pg_shard_t>::iterator it = pg->backfill_targets.begin();
        it != pg->backfill_targets.end();
@@ -7025,7 +7024,13 @@ void PG::RecoveryState::Backfilling::cancel_backfill()
 	con.get());
     }
   }
+}
 
+void PG::RecoveryState::Backfilling::cancel_backfill()
+{
+  PG *pg = context< RecoveryMachine >().pg;
+  pg->osd->local_reserver.cancel_reservation(pg->info.pgid);
+  backfill_release_reservations();
   if (!pg->waiting_on_backfill.empty()) {
     pg->waiting_on_backfill.clear();
     pg->finish_recovery_op(hobject_t::get_max());
@@ -7038,6 +7043,7 @@ PG::RecoveryState::Backfilling::react(const Backfilled &c)
   PG *pg = context< RecoveryMachine >().pg;
   pg->osd->local_reserver.cancel_reservation(pg->info.pgid);
   // no reservations should be in progress
+  backfill_release_reservations();
   assert(!pg->osd->is_recovery_active());
   return transit<Recovered>();
 }
