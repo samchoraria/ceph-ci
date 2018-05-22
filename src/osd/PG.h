@@ -2291,6 +2291,7 @@ protected:
 	post_event(RemoteReservationRevokedTooFull());
 	return discard_event();
       }
+      void backfill_release_reservations();
       boost::statechart::result react(const Backfilled& evt);
       boost::statechart::result react(const RemoteReservationRevokedTooFull& evt);
       boost::statechart::result react(const RemoteReservationRevoked& evt);
