@@ -7044,7 +7044,6 @@ PG::RecoveryState::Backfilling::react(const Backfilled &c)
   pg->osd->local_reserver.cancel_reservation(pg->info.pgid);
   // no reservations should be in progress
   backfill_release_reservations();
-  assert(!pg->osd->is_recovery_active());
   return transit<Recovered>();
 }
 
