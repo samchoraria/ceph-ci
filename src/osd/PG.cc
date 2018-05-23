@@ -7043,6 +7043,7 @@ PG::RecoveryState::Backfilling::react(const Backfilled &c)
   PG *pg = context< RecoveryMachine >().pg;
   pg->osd->local_reserver.cancel_reservation(pg->info.pgid);
   backfill_release_reservations();
+  assert(!pg->osd->is_recovery_active());
   return transit<Recovered>();
 }
 
