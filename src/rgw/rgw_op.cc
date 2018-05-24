@@ -86,14 +86,14 @@ static MultipartMetaFilter mp_filter;
 // at some point
 static constexpr auto S3_EXISTING_OBJTAG = "s3:ExistingObjectTag";
 
-static int parse_range(const char *range, off_t& ofs, off_t& end, bool *partial_content)
+int RGWGetObj::parse_range(void)
 {
   int r = -ERANGE;
-  string s(range);
+  string s(range_str);
   string ofs_str;
   string end_str;
 
-  *partial_content = false;
+  partial_content = false;
 
   size_t pos = s.find("bytes=");
   if (pos == string::npos) {
@@ -117,7 +117,7 @@ static int parse_range(const char *range, off_t& ofs, off_t& end, bool *partial_
   if (pos == string::npos)
     goto done;
 
-  *partial_content = true;
+  partial_content = true;
 
   ofs_str = s.substr(0, pos);
   end_str = s.substr(pos + 1);
@@ -137,8 +137,16 @@ static int parse_range(const char *range, off_t& ofs, off_t& end, bool *partial_
   if (end >= 0 && end < ofs)
     goto done;
 
-  r = 0;
+  range_parsed = true;
+  return 0;
+
 done:
+  if (ignore_invalid_range) {
+    ofs = 0;
+    end = -1;
+    range_parsed = false; // allow retry
+  }
+
   return r;
 }
 
@@ -1673,16 +1681,13 @@ bool RGWGetObj::prefetch_data()
   bool prefetch_first_chunk = true;
   range_str = s->info.env->get("HTTP_RANGE");
 
-  if(range_str) {
-    int r = parse_range(range_str, ofs, end, &partial_content);
-    /* error on parsing the range, stop prefetch and will fail in execte() */
+  if (range_str) {
+    int r = parse_range();
+    /* error on parsing the range, stop prefetch and will fail in execute() */
     if (r < 0) {
-      range_parsed = false;
-      return false;
-    } else {
-      range_parsed = true;
+      return false; /* range_parsed==false */
     }
-    /* range get goes to shadown objects, stop prefetch */
+    /* range get goes to shadow objects, stop prefetch */
     if (ofs >= s->cct->_conf->rgw_max_chunk_size) {
       prefetch_first_chunk = false;
     }
@@ -1690,6 +1695,7 @@ bool RGWGetObj::prefetch_data()
 
   return get_data && prefetch_first_chunk;
 }
+
 void RGWGetObj::pre_exec()
 {
   rgw_bucket_object_pre_exec(s);
@@ -1889,9 +1895,10 @@ done_err:
 int RGWGetObj::init_common()
 {
   if (range_str) {
-    /* range parsed error when prefetch*/
+    ignore_invalid_range = s->cct->_conf->rgw_ignore_get_invalid_range;
+    /* range parsed error when prefetch */
     if (!range_parsed) {
-      int r = parse_range(range_str, ofs, end, &partial_content);
+      int r = parse_range();
       if (r < 0)
         return r;
     }
