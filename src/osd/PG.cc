@@ -5580,29 +5580,17 @@ void PG::share_pg_info()
 
 bool PG::append_log_entries_update_missing(
   const mempool::osd_pglog::list<pg_log_entry_t> &entries,
-  ObjectStore::Transaction &t, boost::optional<eversion_t> trim_to,
-  boost::optional<eversion_t> roll_forward_to)
+  ObjectStore::Transaction &t, boost::optional<eversion_t> trim_to)
 {
   assert(!entries.empty());
   assert(entries.begin()->version > info.last_update);
 
   PGLogEntryHandler rollbacker{this, &t};
-  if (roll_forward_to) {
-    pg_log.roll_forward(&rollbacker);
-  }
   bool invalidate_stats =
     pg_log.append_new_log_entries(info.last_backfill,
 				  info.last_backfill_bitwise,
 				  entries,
 				  &rollbacker);
-
-  if (roll_forward_to && entries.rbegin()->soid > info.last_backfill) {
-    pg_log.roll_forward(&rollbacker);
-  }
-  if (roll_forward_to && *roll_forward_to > pg_log.get_can_rollback_to()) {
-    pg_log.roll_forward_to(*roll_forward_to, &rollbacker);
-    last_rollback_info_trimmed_to_applied = *roll_forward_to;
-  }
 
   info.last_update = pg_log.get_head();
 
@@ -5624,13 +5612,12 @@ bool PG::append_log_entries_update_missing(
 void PG::merge_new_log_entries(
   const mempool::osd_pglog::list<pg_log_entry_t> &entries,
   ObjectStore::Transaction &t,
-  boost::optional<eversion_t> trim_to,
-  boost::optional<eversion_t> roll_forward_to)
+  boost::optional<eversion_t> trim_to)
 {
   dout(10) << __func__ << " " << entries << dendl;
   assert(is_primary());
 
-  bool rebuild_missing = append_log_entries_update_missing(entries, t, trim_to, roll_forward_to);
+  bool rebuild_missing = append_log_entries_update_missing(entries, t, trim_to);
   for (set<pg_shard_t>::const_iterator i = acting_recovery_backfill.begin();
        i != acting_recovery_backfill.end();
        ++i) {
