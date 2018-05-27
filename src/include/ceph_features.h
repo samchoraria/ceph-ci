@@ -86,7 +86,8 @@
 #define CEPH_FEATURE_FS_FILE_LAYOUT_V2       (1ULL<<58) /* file_layout_t */
 
 #define CEPH_FEATURE_OSD_RECOVERY_DELETES (1ULL<<60)
-#define CEPH_FEATURE_RESERVED2 (1ULL<<61)  /* slow down, we are almost out... */
+#define CEPH_FEATURE_CEPHX_V2 (1ULL<<61)  /* do not share this bit */
+
 #define CEPH_FEATURE_RESERVED  (1ULL<<62)  /* DO NOT USE THIS ... last bit! */
 #define CEPH_FEATURE_RESERVED_BROKEN  (1ULL<<63)  /* DO NOT USE THIS; see below */
 
@@ -181,6 +182,7 @@ static inline unsigned long long ceph_sanitize_features(unsigned long long f) {
 	 CEPH_FEATURE_SERVER_JEWEL |  \
 	 CEPH_FEATURE_FS_FILE_LAYOUT_V2 |		 \
 	 CEPH_FEATURE_OSD_RECOVERY_DELETES | \
+	 CEPH_FEATURE_CEPHX_V2 | \
 	 0ULL)
 
 #define CEPH_FEATURES_SUPPORTED_DEFAULT  CEPH_FEATURES_ALL
@@ -204,7 +206,6 @@ static inline unsigned long long ceph_sanitize_features(unsigned long long f) {
 static inline void ____build_time_check_for_reserved_bits(void) {
 	CEPH_STATIC_ASSERT((CEPH_FEATURES_ALL &
 			    (CEPH_FEATURE_RESERVED |
-			     CEPH_FEATURE_RESERVED2 |
 			     CEPH_FEATURE_RESERVED_BROKEN)) == 0);
 }
 
