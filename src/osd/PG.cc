@@ -1503,6 +1503,9 @@ void PG::choose_async_recovery_ec(const map<pg_shard_t, pg_info_t> &all_info,
 {
   set<pair<int, pg_shard_t> > candidates_by_cost;
   for (uint8_t i = 0; i < want->size(); ++i) {
+    // skip osds that are not up
+    if (!get_osdmap()->is_up(i))
+      continue;
     if ((*want)[i] == CRUSH_ITEM_NONE)
       continue;
 
@@ -1548,6 +1551,9 @@ void PG::choose_async_recovery_replicated(const map<pg_shard_t, pg_info_t> &all_
 {
   set<pair<int, pg_shard_t> > candidates_by_cost;
   for (auto osd_num : *want) {
+    // skip osds that are not up
+    if (!get_osdmap()->is_up(osd_num))
+      continue;
     pg_shard_t shard_i(osd_num, shard_id_t::NO_SHARD);
     auto shard_info = all_info.find(shard_i)->second;
     // use the approximate magnitude of the difference in length of
