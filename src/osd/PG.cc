@@ -5044,6 +5044,26 @@ bool PG::may_need_replay(const OSDMapRef osdmap) const
   return crashed;
 }
 
+void PG::fulfill_query(const MQuery& query, RecoveryCtx *rctx)
+{
+  if (query.query.type == pg_query_t::INFO) {
+    pair<pg_shard_t, pg_info_t> notify_info;
+    update_history_from_master(query.query.history);
+    fulfill_info(query.from, query.query, notify_info);
+    rctx->send_notify(
+      notify_info.first,
+      pg_notify_t(
+	notify_info.first.shard, pg_whoami.shard,
+	query.query_epoch,
+	get_osdmap()->get_epoch(),
+	notify_info.second),
+      past_intervals);
+  } else {
+    update_history_from_master(query.query.history);
+    fulfill_log(query.from, query.query, query.query_epoch);
+  }
+}
+
 void PG::check_full_transition(OSDMapRef lastmap, OSDMapRef osdmap)
 {
   bool changed = false;
@@ -7285,13 +7305,11 @@ boost::statechart::result PG::RecoveryState::ReplicaActive::react(const ActMap&)
   return discard_event();
 }
 
-boost::statechart::result PG::RecoveryState::ReplicaActive::react(const MQuery& query)
+boost::statechart::result PG::RecoveryState::ReplicaActive::react(
+  const MQuery& query)
 {
   PG *pg = context< RecoveryMachine >().pg;
-  if (query.query.type == pg_query_t::MISSING) {
-    pg->update_history_from_master(query.query.history);
-    pg->fulfill_log(query.from, query.query, query.query_epoch);
-  } // else: from prior to activation, safe to ignore
+  pg->fulfill_query(query, context<RecoveryMachine>().get_recovery_ctx());
   return discard_event();
 }
 
@@ -7383,21 +7401,7 @@ boost::statechart::result PG::RecoveryState::Stray::react(const MInfoRec& infoev
 boost::statechart::result PG::RecoveryState::Stray::react(const MQuery& query)
 {
   PG *pg = context< RecoveryMachine >().pg;
-  if (query.query.type == pg_query_t::INFO) {
-    pair<pg_shard_t, pg_info_t> notify_info;
-    pg->update_history_from_master(query.query.history);
-    pg->fulfill_info(query.from, query.query, notify_info);
-    context< RecoveryMachine >().send_notify(
-      notify_info.first,
-      pg_notify_t(
-	notify_info.first.shard, pg->pg_whoami.shard,
-	query.query_epoch,
-	pg->get_osdmap()->get_epoch(),
-	notify_info.second),
-      pg->past_intervals);
-  } else {
-    pg->fulfill_log(query.from, query.query, query.query_epoch);
-  }
+  pg->fulfill_query(query, context<RecoveryMachine>().get_recovery_ctx());
   return discard_event();
 }
 
