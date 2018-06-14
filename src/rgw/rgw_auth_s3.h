@@ -32,6 +32,56 @@ static constexpr auto RGW_AUTH_GRACE = std::chrono::minutes{15};
 // returns true if the request time is within RGW_AUTH_GRACE of the current time
 bool is_time_skew_ok(time_t t);
 
+class STSAuthStrategy : public rgw::auth::Strategy,
+                        public rgw::auth::RemoteApplier::Factory,
+                        public rgw::auth::LocalApplier::Factory {
+  typedef rgw::auth::IdentityApplier::aplptr_t aplptr_t;
+  RGWRados* const store;
+  rgw::auth::ImplicitTenants& implicit_tenant_context;
+  STSEngine  sts_engine;
+
+  aplptr_t create_apl_remote(CephContext* const cct,
+                             const req_state* const s,
+                             rgw::auth::RemoteApplier::acl_strategy_t&& acl_alg,
+                             const rgw::auth::RemoteApplier::AuthInfo info
+                            ) const override {
+    auto apl = rgw::auth::add_sysreq(cct, store, s,
+      rgw::auth::RemoteApplier(cct, store, std::move(acl_alg), info,
+			      implicit_tenant_context,
+                              rgw::auth::ImplicitTenants::IMPLICIT_TENANTS_S3));
+    return aplptr_t(new decltype(apl)(std::move(apl)));
+  }
+
+  aplptr_t create_apl_local(CephContext* const cct,
+                            const req_state* const s,
+                            const RGWUserInfo& user_info,
+                            const std::string& subuser,
+                            const boost::optional<vector<std::string> >& role_policies) const override {
+    auto apl = rgw::auth::add_sysreq(cct, store, s,
+      rgw::auth::LocalApplier(cct, user_info, subuser, role_policies));
+    return aplptr_t(new decltype(apl)(std::move(apl)));
+  }
+
+public:
+  STSAuthStrategy(CephContext* const cct,
+		  rgw::auth::ImplicitTenants& implicit_tenant_context,
+		  RGWRados* const store,
+		  AWSEngine::VersionAbstractor* const ver_abstractor)
+    : store(store),
+      implicit_tenant_context(implicit_tenant_context),
+      sts_engine(cct, store, *ver_abstractor,
+		 static_cast<rgw::auth::LocalApplier::Factory*>(this),
+		 static_cast<rgw::auth::RemoteApplier::Factory*>(this)) {
+      if (cct->_conf->rgw_s3_auth_use_sts) {
+        add_engine(Control::SUFFICIENT, sts_engine);
+      }
+    }
+
+  const char* get_name() const noexcept override {
+    return "rgw::auth::s3::STSAuthStrategy";
+  }
+};
+
 class ExternalAuthStrategy : public rgw::auth::Strategy,
                              public rgw::auth::RemoteApplier::Factory {
   typedef rgw::auth::IdentityApplier::aplptr_t aplptr_t;
@@ -105,14 +155,17 @@ class AWSAuthStrategy : public rgw::auth::Strategy,
 
   S3AnonymousEngine anonymous_engine;
   ExternalAuthStrategy external_engines;
+  STSAuthStrategy sts_engine; /* XXX this is confusing, as there is also
+				 an STSEngine! */
   LocalEngine local_engine;
 
   aplptr_t create_apl_local(CephContext* const cct,
                             const req_state* const s,
                             const RGWUserInfo& user_info,
-                            const std::string& subuser) const override {
+                            const std::string& subuser,
+                            const boost::optional<vector<std::string> >& role_policies) const override {
     auto apl = rgw::auth::add_sysreq(cct, store, s,
-      rgw::auth::LocalApplier(cct, user_info, subuser));
+      rgw::auth::LocalApplier(cct, user_info, subuser, role_policies));
     /* TODO(rzarzynski): replace with static_ptr. */
     return aplptr_t(new decltype(apl)(std::move(apl)));
   }
@@ -140,8 +193,8 @@ public:
   {
     std::vector <std::string> result;
 
-    const std::set <boost::string_view> allowed_auth = { "external", "local" };
-    std::vector <std::string> default_order = { "external", "local"};
+    const std::set <boost::string_view> allowed_auth = { "external", "local", "sts" };
+    std::vector <std::string> default_order = { "external", "local", "sts"};
     // supplied strings may contain a space, so let's bypass that
     boost::split(result, cct->_conf->rgw_s3_auth_order,
 		 boost::is_any_of(", "), boost::token_compress_on);
@@ -162,6 +215,7 @@ public:
       anonymous_engine(cct,
                        static_cast<rgw::auth::LocalApplier::Factory*>(this)),
       external_engines(cct, store, implicit_tenant_context, &ver_abstractor),
+      sts_engine(cct, implicit_tenant_context, store, &ver_abstractor),
       local_engine(cct, store, ver_abstractor,
                    static_cast<rgw::auth::LocalApplier::Factory*>(this)) {
     /* The anynoymous auth. */
@@ -179,6 +233,12 @@ public:
     if (cct->_conf->rgw_s3_auth_use_rados) {
       engine_map.insert(std::make_pair("local", std::cref(local_engine)));
     }
+
+    /* STS Auth*/
+    if (! sts_engine.is_empty()) {
+      engine_map.insert(std::make_pair("sts", std::cref(sts_engine)));
+    }
+
     add_engines(auth_order, engine_map);
   }
 
@@ -382,12 +442,13 @@ static constexpr char AWS4_STREAMING_PAYLOAD_HASH[] = \
   "STREAMING-AWS4-HMAC-SHA256-PAYLOAD";
 
 int parse_v4_credentials(const req_info& info,                     /* in */
-			 boost::string_view& access_key_id,        /* out */
-			 boost::string_view& credential_scope,     /* out */
-			 boost::string_view& signedheaders,        /* out */
-			 boost::string_view& signature,            /* out */
-			 boost::string_view& date,                 /* out */
-                         bool& using_qs);                          /* out */
+                      boost::string_view& access_key_id,        /* out */
+                      boost::string_view& credential_scope,     /* out */
+                      boost::string_view& signedheaders,        /* out */
+                      boost::string_view& signature,            /* out */
+                      boost::string_view& date,                 /* out */
+		      boost::string_view& session_token,        /* out */
+                      bool& using_qs);                          /* out */
 
 static inline std::string get_v4_canonical_uri(const req_info& info) {
   /* The code should normalize according to RFC 3986 but S3 does NOT do path
