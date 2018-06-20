@@ -1514,6 +1514,8 @@ void PG::choose_async_recovery_ec(const map<pg_shard_t, pg_info_t> &all_info,
     // do not include strays
     if (stray_set.find(shard_i) != stray_set.end())
       continue;
+    if (!is_up(shard_i))
+      continue;
     auto shard_info = all_info.find(shard_i)->second;
     // for ec pools we rollback all entries past the authoritative
     // last_update *before* activation. This is relatively inexpensive
@@ -1555,6 +1557,8 @@ void PG::choose_async_recovery_replicated(const map<pg_shard_t, pg_info_t> &all_
     pg_shard_t shard_i(osd_num, shard_id_t::NO_SHARD);
     // do not include strays
     if (stray_set.find(shard_i) != stray_set.end())
+      continue;
+    if (!is_up(shard_i))
       continue;
     auto shard_info = all_info.find(shard_i)->second;
     // use the approximate magnitude of the difference in length of
