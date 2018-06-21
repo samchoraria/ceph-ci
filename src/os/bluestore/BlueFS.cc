@@ -194,6 +194,8 @@ void BlueFS::add_block_extent(unsigned id, uint64_t offset, uint64_t length)
   assert(bdev[id]);
   assert(bdev[id]->get_size() >= offset + length);
   block_all[id].insert(offset, length);
+  dout(20) << __func__ << " block_all[" << id << "] now " << block_all[id]
+	   << dendl;
 
   if (id < alloc.size() && alloc[id]) {
     log_t.op_alloc_add(id, offset, length);
@@ -230,6 +232,8 @@ int BlueFS::reclaim_blocks(unsigned id, uint64_t want,
     block_all[id].erase(p.offset, p.length);
     log_t.op_alloc_rm(id, p.offset, p.length);
   }
+  dout(20) << __func__ << " block_all[" << id << "] now " << block_all[id]
+	   << dendl;
 
   flush_bdev();
   int r = _flush_and_sync_log(l);
@@ -1176,7 +1180,7 @@ void BlueFS::compact_log()
 {
   std::unique_lock<std::mutex> l(lock);
   if (cct->_conf->bluefs_compact_log_sync) {
-     _compact_log_sync();
+    _compact_log_sync();
   } else {
     _compact_log_async(l);
   }
@@ -1204,7 +1208,7 @@ void BlueFS::_compact_log_dump_metadata(bluefs_transaction_t *t)
 {
   t->seq = 1;
   t->uuid = super.uuid;
-  dout(20) << __func__ << " op_init" << dendl;
+  dout(20) << __func__ << " op_init " << block_all << dendl;
 
   t->op_init();
   for (unsigned bdev = 0; bdev < MAX_BDEV; ++bdev) {
@@ -1316,7 +1320,7 @@ void BlueFS::_compact_log_sync()
  */
 void BlueFS::_compact_log_async(std::unique_lock<std::mutex>& l)
 {
-  dout(10) << __func__ << dendl;
+  dout(10) << __func__ << " " << block_all << dendl;
   File *log_file = log_writer->file.get();
   assert(!new_log);
   assert(!new_log_writer);
