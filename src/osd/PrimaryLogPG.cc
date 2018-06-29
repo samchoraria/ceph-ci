@@ -1638,7 +1638,7 @@ void PrimaryLogPG::calc_trim_to()
     }
     list<pg_log_entry_t>::const_iterator it = pg_log.get_log().log.begin();
     eversion_t new_trim_to;
-    std::advance(it, num_to_trim);
+    std::advance(it, num_to_trim - 1);
     new_trim_to = it->version;
     dout(10) << "calc_trim_to change " << pg_trim_to << " -> " << new_trim_to << dendl;
     pg_trim_to = new_trim_to;
