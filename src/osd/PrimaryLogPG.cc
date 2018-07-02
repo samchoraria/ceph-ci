@@ -1640,6 +1640,8 @@ void PrimaryLogPG::calc_trim_to()
     eversion_t new_trim_to;
     std::advance(it, num_to_trim - 1);
     new_trim_to = it->version;
+    if (new_trim_to >= pg_log.get_head())
+      return;
     dout(10) << "calc_trim_to change " << pg_trim_to << " -> " << new_trim_to << dendl;
     pg_trim_to = new_trim_to;
     assert(pg_trim_to <= pg_log.get_head());
