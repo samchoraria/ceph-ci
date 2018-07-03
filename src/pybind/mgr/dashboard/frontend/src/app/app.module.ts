@@ -3,9 +3,10 @@ import { ErrorHandler, NgModule } from '@angular/core';
 import { BrowserModule } from '@angular/platform-browser';
 import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
 
+import { JwtModule } from '@auth0/angular-jwt';
 import { ToastModule, ToastOptions } from 'ng2-toastr/ng2-toastr';
-
 import { AccordionModule, BsDropdownModule, TabsModule } from 'ngx-bootstrap';
+
 import { AppRoutingModule } from './app-routing.module';
 import { AppComponent } from './app.component';
 import { CephModule } from './ceph/ceph.module';
@@ -21,6 +22,10 @@ export class CustomOption extends ToastOptions {
   enableHTML = true;
 }
 
+export function jwtTokenGetter() {
+  return localStorage.getItem('access_token');
+}
+
 @NgModule({
   declarations: [AppComponent],
   imports: [
@@ -34,7 +39,12 @@ export class CustomOption extends ToastOptions {
     CephModule,
     AccordionModule.forRoot(),
     BsDropdownModule.forRoot(),
-    TabsModule.forRoot()
+    TabsModule.forRoot(),
+    JwtModule.forRoot({
+      config: {
+        tokenGetter: jwtTokenGetter
+      }
+    })
   ],
   exports: [SharedModule],
   providers: [
