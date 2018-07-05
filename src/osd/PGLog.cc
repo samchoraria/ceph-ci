@@ -49,11 +49,12 @@ void PGLog::IndexedLog::trim(
   set<eversion_t> *trimmed,
   set<string>* trimmed_dups,
   eversion_t *write_from_dups,
-  bool transaction_applied)
+  bool transaction_applied,
+  bool async)
 {
   generic_dout(20) << " complete_to " << complete_to->version << dendl;
   if (complete_to != log.end() &&
-      (complete_to->version <= s && transaction_applied)) {
+      (complete_to->version <= s && transaction_applied && !async)) {
     generic_derr << " bad trim to " << s << " when complete_to is "
 		 << complete_to->version
 		 << " on " << *this << dendl;
@@ -164,14 +165,15 @@ void PGLog::clear_info_log(
 void PGLog::trim(
   eversion_t trim_to,
   pg_info_t &info,
-  bool transaction_applied)
+  bool transaction_applied,
+  bool async)
 {
   dout(10) << " proposed trim_to = " << trim_to << dendl;
   // trim?
   if (trim_to > log.tail) {
     // We shouldn't be trimming the log past last_complete
     // Don't assert for async_recovery_targets or backfill_targets
-    if (transaction_applied)
+    if (transaction_applied && !async)
       assert(trim_to <= info.last_complete);
 
     dout(10) << "trim " << log << " to " << trim_to << dendl;

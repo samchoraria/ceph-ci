@@ -538,7 +538,8 @@ public:
       set<eversion_t> *trimmed,
       set<string>* trimmed_dups,
       eversion_t *write_from_dups,
-      bool transaction_applied = true);
+      bool transaction_applied = true,
+      bool async = false);
 
     ostream& print(ostream& out) const;
   }; // IndexedLog
@@ -706,7 +707,8 @@ public:
   void trim(
     eversion_t trim_to,
     pg_info_t &info,
-    bool transaction_applied = true);
+    bool transaction_applied = true,
+    bool async = false);
 
   void roll_forward_to(
     eversion_t roll_forward_to,

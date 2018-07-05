@@ -3622,7 +3622,8 @@ void PG::append_log(
   eversion_t trim_to,
   eversion_t roll_forward_to,
   ObjectStore::Transaction &t,
-  bool transaction_applied)
+  bool transaction_applied,
+  bool async)
 {
   if (transaction_applied)
     update_snap_map(logv, t);
@@ -3678,9 +3679,9 @@ void PG::append_log(
   dout(10) << __func__ << " approx pg log length =  "
            << pg_log.get_log().approx_size() << dendl;
   dout(10) << " transaction_applied = " << transaction_applied << dendl;
-  if (!transaction_applied)
+  if (!transaction_applied || async)
     dout(10) << __func__ << " " << pg_whoami << " is async or backfill target" << dendl;
-  pg_log.trim(trim_to, info, transaction_applied);
+  pg_log.trim(trim_to, info, transaction_applied, async);
 
   // update the local pg, pg log
   dirty_info = true;
