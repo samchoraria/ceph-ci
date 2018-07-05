@@ -5,6 +5,42 @@ from ceph_volume.util import disk
 from . import strategies
 
 
+# confirmation prompts
+def strtobool(val):
+    """
+    Convert a string representation of truth to True or False
+
+    True values are 'y', 'yes', or ''; case-insensitive
+    False values are 'n', or 'no'; case-insensitive
+    Raises ValueError if 'val' is anything else.
+    """
+    true_vals = ['yes', 'y', '']
+    false_vals = ['no', 'n']
+    try:
+        val = val.lower()
+    except AttributeError:
+        val = str(val).lower()
+    if val in true_vals:
+        return True
+    elif val in false_vals:
+        return False
+    else:
+        raise ValueError("Invalid input value: %s" % val)
+
+
+def prompt_bool(question, _raw_input=None):
+    input_prompt = _raw_input or raw_input
+    prompt_format = '--> {question} '.format(question=question)
+    response = input_prompt(prompt_format)
+    try:
+        return strtobool(response)
+    except ValueError:
+        terminal.error('Valid true responses are: y, yes, <Enter>')
+        terminal.error('Valid false responses are: n, no')
+        terminal.error('That response was invalid, please try again')
+        return prompt_bool(question, _raw_input=input_prompt)
+
+
 device_list_template = """
   * {path: <25} {size: <10} {state}"""
 
@@ -86,7 +122,7 @@ def get_strategy(devices, args):
     for strategy in strategies:
         backend = strategy(devices)
         if backend:
-            return backend(devices)
+            return backend(devices, args)
 
 
 class Auto(object):
@@ -101,11 +137,11 @@ class Auto(object):
 
     Usage:
 
-        ceph-volume lvm auto [{device}..]
+        ceph-volume lvm auto [DEVICE...]
 
     Optional reporting on possible outcomes is enabled with --report
 
-        ceph-volume lvm auto --report [{device}..]
+        ceph-volume lvm auto --report [DEVICE...]
     """)
 
     def __init__(self, argv):
@@ -121,7 +157,7 @@ class Auto(object):
         devices = sorted(all_devices.items(), key=lambda x: (x[0], x[1]['size']))
         return device_formatter(devices)
 
-    def print_help(self, sub_help):
+    def print_help(self):
         return self._help.format(
             detected_devices=self.get_devices(),
         )
@@ -133,7 +169,7 @@ class Auto(object):
         """
         system_devices = disk.get_devices()
         if not devices:
-            return system_devices
+            return system_devices.values()
         parsed_devices = []
         for device in devices:
             try:
@@ -152,14 +188,25 @@ class Auto(object):
         else:
             raise RuntimeError('report format must be "pretty" or "json"')
 
+    def execute(self, args):
+        strategy = get_strategy(self.get_filtered_devices(args.devices), args)
+        if not args.yes:
+            strategy.report_pretty()
+            terminal.info('The above OSDs would be created if the operation continues')
+            if not prompt_bool('do you want to proceed? (yes/no)'):
+                terminal.error('aborting OSD provisioning for %s' % ','.join(args.devices))
+                raise SystemExit(0)
+
+        strategy.execute()
+
     @decorators.needs_root
     def main(self):
-        terminal.dispatch(self.mapper, self.argv)
         parser = argparse.ArgumentParser(
             prog='ceph-volume auto',
             formatter_class=argparse.RawDescriptionHelpFormatter,
-            description=self.print_help(terminal.subhelp(self.mapper)),
+            description=self.print_help(),
         )
+
         parser.add_argument(
             'devices',
             metavar='DEVICES',
@@ -183,10 +230,25 @@ class Auto(object):
             help='Autodetect the objectstore by inspecting the OSD',
         )
         parser.add_argument(
+            '--yes',
+            action='store_true',
+            help='Avoid prompting for confirmation when provisioning',
+        )
+        parser.add_argument(
             '--format',
             help='output format, defaults to "pretty"',
             default='pretty',
             choices=['json', 'pretty'],
+        )
+        parser.add_argument(
+            '--dmcrypt',
+            action='store_true',
+            help='Enable device encryption via dm-crypt',
+        )
+        parser.add_argument(
+            '--crush-device-class',
+            dest='crush_device_class',
+            help='Crush device class to assign this OSD to',
         )
         parser.add_argument(
             '--no-systemd',
@@ -195,8 +257,10 @@ class Auto(object):
             help='Skip creating and enabling systemd units and starting OSD services',
         )
         args = parser.parse_args(self.argv)
-        if len(self.argv) <= 1:
+
+        if not args.devices:
             return parser.print_help()
+
         # Default to bluestore here since defaulting it in add_argument may
         # cause both to be True
         if not args.bluestore and not args.filestore:
@@ -204,3 +268,5 @@ class Auto(object):
 
         if args.report:
             self.report(args)
+        else:
+            self.execute(args)
