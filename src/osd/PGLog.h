@@ -538,8 +538,7 @@ public:
       set<eversion_t> *trimmed,
       set<string>* trimmed_dups,
       eversion_t *write_from_dups,
-      bool transaction_applied = true,
-      bool async = false);
+      bool check_trim = true);
 
     ostream& print(ostream& out) const;
   }; // IndexedLog
