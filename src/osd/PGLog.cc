@@ -51,7 +51,6 @@ void PGLog::IndexedLog::trim(
   eversion_t *write_from_dups,
   bool check_trim)
 {
-  generic_dout(20) << " complete_to " << complete_to->version << dendl;
   if (complete_to != log.end() &&
       (complete_to->version <= s && check_trim)) {
     generic_derr << " bad trim to " << s << " when complete_to is "
@@ -61,6 +60,9 @@ void PGLog::IndexedLog::trim(
   }
 
   assert(s <= can_rollback_to);
+
+  generic_dout(0) << " complete_to " << complete_to->version << dendl;
+  generic_dout(0) << " end " << log.end()->version << dendl;
 
   auto earliest_dup_version =
     log.rbegin()->version.version < cct->_conf->osd_pg_log_dups_tracked
@@ -177,12 +179,16 @@ void PGLog::trim(
     if (transaction_applied && !async && (missing.num_missing() == 0)) {
       assert(trim_to <= info.last_complete);
       check_trim = true;
-    } else
+    } else {
       check_trim = false;
-
+    }
+    dout(10) << " check_trim = " << check_trim << dendl;
     dout(10) << "trim " << log << " to " << trim_to << dendl;
     log.trim(cct, trim_to, &trimmed, &trimmed_dups, &write_from_dups, check_trim);
     info.log_tail = log.tail;
+    dout(10) << " after trim complete_to " << log.complete_to->version << dendl;
+    dout(10) << " after trim tail " << log.tail << dendl;
+    dout(10) << " after trim end " << log.log.end()->version << dendl;
   }
 }
 
