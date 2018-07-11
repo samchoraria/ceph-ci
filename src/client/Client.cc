@@ -9046,8 +9046,6 @@ void Client::_sync_write_commit(Inode *in)
   assert(unsafe_sync_write > 0);
   unsafe_sync_write--;
 
-  put_cap_ref(in, CEPH_CAP_FILE_BUFFER);
-
   ldout(cct, 15) << __func__ << " unsafe_sync_write = " << unsafe_sync_write << dendl;
   if (unsafe_sync_write == 0 && unmounting) {
     ldout(cct, 10) << __func__ << " -- no more unsafe writes, unmount can proceed" << dendl;
@@ -9310,7 +9308,6 @@ int64_t Client::_write(Fh *f, int64_t offset, uint64_t size, const char *buf,
     // simple, non-atomic sync write
     C_SaferCond onfinish("Client::_write flock");
     unsafe_sync_write++;
-    get_cap_ref(in, CEPH_CAP_FILE_BUFFER);  // released by onsafe callback
 
     filer->write_trunc(in->ino, &in->layout, in->snaprealm->get_snap_context(),
 		       offset, size, bl, ceph::real_clock::now(), 0,
@@ -13109,7 +13106,6 @@ int Client::_fallocate(Fh *fh, int mode, int64_t offset, int64_t length)
       C_SaferCond onfinish("Client::_punch_hole flock");
 
       unsafe_sync_write++;
-      get_cap_ref(in, CEPH_CAP_FILE_BUFFER);
 
       _invalidate_inode_cache(in, offset, length);
       filer->zero(in->ino, &in->layout,
