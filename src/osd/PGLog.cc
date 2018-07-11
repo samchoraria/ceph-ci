@@ -192,6 +192,32 @@ void PGLog::trim(
   }
 }
 
+void PGLog::recover_got(hobject_t oid, eversion_t v, pg_info_t &info) {
+  if (missing.is_missing(oid, v)) {
+    dout(10) << __func__ << " missing before " << missing.get_items() << dendl;
+    missing.got(oid, v);
+    dout(10) << __func__ << " missing after " << missing.get_items() << dendl;
+
+    // raise last_complete?
+    if (missing.get_items().empty()) {
+      log.complete_to = log.log.end();
+      info.last_complete = info.last_update;
+    }
+    auto oldest_need = missing.get_oldest_need();
+    dout(10) <<  __func__ << " oldest_need " << oldest_need << dendl;
+    while (log.complete_to != log.log.end()) {
+      dout(10) <<  __func__ << " complete_to " << log.complete_to->version << dendl;
+      if (oldest_need <= log.complete_to->version)
+        break;
+      if (info.last_complete < log.complete_to->version)
+        info.last_complete = log.complete_to->version;
+      ++log.complete_to;
+    }
+  }
+
+  assert(log.get_can_rollback_to() >= v);
+}
+
 void PGLog::proc_replica_log(
   pg_info_t &oinfo,
   const pg_log_t &olog,

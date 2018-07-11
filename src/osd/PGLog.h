@@ -751,6 +751,8 @@ public:
       opg_log->rebuilt_missing_with_deletes = true;
   }
 
+  void recover_got(hobject_t oid, eversion_t v, pg_info_t &info);
+  /*
   void recover_got(hobject_t oid, eversion_t v, pg_info_t &info) {
     if (missing.is_missing(oid, v)) {
       missing.got(oid, v);
@@ -772,7 +774,7 @@ public:
 
     assert(log.get_can_rollback_to() >= v);
   }
-
+  */
   void reset_complete_to(pg_info_t *info) {
     log.complete_to = log.log.begin();
     assert(log.complete_to != log.log.end());
