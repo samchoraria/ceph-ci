@@ -1625,7 +1625,8 @@ void PrimaryLogPG::calc_trim_to()
 		 PG_STATE_BACKFILL_TOOFULL)) {
     target = cct->_conf->osd_max_pg_log_entries;
   }
-  eversion_t limit = pg_log.get_log().log.end()->version;
+  eversion_t limit = pg_log.get_head();
+  dout(10) << __func__ << " limit " << limit << dendl;
 
   if (limit != eversion_t() &&
       limit != pg_trim_to &&
@@ -1640,11 +1641,12 @@ void PrimaryLogPG::calc_trim_to()
       return;
     }
     list<pg_log_entry_t>::const_iterator it = pg_log.get_log().log.begin();
+    dout(10) << " log begin " << pg_log.get_log().log.begin()->version << dendl;
     eversion_t new_trim_to;
     for (size_t i = 0; i < num_to_trim; ++i) {
       new_trim_to = it->version;
       ++it;
-      if (new_trim_to > limit) {
+      if (new_trim_to >= limit) {
         new_trim_to = limit;
         break;
       }
