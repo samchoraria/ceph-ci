@@ -5,6 +5,7 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <thread>
 
 #include "auth/Crypto.h"
 
@@ -2207,6 +2208,30 @@ public:
   }
 };
 
+static int trim_sync_error_log(int shard_id, const ceph::real_time& start_time,
+                               const ceph::real_time& end_time,
+                               const string& start_marker, const string& end_marker,
+                               int delay_ms)
+{
+  auto oid = RGWSyncErrorLogger::get_shard_oid(RGW_SYNC_ERROR_LOG_SHARD_PREFIX,
+                                               shard_id);
+  // call cls_log_trim() until it returns -ENODATA
+  for (;;) {
+    int ret = store->time_log_trim(oid, start_time, end_time,
+                                   start_marker, end_marker);
+    if (ret == -ENODATA) {
+      return 0;
+    }
+    if (ret < 0) {
+      return ret;
+    }
+    if (delay_ms) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(delay_ms));
+    }
+  }
+  // unreachable
+}
+
 int main(int argc, char **argv)
 {
   vector<const char*> args;
@@ -2339,6 +2364,7 @@ int main(int argc, char **argv)
   boost::optional<string> data_extra_pool;
   RGWBucketIndexType placement_index_type = RGWBIType_Normal;
   bool index_type_specified = false;
+  int trim_delay_ms = 0;
 
   for (std::vector<const char*>::iterator i = args.begin(); i != args.end(); ) {
     if (ceph_argparse_double_dash(args, i)) {
@@ -2633,6 +2659,9 @@ int main(int argc, char **argv)
         }
       }
       index_type_specified = true;
+    } else if (ceph_argparse_witharg(args, i, &val, "--trim-delay-ms",
+				     (char*)NULL)) {
+      trim_delay_ms = atoi(val.c_str());
     } else if (strncmp(*i, "-", 1) == 0) {
       cerr << "ERROR: invalid flag " << *i << std::endl;
       return EINVAL;
@@ -6122,9 +6151,10 @@ next:
     }
 
     for (; shard_id < ERROR_LOGGER_SHARDS; ++shard_id) {
-      string oid = RGWSyncErrorLogger::get_shard_oid(RGW_SYNC_ERROR_LOG_SHARD_PREFIX, shard_id);
-      ret = store->time_log_trim(oid, start_time.to_real_time(), end_time.to_real_time(), start_marker, end_marker);
-      if (ret < 0 && ret != -ENODATA) {
+      ret = trim_sync_error_log(shard_id, start_time.to_real_time(),
+                                end_time.to_real_time(), start_marker,
+                                end_marker, trim_delay_ms);
+      if (ret < 0) {
         cerr << "ERROR: sync error trim: " << cpp_strerror(-ret) << std::endl;
         return -ret;
       }
