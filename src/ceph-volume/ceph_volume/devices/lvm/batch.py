@@ -125,7 +125,7 @@ def get_strategy(devices, args):
             return backend(devices, args)
 
 
-class Auto(object):
+class Batch(object):
 
     help = 'Automatically size devices for multi-OSD provisioning with minimal interaction'
 
@@ -137,11 +137,11 @@ class Auto(object):
 
     Usage:
 
-        ceph-volume lvm auto [DEVICE...]
+        ceph-volume lvm batch [DEVICE...]
 
     Optional reporting on possible outcomes is enabled with --report
 
-        ceph-volume lvm auto --report [DEVICE...]
+        ceph-volume lvm batch --report [DEVICE...]
     """)
 
     def __init__(self, argv):
@@ -202,7 +202,7 @@ class Auto(object):
     @decorators.needs_root
     def main(self):
         parser = argparse.ArgumentParser(
-            prog='ceph-volume auto',
+            prog='ceph-volume lvm batch',
             formatter_class=argparse.RawDescriptionHelpFormatter,
             description=self.print_help(),
         )
