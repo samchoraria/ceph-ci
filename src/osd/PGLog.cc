@@ -96,12 +96,24 @@ void PGLog::IndexedLog::trim(
       }
     }
 
+    bool reset_complete_to = false;
+    // we are trimming past complete_to, so reset complete_to
+    if (!check_trim && e.version >= complete_to->version)
+      reset_complete_to = true;
+
     if (rollback_info_trimmed_to_riter == log.rend() ||
 	e.version == rollback_info_trimmed_to_riter->version) {
       log.pop_front();
       rollback_info_trimmed_to_riter = log.rend();
     } else {
       log.pop_front();
+    }
+
+    // reset complete_to to the beginning of the log
+    if (reset_complete_to) {
+      generic_dout(0) << " moving complete_to " << " to "
+                      << log.begin()->version << dendl;
+      complete_to = log.begin();
     }
   }
 
