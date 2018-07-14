@@ -51,13 +51,14 @@ void PGLog::IndexedLog::trim(
   eversion_t *write_from_dups,
   bool check_trim)
 {
+  /*
   if (complete_to != log.end() &&
       (complete_to->version <= s && check_trim)) {
     generic_derr << " bad trim to " << s << " when complete_to is "
 		 << complete_to->version
 		 << " on " << *this << dendl;
     assert(0 == "out of order trim");
-  }
+  }*/
 
   assert(s <= can_rollback_to);
 
