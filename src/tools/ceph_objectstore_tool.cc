@@ -1982,7 +1982,7 @@ int do_meta(ObjectStore *store, string object, Formatter *formatter, bool debug,
 }
 
 enum rmtype {
-  STANDARD,
+  BOTH,
   SNAPMAP,
   NOSNAPMAP
 };
@@ -1993,7 +1993,7 @@ int remove_object(coll_t coll, ghobject_t &ghobj,
   ObjectStore::Transaction *t,
   enum rmtype type)
 {
-  if (type != NOSNAPMAP) {
+  if (type == BOTH || type == SNAPMAP) {
     int r = mapper.remove_oid(ghobj.hobj, _t);
     if (r < 0 && r != -ENOENT) {
       cerr << "remove_oid returned " << cpp_strerror(r) << std::endl;
@@ -2001,7 +2001,7 @@ int remove_object(coll_t coll, ghobject_t &ghobj,
     }
   }
 
-  if (type != SNAPMAP) {
+  if (type == BOTH || type == NOSNAPMAP) {
     t->remove(coll, ghobj);
   }
   return 0;
@@ -3819,7 +3819,7 @@ int main(int argc, char **argv)
       ret = 0;
       if (objcmd == "remove" || objcmd == "removeall") {
         bool all = (objcmd == "removeall");
-        enum rmtype type = STANDARD;
+        enum rmtype type = BOTH;
         if (rmtypestr == "nosnapmap")
           type = NOSNAPMAP;
         else if (rmtypestr == "snapmap")
