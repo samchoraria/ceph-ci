@@ -50,14 +50,6 @@ void PGLog::IndexedLog::trim(
   set<string>* trimmed_dups,
   eversion_t *write_from_dups)
 {
-  if (complete_to != log.end() &&
-      complete_to->version <= s) {
-    generic_derr << " bad trim to " << s << " when complete_to is "
-		 << complete_to->version
-		 << " on " << *this << dendl;
-    assert(0 == "out of order trim");
-  }
-
   assert(s <= can_rollback_to);
   generic_dout(0) << " complete_to " << complete_to->version << dendl;
 
