@@ -141,7 +141,7 @@ test_rename() {
     rbd rename bar bar2
     rbd rename bar2 foo2 2>&1 | grep exists
 
-    rados mkpool rbd2
+    ceph osd pool create rbd2 8
     rbd pool init rbd2
     rbd create -p rbd2 -s 1 foo
     rbd rename rbd2/foo rbd2/bar
@@ -151,7 +151,7 @@ test_rename() {
     ! rbd rename rbd2/bar --dest-pool rbd foo
     rbd rename --pool rbd2 bar --dest-pool rbd2 foo
     rbd -p rbd2 ls | grep foo
-    rados rmpool rbd2 rbd2 --yes-i-really-really-mean-it
+    ceph osd pool rm rbd2 rbd2 --yes-i-really-really-mean-it
 
     remove_images
 }
@@ -378,7 +378,7 @@ test_clone() {
     rbd snap create test1@s1
     rbd snap protect test1@s1
 
-    rados mkpool rbd2
+    ceph osd pool create rbd2 8
     rbd pool init rbd2
     rbd clone test1@s1 rbd2/clone
     rbd -p rbd2 ls | grep clone
@@ -399,7 +399,7 @@ test_clone() {
     rbd snap unprotect test1@s1
     rbd snap rm test1@s1
     rbd rm test1
-    rados rmpool rbd2 rbd2 --yes-i-really-really-mean-it
+    ceph osd pool rm rbd2 rbd2 --yes-i-really-really-mean-it
 }
 
 test_trash() {

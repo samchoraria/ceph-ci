@@ -36,3 +36,7 @@
 * The ``osd_heartbeat_addr`` option has been removed as it served no
   (good) purpose: the OSD should always check heartbeats on both the
   public and cluster networks.
+
+* The ``rados`` tool's ``mkpool``, ``rmpool``, ``cppool``, and
+  ``purge`` commands have been removed.  They were all either
+  redundant, incompletely implemented, or dangerous.
