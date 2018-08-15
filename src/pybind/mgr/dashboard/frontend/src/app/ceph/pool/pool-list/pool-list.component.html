@@ -1,5 +1,9 @@
-<cd-table [data]="pools"
-          (fetchData)="getPoolList($event)"
+<cd-view-cache *ngFor="let viewCacheStatus of viewCacheStatusList"
+               [status]="viewCacheStatus.status"
+               [statusFor]="viewCacheStatus.statusFor"></cd-view-cache>
+
+<cd-table #table
+          [data]="pools"
           [columns]="columns"
           selectionType="single"
           (updateSelection)="updateSelection($event)">
