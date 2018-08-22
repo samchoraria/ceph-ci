@@ -231,17 +231,15 @@ class TestModuleSelftest(MgrTestCase):
         disabled/failed/recently-enabled modules.
         """
 
-        self._load_module("selftest")
-
         # Calling a command on a disabled module should return the proper
         # error code.
         self.mgr_cluster.mon_manager.raw_cluster_cmd(
-            "mgr", "module", "disable", "hello")
+            "mgr", "module", "disable", "selftest")
         with self.assertRaises(CommandFailedError) as exc_raised:
             self.mgr_cluster.mon_manager.raw_cluster_cmd(
-                "hello")
-
+                "mgr", "self-test", "run")
         self.assertEqual(exc_raised.exception.exitstatus, errno.EOPNOTSUPP)
+        self._load_module("selftest")
 
         # Calling a command that really doesn't exist should give me EINVAL.
         with self.assertRaises(CommandFailedError) as exc_raised:
