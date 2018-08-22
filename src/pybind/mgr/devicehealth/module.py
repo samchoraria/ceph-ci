@@ -1,7 +1,7 @@
 """
 Device health monitoring
 """
-
+import _strptime
 import errno
 import json
 from mgr_module import MgrModule, CommandResult
@@ -14,7 +14,7 @@ from six import iteritems
 TIME_FORMAT = '%Y%m%d-%H%M%S'
 
 DEFAULTS = {
-    'enable_monitoring': str(False),
+    'enable_monitoring': str(True),
     'scrape_frequency': str(86400),
     'retention_period': str(86400 * 14),
     'pool_name': 'device_health_metrics',
@@ -535,3 +535,4 @@ class Module(MgrModule):
         # FIXME: extract and normalize raw smartctl --json output and
         # generate a dict of the fields we care about.
         return raw
+
