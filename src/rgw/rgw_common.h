@@ -1104,6 +1104,10 @@ struct rgw_bucket {
   bool operator==(const rgw_bucket& b) const {
     return (name == b.name) && (bucket_id == b.bucket_id);
   }
+  bool operator!=(const rgw_bucket& b) const {
+    return (tenant != b.tenant) || (name != b.name) ||
+           (bucket_id != b.bucket_id);
+  }
 };
 WRITE_CLASS_ENCODER(rgw_bucket)
 
