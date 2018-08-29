@@ -8,6 +8,7 @@ import { RbdImagesComponent } from './ceph/block/rbd-images/rbd-images.component
 import { CephfsListComponent } from './ceph/cephfs/cephfs-list/cephfs-list.component';
 import { ConfigurationComponent } from './ceph/cluster/configuration/configuration.component';
 import { HostsComponent } from './ceph/cluster/hosts/hosts.component';
+import { LogsComponent } from './ceph/cluster/logs/logs.component';
 import { MonitorComponent } from './ceph/cluster/monitor/monitor.component';
 import { OsdListComponent } from './ceph/cluster/osd/osd-list/osd-list.component';
 import { DashboardComponent } from './ceph/dashboard/dashboard/dashboard.component';
@@ -87,6 +88,12 @@ const routes: Routes = [
     component: ConfigurationComponent,
     canActivate: [AuthGuardService],
     data: { breadcrumbs: 'Cluster/Configuration Documentation' }
+  },
+  {
+    path: 'logs',
+    component: LogsComponent,
+    canActivate: [AuthGuardService],
+    data: { breadcrumbs: 'Cluster/Logs' }
   },
   {
     path: 'perf_counters/:type/:id',

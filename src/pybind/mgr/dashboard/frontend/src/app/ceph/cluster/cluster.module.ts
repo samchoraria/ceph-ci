@@ -14,6 +14,7 @@ import { PerformanceCounterModule } from '../performance-counter/performance-cou
 import { ConfigurationComponent } from './configuration/configuration.component';
 import { HostDetailsComponent } from './hosts/host-details/host-details.component';
 import { HostsComponent } from './hosts/hosts.component';
+import { LogsComponent } from './logs/logs.component';
 import { MonitorComponent } from './monitor/monitor.component';
 import { OsdDetailsComponent } from './osd/osd-details/osd-details.component';
 import { OsdFlagsModalComponent } from './osd/osd-flags-modal/osd-flags-modal.component';
@@ -52,7 +53,8 @@ import { OsdScrubModalComponent } from './osd/osd-scrub-modal/osd-scrub-modal.co
     OsdScrubModalComponent,
     OsdFlagsModalComponent,
     HostDetailsComponent,
-    OsdReweightModalComponent
+    OsdReweightModalComponent,
+    LogsComponent
   ]
 })
 export class ClusterModule {}

@@ -1,4 +1,3 @@
-import { ViewportScroller } from '@angular/common';
 import { Component, OnDestroy, OnInit } from '@angular/core';
 
 import * as _ from 'lodash';
@@ -14,10 +13,7 @@ export class HealthComponent implements OnInit, OnDestroy {
   contentData: any;
   interval: number;
 
-  constructor(
-    private dashboardService: DashboardService,
-    public viewportScroller: ViewportScroller
-  ) {}
+  constructor(private dashboardService: DashboardService) {}
 
   ngOnInit() {
     this.getInfo();
