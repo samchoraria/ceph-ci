@@ -90,6 +90,8 @@ int RGWAccessControlPolicy_SWIFT::add_grants(RGWRados *store, list<string>& uids
       rgw_user user(uid);
       if (rgw_get_user_info_by_uid(store, user, grant_user) < 0) {
 	// also catches ".rlistings" case - no separate mech for this in ceph
+	if (uid == ".rlistings")
+	  continue;
         ldout(cct, 10) << "grant user does not exist:" << uid << dendl;
         /* skipping not so silently */
 	if (!result) result = -ENO_SUCH_USER;
