@@ -90,12 +90,6 @@ describe('UserFormComponent', () => {
       expect(form.get('username').hasError('required')).toBeTruthy();
     });
 
-    it('should validate password required', () => {
-      ['password', 'confirmpassword'].forEach((key) =>
-        expect(form.get(key).hasError('required')).toBeTruthy()
-      );
-    });
-
     it('should validate password match', () => {
       form.get('password').setValue('aaa');
       form.get('confirmpassword').setValue('bbb');
@@ -194,13 +188,6 @@ describe('UserFormComponent', () => {
 
     it('should set mode', () => {
       expect(component.mode).toBe('editing');
-    });
-
-    it('should validate password not required', () => {
-      ['password', 'confirmpassword'].forEach((key) => {
-        form.get(key).setValue('');
-        expect(form.get(key).hasError('required')).toBeFalsy();
-      });
     });
 
     it('should alert if user is removing needed role permission', () => {
