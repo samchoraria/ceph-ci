@@ -673,7 +673,6 @@ namespace buffer CEPH_BUFFER_API {
     buffers_t _buffers;
     unsigned _len;
     unsigned _memcopy_count; //the total of memcopy using rebuild().
-    ptr append_buffer;  // where i put small appends.
 
     template <bool is_const>
     class CEPH_BUFFER_API iterator_impl {
@@ -1011,7 +1010,6 @@ namespace buffer CEPH_BUFFER_API {
       _len = other._len;
       _memcopy_count = other._memcopy_count;
       last_p = begin();
-      append_buffer.swap(other.append_buffer);
       other.clear();
       return *this;
     }
@@ -1077,7 +1075,6 @@ namespace buffer CEPH_BUFFER_API {
       _len = 0;
       _memcopy_count = 0;
       last_p = begin();
-      append_buffer = ptr();
     }
     void push_back(const ptr& bp) {
       if (bp.length() == 0)
