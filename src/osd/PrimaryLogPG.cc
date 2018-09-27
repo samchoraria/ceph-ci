@@ -269,6 +269,7 @@ void PrimaryLogPG::OpContext::start_async_reads(PrimaryLogPG *pg)
   in.swap(pending_async_reads);
   pg->pgbackend->objects_read_async(
     obc->obs.oi.soid,
+    pg->get_pool().stripe_width,
     in,
     new OnReadComplete(pg, this), pg->get_pool().fast_read);
 }
