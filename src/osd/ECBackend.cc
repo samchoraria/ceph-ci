@@ -2123,6 +2123,7 @@ int ECBackend::objects_read_sync(
 
 void ECBackend::objects_read_async(
   const hobject_t &hoid,
+  const uint32_t stripe_width,
   const list<pair<boost::tuple<uint64_t, uint64_t, uint32_t>,
              pair<bufferlist*, Context*> > > &to_read,
   Context *on_complete,
@@ -2162,6 +2163,7 @@ void ECBackend::objects_read_async(
   struct cb {
     ECBackend *ec;
     hobject_t hoid;
+    uint32_t stripe_width;
     list<pair<boost::tuple<uint64_t, uint64_t, uint32_t>,
 	      pair<bufferlist*, Context*> > > to_read;
     unique_ptr<Context> on_complete;
@@ -2169,11 +2171,13 @@ void ECBackend::objects_read_async(
     cb(cb &&) = default;
     cb(ECBackend *ec,
        const hobject_t &hoid,
+       const uint32_t stripe_width,
        const list<pair<boost::tuple<uint64_t, uint64_t, uint32_t>,
                   pair<bufferlist*, Context*> > > &to_read,
        Context *on_complete)
       : ec(ec),
 	hoid(hoid),
+        stripe_width(stripe_width),
 	to_read(to_read),
 	on_complete(on_complete) {}
     void operator()(map<hobject_t,pair<int, extent_map> > &&results) {
@@ -2202,16 +2206,14 @@ void ECBackend::objects_read_async(
 	  ceph_assert(range.first.get_off() <= offset);
           ldpp_dout(dpp, 20) << "length: " << length << dendl;
           ldpp_dout(dpp, 20) << "range length: " << range.first.get_len()  << dendl;
-
-	  ceph_assert(
-	    (offset + length) <=
-	    (range.first.get_off() + range.first.get_len()));
+          ceph_assert((offset + length) % stripe_width == 0);
+          ceph_assert((range.first.get_off() + range.first.get_len()) % stripe_width == 0);
 	  read.second.first->substr_of(
 	    range.first.get_val(),
 	    offset - range.first.get_off(),
 	    length);
 	  if (read.second.second) {
-	    read.second.second->complete(length);
+	    read.second.second->complete(range.first.get_len());
 	    read.second.second = nullptr;
 	  }
 	}
@@ -2235,6 +2237,7 @@ void ECBackend::objects_read_async(
       map<hobject_t,pair<int, extent_map> > &&, cb>(
 	cb(this,
 	   hoid,
+           stripe_width,
 	   to_read,
 	   on_complete)));
 }
