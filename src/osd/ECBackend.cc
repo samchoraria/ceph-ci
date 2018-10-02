@@ -2190,6 +2190,7 @@ void ECBackend::objects_read_async(
       auto &got = results[hoid];
 
       int r = 0;
+      ldpp_dout(dpp, 20) << "to_read " << to_read << dendl;
       for (auto &&read: to_read) {
 	if (got.first < 0) {
 	  if (read.second.second) {
@@ -2204,16 +2205,20 @@ void ECBackend::objects_read_async(
 	  auto range = got.second.get_containing_range(offset, length);
 	  ceph_assert(range.first != range.second);
 	  ceph_assert(range.first.get_off() <= offset);
+          ldpp_dout(dpp, 20) << "stripe_width: " << stripe_width << dendl;
+          ldpp_dout(dpp, 20) << "offset: " << offset << dendl;
+          ldpp_dout(dpp, 20) << "range.first.get_off(): " << range.first.get_off() << dendl;
           ldpp_dout(dpp, 20) << "length: " << length << dendl;
           ldpp_dout(dpp, 20) << "range length: " << range.first.get_len()  << dendl;
-          ceph_assert((offset + length) % stripe_width == 0);
+          if ((offset + length) > (range.first.get_off() + range.first.get_len()))
+            ldpp_dout(dpp, 20) << " (offset + length) <= (range.first.get_off() + range.first.get_len())" << dendl;
           ceph_assert((range.first.get_off() + range.first.get_len()) % stripe_width == 0);
 	  read.second.first->substr_of(
 	    range.first.get_val(),
 	    offset - range.first.get_off(),
 	    length);
 	  if (read.second.second) {
-	    read.second.second->complete(range.first.get_len());
+	    read.second.second->complete(length);
 	    read.second.second = nullptr;
 	  }
 	}
