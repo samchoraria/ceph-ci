@@ -625,6 +625,14 @@ int BlueFS::_replay(bool noop, bool to_stdout)
                << dendl;
       break;
     }
+    if (cct->_conf->bluefs_replay_max &&
+	seq > cct->_conf->bluefs_replay_max) {
+      derr << __func__ << " 0x" << std::hex << pos << std::dec
+	   << ": stop: seq " << seq << " > bluefs_replay_max " << cct->_conf->bluefs_replay_max
+	   << dendl;
+      break;
+    }
+
     if (more) {
       dout(20) << __func__ << " need 0x" << std::hex << more << std::dec
                << " more bytes" << dendl;

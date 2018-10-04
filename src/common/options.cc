@@ -3754,6 +3754,10 @@ std::vector<Option> get_global_options() {
     .set_default(false)
     .set_description(""),
 
+    Option("bluefs_replay_max", Option::TYPE_UINT, Option::LEVEL_DEV)
+    .set_default(0)
+    .set_description("Stop bluefs journal replay at specified seq (replay this transaction but no further)"),
+
     Option("bluestore_bluefs", Option::TYPE_BOOL, Option::LEVEL_DEV)
     .set_default(true)
     .set_flag(Option::FLAG_CREATE)
