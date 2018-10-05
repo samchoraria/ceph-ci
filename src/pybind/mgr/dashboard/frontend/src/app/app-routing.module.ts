@@ -72,9 +72,15 @@ const routes: Routes = [
   },
   {
     path: 'osd',
-    component: OsdListComponent,
     canActivate: [AuthGuardService],
-    data: { breadcrumbs: 'Cluster/OSDs' }
+    canActivateChild: [AuthGuardService],
+    data: { breadcrumbs: 'Cluster/OSDs' },
+    children: [
+      {
+        path: '',
+        component: OsdListComponent
+      }
+    ]
   },
   {
     path: 'configuration',
