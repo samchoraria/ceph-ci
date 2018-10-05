@@ -630,6 +630,16 @@ int BlueFS::_replay(bool noop, bool to_stdout)
       derr << __func__ << " 0x" << std::hex << pos << std::dec
 	   << ": stop: seq " << seq << " > bluefs_replay_max " << cct->_conf->bluefs_replay_max
 	   << dendl;
+      if (cct->_conf->bluefs_hack_replay_truncate) {
+	// hack: corrupt the next position in the journal by writing a few zeros
+	bufferlist zbl;
+	zbl.append_zero(4096);
+	uint64_t x_off;
+	auto p = log_reader->file->fnode.seek(pos, &x_off);
+	derr << __func__ << " truncating journal by writing zeroed block to 0x"
+	     << std::hex << p->offset + x_off << dendl;
+	bdev[p->bdev]->write(p->offset + x_off, zbl, false);
+      }
       break;
     }
 
