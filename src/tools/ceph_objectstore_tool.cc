@@ -4149,6 +4149,7 @@ int main(int argc, char **argv)
       cout << "Marking complete " << std::endl;
 
       info.last_update = eversion_t(superblock.current_epoch, info.last_update.version + 1);
+      info.last_complete = info.last_update;
       info.last_backfill = hobject_t::get_max();
       info.last_epoch_started = superblock.current_epoch;
       info.history.last_epoch_started = superblock.current_epoch;
