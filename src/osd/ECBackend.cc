@@ -2213,6 +2213,9 @@ void ECBackend::objects_read_async(
           if ((offset + length) > (range.first.get_off() + range.first.get_len()))
             ldpp_dout(dpp, 20) << " (offset + length) <= (range.first.get_off() + range.first.get_len())" << dendl;
           ceph_assert((range.first.get_off() + range.first.get_len()) % stripe_width == 0);
+          ceph_assert(
+            (offset + length) <=
+            (range.first.get_off() + range.first.get_len()));
 	  read.second.first->substr_of(
 	    range.first.get_val(),
 	    offset - range.first.get_off(),
