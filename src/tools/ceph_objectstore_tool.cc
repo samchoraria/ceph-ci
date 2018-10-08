@@ -484,6 +484,9 @@ int write_pg(ObjectStore::Transaction &t, epoch_t epoch, pg_info_t &info,
   coll_t coll(info.pgid);
   map<string,bufferlist> km;
 
+  divergent.clear();
+  missing.clear();
+  
   if (!divergent.empty()) {
     assert(missing.get_items().empty());
     PGLog::write_log_and_missing_wo_missing(
@@ -4149,11 +4152,13 @@ int main(int argc, char **argv)
       cout << "Marking complete " << std::endl;
 
       info.last_update = eversion_t(superblock.current_epoch, info.last_update.version + 1);
+      info.last_complete = info.last_update;
       info.last_backfill = hobject_t::get_max();
       info.last_epoch_started = superblock.current_epoch;
       info.history.last_epoch_started = superblock.current_epoch;
       info.history.last_epoch_clean = superblock.current_epoch;
       past_intervals.clear();
+      log.reset_backfill();  // this clears missing
 
       if (!dry_run) {
 	ret = write_info(*t, map_epoch, info, past_intervals);
