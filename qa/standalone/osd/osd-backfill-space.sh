@@ -540,6 +540,364 @@ function TEST_backfill_grow() {
     ! grep -q "num_bytes mismatch" $dir/osd.*.log || return 1
 }
 
+function TEST_ec_backfill_simple() {
+    local dir=$1
+    local EC=$2
+    local pools=1
+    local OSDS=6
+    local k=3
+    local m=2
+    local ecobjects=$(expr $objects / $k)
+
+    run_mon $dir a || return 1
+    run_mgr $dir x || return 1
+    export CEPH_ARGS
+
+    for osd in $(seq 0 $(expr $OSDS - 1))
+    do
+      run_osd $dir $osd || return 1
+    done
+
+    create_pool fillpool 1 1
+    ceph osd pool set fillpool size 1
+
+    # Partially fill an osd
+    # We have room for 200 18K replicated objects, if we create 13K objects
+    # there is only 3600K - (13 * 200) = 1000K which won't hold
+    # a k=3 shard below (24K / 3) * 200 = 1600K
+    dd if=/dev/urandom of=$dir/datafile bs=1024 count=13
+    for o in $(seq 1 $ecobjects)
+    do
+      rados -p fillpool put obj$o $dir/datafile
+    done
+
+    local fillosd=$(get_primary fillpool obj1)
+    osd=$(expr $fillosd + 1)
+    if [ "$osd" = "$OSDS" ]; then
+      osd="0"
+    fi
+
+    sleep 5
+    kill $(cat $dir/osd.$fillosd.pid)
+    ceph osd out osd.$fillosd
+    sleep 2
+    ceph osd erasure-code-profile set ec-profile k=$k m=$m crush-failure-domain=osd technique=reed_sol_van plugin=jerasure || return 1
+
+    for p in $(seq 1 $pools)
+    do
+        ceph osd pool create "${poolprefix}$p" 1 1 erasure ec-profile
+    done
+
+    # Can't wait for clean here because we created a stale pg
+    #wait_for_clean || return 1
+    sleep 5
+
+    ceph pg dump pgs
+
+    dd if=/dev/urandom of=$dir/datafile bs=1024 count=24
+    for o in $(seq 1 $ecobjects)
+    do
+      for p in $(seq 1 $pools)
+      do
+	rados -p "${poolprefix}$p" put obj$o $dir/datafile
+      done
+    done
+
+    kill $(cat $dir/osd.$osd.pid)
+    ceph osd out osd.$osd
+
+    activate_osd $dir $fillosd || return 1
+    ceph osd in osd.$fillosd
+    sleep 30
+
+    ceph pg dump pgs
+
+    wait_for_backfill 60
+    wait_for_active 60
+
+    ceph pg dump pgs
+
+    ERRORS=0
+    if [ "$(ceph pg dump pgs | grep -v "^1.0" | grep +backfill_toofull | wc -l)" != "1" ]; then
+      echo "One pool should have been in backfill_toofull"
+      ERRORS="$(expr $ERRORS + 1)"
+    fi
+
+    if [ $ERRORS != "0" ];
+    then
+      return 1
+    fi
+
+    delete_pool fillpool
+    for i in $(seq 1 $pools)
+    do
+      delete_pool "${poolprefix}$i"
+    done
+    kill_daemons $dir || return 1
+}
+
+function TEST_ec_backfill_multi() {
+    local dir=$1
+    local EC=$2
+    local pools=2
+    local OSDS=6
+    local k=3
+    local m=2
+    local ecobjects=$(expr $objects / $k)
+
+    run_mon $dir a || return 1
+    run_mgr $dir x || return 1
+    export CEPH_ARGS
+
+    for osd in $(seq 0 $(expr $OSDS - 1))
+    do
+      run_osd $dir $osd || return 1
+    done
+
+    create_pool fillpool 1 1
+    ceph osd pool set fillpool size 1
+
+    # Partially fill an osd
+    # We have room for 200 18K replicated objects, if we create 5K objects
+    # there is only 3600K - (6 * 200) = 2400K which will only hold
+    # one k=3 shard below (21K / 3) * 200 = 1400K
+    dd if=/dev/urandom of=$dir/datafile bs=1024 count=6
+    for o in $(seq 1 $ecobjects)
+    do
+      rados -p fillpool put obj$o $dir/datafile
+    done
+
+    local fillosd=$(get_primary fillpool obj1)
+    osd=$(expr $fillosd + 1)
+    if [ "$osd" = "$OSDS" ]; then
+      osd="0"
+    fi
+
+    sleep 5
+    kill $(cat $dir/osd.$fillosd.pid)
+    ceph osd out osd.$fillosd
+    sleep 2
+    ceph osd erasure-code-profile set ec-profile k=3 m=2 crush-failure-domain=osd technique=reed_sol_van plugin=jerasure || return 1
+
+    for p in $(seq 1 $pools)
+    do
+        ceph osd pool create "${poolprefix}$p" 1 1 erasure ec-profile
+    done
+
+    # Can't wait for clean here because we created a stale pg
+    #wait_for_clean || return 1
+    sleep 5
+
+    ceph pg dump pgs
+
+    dd if=/dev/urandom of=$dir/datafile bs=1024 count=21
+    for o in $(seq 1 $ecobjects)
+    do
+      for p in $(seq 1 $pools)
+      do
+	rados -p "${poolprefix}$p" put obj$o-$p $dir/datafile
+      done
+    done
+
+    kill $(cat $dir/osd.$osd.pid)
+    ceph osd out osd.$osd
+
+    activate_osd $dir $fillosd || return 1
+    ceph osd in osd.$fillosd
+    sleep 15
+
+    wait_for_backfill 60
+    wait_for_active 60
+
+    ceph pg dump pgs
+
+    ERRORS=0
+    if [ "$(ceph pg dump pgs | grep -v "^1.0" | grep +backfill_toofull | wc -l)" != "1" ];
+    then
+      echo "One pool should have been in backfill_toofull"
+      ERRORS="$(expr $ERRORS + 1)"
+    fi
+
+    if [ "$(ceph pg dump pgs | grep -v "^1.0" | grep active+clean | wc -l)" != "1" ];
+    then
+      echo "One didn't finish backfill"
+      ERRORS="$(expr $ERRORS + 1)"
+    fi
+
+    if [ $ERRORS != "0" ];
+    then
+      return 1
+    fi
+
+    delete_pool fillpool
+    for i in $(seq 1 $pools)
+    do
+      delete_pool "${poolprefix}$i"
+    done
+    kill_daemons $dir || return 1
+}
+
+function TEST_ec_backfill_multi_partial() {
+    local dir=$1
+    local EC=$2
+    local pools=2
+    local OSDS=6
+
+    run_mon $dir a || return 1
+    run_mgr $dir x || return 1
+    export CEPH_ARGS
+
+    for osd in $(seq 0 $(expr $OSDS - 1))
+    do
+      run_osd $dir $osd || return 1
+    done
+
+    create_pool fillpool 1 1
+    ceph osd pool set fillpool size 1
+
+    # Partially fill an osd
+    # We have room for 200 6K replicated objects, if we create 4k byte objects
+    # there is 1228800 - (4096 *200) = 8819200 which won't hold 2 k=3 shard
+    # of 200 4K objects which takes 4K * 200 / 3 = 273066 with enough to spare
+    # to not get out of space.
+    dd if=/dev/urandom of=$dir/datafile bs=1024 count=4
+    for o in $(seq 1 $objects)
+    do
+      rados -p fillpool put obj$o $dir/datafile
+    done
+
+    local fillosd=$(get_primary fillpool obj1)
+    osd=$(expr $fillosd + 1)
+    if [ "$osd" = "$OSDS" ]; then
+      osd="0"
+    fi
+
+    sleep 5
+    kill $(cat $dir/osd.$fillosd.pid)
+    ceph osd out osd.$fillosd
+    sleep 2
+    ceph osd erasure-code-profile set ec-profile k=3 m=2 crush-failure-domain=osd technique=reed_sol_van plugin=jerasure || return 1
+
+    for p in $(seq 1 $pools)
+    do
+        ceph osd pool create "${poolprefix}$p" 1 1 erasure ec-profile
+    done
+
+    # Can't wait for clean here because we created a stale pg
+    #wait_for_clean || return 1
+    sleep 5
+
+    ceph pg dump pgs
+
+    dd if=/dev/urandom of=$dir/datafile bs=1024 count=4
+    for o in $(seq 1 $objects)
+    do
+      for p in $(seq 1 $pools)
+      do
+	rados -p "${poolprefix}$p" put obj$o $dir/datafile
+      done
+    done
+
+    #ceph pg map 2.0 --format=json | jq '.'
+    objectstore_tool $dir $osd --op export --pgid 2.0 --file $dir/export.out
+    objectstore_tool $dir $fillosd --op import --pgid 2.0 --file $dir/export.out
+
+    kill $(cat $dir/osd.$osd.pid)
+    ceph osd out osd.$osd
+
+    activate_osd $dir $fillosd || return 1
+    ceph osd in osd.$fillosd
+    sleep 15
+
+    wait_for_backfill 60
+    wait_for_active 60
+
+    ERRORS=0
+    if [ "$(ceph pg dump pgs | grep -v "^1.0" | grep +backfill_toofull | wc -l)" != "1" ];
+    then
+      echo "One pool should have been in backfill_toofull"
+      ERRORS="$(expr $ERRORS + 1)"
+    fi
+
+    if [ "$(ceph pg dump pgs | grep -v "^1.0" | grep active+clean | wc -l)" != "1" ];
+    then
+      echo "One didn't finish backfill"
+      ERRORS="$(expr $ERRORS + 1)"
+    fi
+
+    ceph pg dump pgs
+
+    if [ $ERRORS != "0" ];
+    then
+      return 1
+    fi
+
+    delete_pool fillpool
+    for i in $(seq 1 $pools)
+    do
+      delete_pool "${poolprefix}$i"
+    done
+    kill_daemons $dir || return 1
+}
+
+function TEST_ec_backfill_grow() {
+    local dir=$1
+    local poolname="test"
+    local OSDS=6
+    local k=3
+    local m=2
+
+    run_mon $dir a || return 1
+    run_mgr $dir x || return 1
+
+    for osd in $(seq 0 $(expr $OSDS - 1))
+    do
+      run_osd $dir $osd || return 1
+    done
+
+    ceph osd erasure-code-profile set ec-profile k=$k m=$m crush-failure-domain=osd technique=reed_sol_van plugin=jerasure || return 1
+    ceph osd pool create $poolname 1 1 erasure ec-profile
+
+    wait_for_clean || return 1
+
+    dd if=/dev/urandom of=${dir}/4kdata bs=1k count=4
+    for i in $(seq 1 $objects)
+    do
+	rados -p $poolname put obj$i $dir/4kdata
+    done
+
+    local PG=$(get_pg $poolname obj1)
+    # Remember primary during the backfill
+    local primary=$(get_primary $poolname obj1)
+    local otherosd=$(get_not_primary $poolname obj1)
+
+    ceph osd set noout
+    kill_daemons $dir TERM $otherosd || return 1
+
+    rmobjects=$(expr $objects / 4)
+    for i in $(seq 1 $rmobjects)
+    do
+        rados -p $poolname rm obj$i
+    done
+
+    dd if=/dev/urandom of=${dir}/2.5kdata bs=2730 count=1
+    for i in $(seq $(expr $rmobjects + 1) $objects)
+    do
+	rados -p $poolname put obj$i $dir/2.5kdata
+    done
+
+    activate_osd $dir $otherosd || return 1
+
+    ceph tell osd.$primary debug kick_recovery_wq 0
+
+    sleep 2
+
+    wait_for_clean || return 1
+
+    delete_pool $poolname
+    kill_daemons $dir || return 1
+}
+
 main osd-backfill-space "$@"
 
 # Local Variables:
