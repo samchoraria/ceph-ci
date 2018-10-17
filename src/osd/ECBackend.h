@@ -601,6 +601,10 @@ public:
     return new ECRecPred(ec_impl);
   }
 
+  int get_ec_data_chunk_count() const override {
+    return ec_impl->get_data_chunk_count();
+  }
+
   /**
    * ECReadPred
    *

@@ -7655,6 +7655,10 @@ PG::RecoveryState::RepNotRecovering::react(const RequestBackfillPrio &evt)
   int64_t primary_num_bytes = evt.primary_num_bytes;
   int64_t local_num_bytes = evt.local_num_bytes;
   if (primary_num_bytes) {
+    if (pg->pool.info.is_erasure()) {
+      primary_num_bytes /= (int)pg->get_pgbackend()->get_ec_data_chunk_count();
+      local_num_bytes /= (int)pg->get_pgbackend()->get_ec_data_chunk_count();
+    }
     pending_adjustment = pending_backfill_kb(pg->cct, primary_num_bytes, local_num_bytes);
     ldout(pg->cct, 10) << __func__ << " primary_num_bytes " << (primary_num_bytes >> 10) << "KiB"
                        << " local " << (local_num_bytes >> 10) << "KiB"

@@ -4302,9 +4302,12 @@ void PrimaryLogPG::do_backfill_remove(OpRequestRef op)
     if (r == 0) {
       sub_local_num_bytes(st.st_size);
       int chunks = 1;
+      if (pool.info.is_erasure())
+        chunks = get_pgbackend()->get_ec_data_chunk_count();
       sub_num_bytes(st.st_size * chunks);
       dout(10) << __func__ << " " << ghobject_t(p.first, ghobject_t::NO_GEN, pg_whoami.shard)
                << " sub actual data by " << st.st_size
+               << " sub num_bytes by " << st.st_size * chunks
                << dendl;
     }
     remove_snap_mapped_object(t, p.first);
