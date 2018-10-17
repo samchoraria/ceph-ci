@@ -400,6 +400,19 @@ public:
     release_object_locks(manager);
   }
 
+  void pg_add_local_num_bytes(int64_t num_bytes) override {
+    add_local_num_bytes(num_bytes);
+  }
+  void pg_sub_local_num_bytes(int64_t num_bytes) override {
+    sub_local_num_bytes(num_bytes);
+  }
+  void pg_add_num_bytes(int64_t num_bytes) override {
+    add_num_bytes(num_bytes);
+  }
+  void pg_sub_num_bytes(int64_t num_bytes) override {
+    sub_num_bytes(num_bytes);
+  }
+
   void pgb_set_object_snap_mapping(
     const hobject_t &soid,
     const set<snapid_t> &snaps,
