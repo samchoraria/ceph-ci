@@ -1264,6 +1264,8 @@ public:
     int num_bytes = info.stats.stats.sum.num_bytes;
     if (pool.info.is_erasure()) {
       num_bytes /= (int)get_pgbackend()->get_ec_data_chunk_count();
+      // Round up each object by a stripe
+      num_bytes +=  get_pgbackend()->get_ec_stripe_chunk_size() * info.stats.stats.sum.num_objects;
     }
     int64_t lnb = local_num_bytes.load();
     if (lnb && lnb != num_bytes) {
