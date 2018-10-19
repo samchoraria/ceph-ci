@@ -558,13 +558,14 @@ function TEST_ec_backfill_simple() {
       run_osd $dir $osd || return 1
     done
 
+    ceph osd set-require-min-compat-client luminous
     create_pool fillpool 1 1
     ceph osd pool set fillpool size 1
 
     # Partially fill an osd
     # We have room for 200 18K replicated objects, if we create 13K objects
     # there is only 3600K - (13 * 200) = 1000K which won't hold
-    # a k=3 shard below (24K / 3) * 200 = 1600K
+    # a k=3 shard below (18K / 3) * 200 = 1200K
     dd if=/dev/urandom of=$dir/datafile bs=1024 count=13
     for o in $(seq 1 $ecobjects)
     do
@@ -594,7 +595,7 @@ function TEST_ec_backfill_simple() {
 
     ceph pg dump pgs
 
-    dd if=/dev/urandom of=$dir/datafile bs=1024 count=24
+    dd if=/dev/urandom of=$dir/datafile bs=1024 count=18
     for o in $(seq 1 $ecobjects)
     do
       for p in $(seq 1 $pools)
@@ -636,6 +637,25 @@ function TEST_ec_backfill_simple() {
     kill_daemons $dir || return 1
 }
 
+function osdlist() {
+    local OSDS=$1
+    local excludeosd=$2
+
+    osds=""
+    for osd in $(seq 0 $(expr $OSDS - 1))
+    do
+      if [ $osd = $excludeosd ];
+      then
+        continue
+      fi
+      if [ -n "$osds" ]; then
+        osds="${osds} "
+      fi
+      osds="${osds}${osd}"
+    done
+    echo $osds
+}
+
 function TEST_ec_backfill_multi() {
     local dir=$1
     local EC=$2
@@ -654,43 +674,53 @@ function TEST_ec_backfill_multi() {
       run_osd $dir $osd || return 1
     done
 
+    # This test requires that shards from 2 different pools
+    # fit on a given OSD, but both will not fix.  I'm using
+    # making the fillosd plus 1 shard use 75% of the space,
+    # leaving not enough to be under the 85% set here.
+    ceph osd set-backfillfull-ratio .85
+
+    ceph osd set-require-min-compat-client luminous
     create_pool fillpool 1 1
     ceph osd pool set fillpool size 1
 
     # Partially fill an osd
-    # We have room for 200 18K replicated objects, if we create 5K objects
-    # there is only 3600K - (6 * 200) = 2400K which will only hold
-    # one k=3 shard below (21K / 3) * 200 = 1400K
-    dd if=/dev/urandom of=$dir/datafile bs=1024 count=6
+    # We have room for 200 18K replicated objects, if we create 9K objects
+    # there is only 3600K - (9K * 200) = 1800K which will only hold
+    # one k=3 shard below (12K / 3) * 200 = 800K
+    dd if=/dev/urandom of=$dir/datafile bs=1024 count=9
     for o in $(seq 1 $ecobjects)
     do
       rados -p fillpool put obj$o $dir/datafile
     done
 
     local fillosd=$(get_primary fillpool obj1)
-    osd=$(expr $fillosd + 1)
-    if [ "$osd" = "$OSDS" ]; then
-      osd="0"
-    fi
+    #osd=$(expr $fillosd + 1)
+    #if [ "$osd" = "$OSDS" ]; then
+    #  osd="0"
+    #fi
 
-    sleep 5
-    kill $(cat $dir/osd.$fillosd.pid)
-    ceph osd out osd.$fillosd
-    sleep 2
+    #sleep 5
+    #kill $(cat $dir/osd.$fillosd.pid)
+    #ceph osd out osd.$fillosd
+    #sleep 2
     ceph osd erasure-code-profile set ec-profile k=3 m=2 crush-failure-domain=osd technique=reed_sol_van plugin=jerasure || return 1
+
+    nonfillosds="$(osdlist $OSDS $fillosd)"
 
     for p in $(seq 1 $pools)
     do
         ceph osd pool create "${poolprefix}$p" 1 1 erasure ec-profile
+        ceph osd pg-upmap "$(expr $p + 1).0" $nonfillosds
     done
 
     # Can't wait for clean here because we created a stale pg
     #wait_for_clean || return 1
-    sleep 5
+    sleep 15
 
     ceph pg dump pgs
 
-    dd if=/dev/urandom of=$dir/datafile bs=1024 count=21
+    dd if=/dev/urandom of=$dir/datafile bs=1024 count=12
     for o in $(seq 1 $ecobjects)
     do
       for p in $(seq 1 $pools)
@@ -699,12 +729,28 @@ function TEST_ec_backfill_multi() {
       done
     done
 
-    kill $(cat $dir/osd.$osd.pid)
-    ceph osd out osd.$osd
+    ceph pg dump pgs
 
-    activate_osd $dir $fillosd || return 1
-    ceph osd in osd.$fillosd
-    sleep 15
+    for p in $(seq 1 $pools)
+    do
+      ceph osd pg-upmap $(expr $p + 1).0 ${nonfillosds% *} $fillosd
+      #ceph osd pg-upmap-items $(expr $p + 1).0 ${nonfillosds##* } $fillosd
+    done
+
+    sleep 1
+    ceph pg dump pgs
+    sleep 5
+    ceph pg dump pgs
+    sleep 10
+    ceph pg dump pgs
+    sleep 4
+ 
+    #kill $(cat $dir/osd.$osd.pid)
+    #ceph osd out osd.$osd
+
+    #activate_osd $dir $fillosd || return 1
+    #ceph osd in osd.$fillosd
+    #sleep 15
 
     wait_for_backfill 60
     wait_for_active 60
@@ -737,7 +783,7 @@ function TEST_ec_backfill_multi() {
     kill_daemons $dir || return 1
 }
 
-function TEST_ec_backfill_multi_partial() {
+function SKIP_TEST_ec_backfill_multi_partial() {
     local dir=$1
     local EC=$2
     local pools=2
@@ -752,6 +798,7 @@ function TEST_ec_backfill_multi_partial() {
       run_osd $dir $osd || return 1
     done
 
+    ceph osd set-require-min-compat-client luminous
     create_pool fillpool 1 1
     ceph osd pool set fillpool size 1
 
@@ -840,7 +887,7 @@ function TEST_ec_backfill_multi_partial() {
     kill_daemons $dir || return 1
 }
 
-function TEST_ec_backfill_grow() {
+function SKIP_TEST_ec_backfill_grow() {
     local dir=$1
     local poolname="test"
     local OSDS=6
@@ -855,6 +902,7 @@ function TEST_ec_backfill_grow() {
       run_osd $dir $osd || return 1
     done
 
+    ceph osd set-require-min-compat-client luminous
     ceph osd erasure-code-profile set ec-profile k=$k m=$m crush-failure-domain=osd technique=reed_sol_van plugin=jerasure || return 1
     ceph osd pool create $poolname 1 1 erasure ec-profile
 
