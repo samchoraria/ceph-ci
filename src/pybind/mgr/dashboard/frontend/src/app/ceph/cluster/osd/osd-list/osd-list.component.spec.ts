@@ -1,4 +1,4 @@
-import { HttpClientModule } from '@angular/common/http';
+import { HttpClientTestingModule } from '@angular/common/http/testing';
 import { DebugElement } from '@angular/core';
 import { ComponentFixture, fakeAsync, TestBed, tick } from '@angular/core/testing';
 import { ReactiveFormsModule } from '@angular/forms';
@@ -67,7 +67,7 @@ describe('OsdListComponent', () => {
 
   configureTestBed({
     imports: [
-      HttpClientModule,
+      HttpClientTestingModule,
       PerformanceCounterModule,
       TabsModule.forRoot(),
       SharedModule,
