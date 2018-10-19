@@ -7686,7 +7686,11 @@ ldout(pg->cct, 10) << __func__ << " chunk size " << pg->get_pgbackend()->get_ec_
     post_event(RejectRemoteReservation());
   } else {
     Context *preempt = nullptr;
-    if (primary_num_bytes)
+    // Don't reserve space if skipped reservation check, this is used
+    // to test the other backfill full check AND in case a corruption
+    // of num_bytes requires ignoring that value and trying the
+    // backfill anyway.
+    if (primary_num_bytes && !pg->cct->_conf->osd_debug_skip_full_check_in_backfill_reservation)
       pg->set_reserved_num_bytes(primary_num_bytes, local_num_bytes);
     else
       pg->clear_reserved_num_bytes();
