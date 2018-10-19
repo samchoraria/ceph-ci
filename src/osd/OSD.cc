@@ -268,7 +268,7 @@ OSDService::OSDService(OSD *osd) :
   stat_lock("OSDService::stat_lock"),
   full_status_lock("OSDService::full_status_lock"),
   cur_state(NONE),
-  cur_ratio(0),
+  cur_ratio(0), physical_ratio(0),
   epoch_lock("OSDService::epoch_lock"),
   boot_epoch(0), up_epoch(0), bind_epoch(0),
   is_stopping_lock("OSDService::is_stopping_lock")
@@ -684,7 +684,7 @@ float OSDService::get_failsafe_full_ratio()
   return full_ratio;
 }
 
-OSDService::s_names OSDService::recalc_full_state(float ratio, string &inject)
+OSDService::s_names OSDService::recalc_full_state(float ratio, float pratio, string &inject)
 {
   // The OSDMap ratios take precendence.  So if the failsafe is .95 and
   // the admin sets the cluster full to .96, the failsafe moves up to .96
@@ -719,7 +719,7 @@ OSDService::s_names OSDService::recalc_full_state(float ratio, string &inject)
   if (injectfull_state > NONE && injectfull) {
     inject = "(Injected)";
     return injectfull_state;
-  } else if (ratio > failsafe_ratio) {
+  } else if (pratio > failsafe_ratio) {
     return FAILSAFE;
   } else if (ratio > full_ratio) {
     return FULL;
@@ -731,17 +731,19 @@ OSDService::s_names OSDService::recalc_full_state(float ratio, string &inject)
    return NONE;
 }
 
-void OSDService::check_full_status(float ratio)
+void OSDService::check_full_status(float ratio, float pratio)
 {
   Mutex::Locker l(full_status_lock);
 
   cur_ratio = ratio;
+  physical_ratio = pratio;
 
   string inject;
   s_names new_state;
-  new_state = recalc_full_state(ratio, inject);
+  new_state = recalc_full_state(ratio, pratio, inject);
 
   dout(20) << __func__ << " cur ratio " << ratio
+           << ", physical ratio " << pratio
 	   << ", new state " << get_full_state_name(new_state)
 	   << " " << inject
 	   << dendl;
@@ -807,7 +809,8 @@ bool OSDService::_check_full(DoutPrefixProvider *dpp, s_names type) const
     return true;
 
   if (cur_state >= type)
-    ldpp_dout(dpp, 10) << __func__ << " current usage is " << cur_ratio << dendl;
+    ldpp_dout(dpp, 10) << __func__ << " current usage is " << cur_ratio
+                       << " physical " << physical_ratio << dendl;
 
   return cur_state >= type;
 }
@@ -822,14 +825,11 @@ bool OSDService::_tentative_full(DoutPrefixProvider *dpp, s_names type, int64_t 
     }
   }
 
-  ldpp_dout(dpp, 20) << __func__ << " Before kb_used " << adjusted_stat.kb_used << dendl;
-  adjusted_stat.kb_used += adjust_used;
-  ldpp_dout(dpp, 20) << __func__ << " After kb_used " << adjusted_stat.kb_used << dendl;
-
-  float ratio = compute_adjusted_ratio(adjusted_stat);
+  float pratio;
+  float ratio = compute_adjusted_ratio(adjusted_stat, &pratio, adjust_used);
 
   string notused;
-  s_names tentative_state = recalc_full_state(ratio, notused);
+  s_names tentative_state = recalc_full_state(ratio, pratio, notused);
 
   if (tentative_state >= type)
     ldpp_dout(dpp, 10) << __func__ << " tentative usage is " << ratio << dendl;
@@ -944,8 +944,17 @@ osd_stat_t OSDService::set_osd_stat(vector<int>& hb_peers,
   return osd_stat;
 }
 
-float OSDService::compute_adjusted_ratio(osd_stat_t new_stat)
+float OSDService::compute_adjusted_ratio(osd_stat_t new_stat, float *pratio,
+				         int64_t adjust_used)
 {
+  *pratio = ((float)new_stat.kb_used) / ((float)new_stat.kb);
+
+  if (adjust_used) {
+    dout(20) << __func__ << " Before kb_used " << new_stat.kb_used << dendl;
+    new_stat.kb_used += adjust_used;
+    dout(20) << __func__ << " After kb_used " << new_stat.kb_used << dendl;
+  }
+
   // Check all pgs and adjust kb_used to include all pending backfill data
   int backfill_adjusted = 0;
   vector<PGRef> pgs;
@@ -4991,9 +5000,10 @@ void OSD::heartbeat()
   dout(5) << __func__ << " " << new_stat << dendl;
   ceph_assert(new_stat.kb);
 
-  float ratio = service.compute_adjusted_ratio(new_stat);
+  float pratio;
+  float ratio = service.compute_adjusted_ratio(new_stat, &pratio);
 
-  service.check_full_status(ratio);
+  service.check_full_status(ratio, pratio);
 
   utime_t now = ceph_clock_now();
   utime_t deadline = now;
