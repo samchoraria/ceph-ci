@@ -110,6 +110,11 @@ const routes: Routes = [
     data: { breadcrumbs: true, text: 'Block', path: null },
     children: [
       {
+        path: '',
+        redirectTo: 'rbd',
+        pathMatch: 'full'
+      },
+      {
         path: 'rbd',
         data: { breadcrumbs: 'Images' },
         children: [
