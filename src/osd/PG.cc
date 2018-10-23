@@ -6831,21 +6831,18 @@ int PG::pg_stat_adjust(osd_stat_t *ns)
   }
   // Adjust the kb_used by adding pending backfill data
   int64_t reserved_num_bytes = get_reserved_num_bytes();
-  if (reserved_num_bytes) {
+
+  // For now we don't consider projected space gains here
+  // I suggest we have an optional 2 pass backfill that frees up
+  // space in a first pass.  This could be triggered when at nearfull
+  // or near to backfillfull.
+  if (reserved_num_bytes > 0) {
     // TODO: Handle compression by adjusting by the PGs average
     // compression precentage.
-    if (reserved_num_bytes < 0) {
-      reserved_num_bytes = -reserved_num_bytes;
-      dout(20) << __func__ << " reserved_num_bytes -" << (reserved_num_bytes >> 10) << "KiB"
-               << " Before kb_used " << new_stat.kb_used << "KiB" << dendl;
-      new_stat.kb_used -= (reserved_num_bytes >> 10);
-      new_stat.kb_avail += (reserved_num_bytes >> 10);
-    } else {
-      dout(20) << __func__ << " reserved_num_bytes " << (reserved_num_bytes >> 10) << "KiB"
-               << " Before kb_used " << new_stat.kb_used << "KiB" << dendl;
-      new_stat.kb_used += (reserved_num_bytes >> 10);
-      new_stat.kb_avail -= (reserved_num_bytes >> 10);
-    }
+    dout(20) << __func__ << " reserved_num_bytes " << (reserved_num_bytes >> 10) << "KiB"
+             << " Before kb_used " << new_stat.kb_used << "KiB" << dendl;
+    new_stat.kb_used += (reserved_num_bytes >> 10);
+    new_stat.kb_avail -= (reserved_num_bytes >> 10);
     dout(20) << __func__ << " After kb_used " << new_stat.kb_used << "KiB" << dendl;
     return 1;
   }
@@ -7662,7 +7659,6 @@ PG::RecoveryState::RepNotRecovering::react(const RequestBackfillPrio &evt)
       primary_num_bytes += pg->get_pgbackend()->get_ec_stripe_chunk_size() * pg->info.stats.stats.sum.num_objects;
       local_num_bytes /= (int)pg->get_pgbackend()->get_ec_data_chunk_count();
       local_num_bytes += pg->get_pgbackend()->get_ec_stripe_chunk_size() * pg->info.stats.stats.sum.num_objects;
-ldout(pg->cct, 10) << __func__ << " chunk size " << pg->get_pgbackend()->get_ec_stripe_chunk_size() << dendl;
     }
     pending_adjustment = pending_backfill_kb(pg->cct, primary_num_bytes, local_num_bytes);
     ldout(pg->cct, 10) << __func__ << " primary_num_bytes " << (primary_num_bytes >> 10) << "KiB"
