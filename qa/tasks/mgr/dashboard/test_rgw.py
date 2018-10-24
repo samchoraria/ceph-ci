@@ -138,10 +138,15 @@ class RgwBucketTest(RgwTestCase):
         self.assertIn('bucket_info', data)
         data = data['bucket_info']
         self.assertIn('bucket', data)
+        self.assertTrue(isinstance(data['bucket'], dict))
         self.assertIn('quota', data)
+        self.assertTrue(isinstance(data['quota'], dict))
         self.assertIn('creation_time', data)
+        self.assertTrue(isinstance(data['creation_time'], basestring))
         self.assertIn('name', data['bucket'])
+        self.assertTrue(isinstance(data['bucket']['name'], basestring))
         self.assertIn('bucket_id', data['bucket'])
+        self.assertTrue(isinstance(data['bucket']['bucket_id'], basestring))
         self.assertEqual(data['bucket']['name'], 'teuth-test-bucket')
 
         # List all buckets.
@@ -154,9 +159,17 @@ class RgwBucketTest(RgwTestCase):
         data = self._get('/api/rgw/bucket/teuth-test-bucket')
         self.assertStatus(200)
         self.assertIn('id', data)
+        self.assertTrue(isinstance(data['id'], basestring))
+        self.assertIn('bid', data)
+        self.assertTrue(isinstance(data['bid'], basestring))
+        self.assertIn('tenant', data)
+        self.assertTrue(isinstance(data['tenant'], basestring))
         self.assertIn('bucket', data)
+        self.assertTrue(isinstance(data['bucket'], basestring))
         self.assertIn('bucket_quota', data)
+        self.assertTrue(isinstance(data['bucket_quota'], dict))
         self.assertIn('owner', data)
+        self.assertTrue(isinstance(data['owner'], basestring))
         self.assertEqual(data['bucket'], 'teuth-test-bucket')
         self.assertEqual(data['owner'], 'admin')
 
@@ -170,7 +183,13 @@ class RgwBucketTest(RgwTestCase):
         self.assertStatus(200)
         data = self._get('/api/rgw/bucket/teuth-test-bucket')
         self.assertStatus(200)
+        self.assertIn('owner', data)
+        self.assertTrue(isinstance(data['owner'], basestring))
         self.assertEqual(data['owner'], 'teuth-test-user')
+        self.assertIn('bid', data)
+        self.assertTrue(isinstance(data['bid'], basestring))
+        self.assertIn('tenant', data)
+        self.assertTrue(isinstance(data['tenant'], basestring))
 
         # Delete the bucket.
         self._delete('/api/rgw/bucket/teuth-test-bucket')
@@ -238,16 +257,28 @@ class RgwUserTest(RgwTestCase):
 
     def _assert_user_data(self, data):
         self.assertIn('caps', data)
+        self.assertTrue(isinstance(data['caps'], list))
         self.assertIn('display_name', data)
+        self.assertTrue(isinstance(data['display_name'], basestring))
         self.assertIn('email', data)
+        self.assertTrue(isinstance(data['email'], basestring))
         self.assertIn('keys', data)
+        self.assertTrue(isinstance(data['keys'], list))
         self.assertGreaterEqual(len(data['keys']), 1)
         self.assertIn('max_buckets', data)
+        self.assertTrue(isinstance(data['max_buckets'], int))
         self.assertIn('subusers', data)
+        self.assertTrue(isinstance(data['subusers'], list))
         self.assertIn('suspended', data)
+        self.assertTrue(isinstance(data['suspended'], int))
         self.assertIn('swift_keys', data)
+        self.assertTrue(isinstance(data['swift_keys'], list))
         self.assertIn('tenant', data)
+        self.assertTrue(isinstance(data['tenant'], basestring))
         self.assertIn('user_id', data)
+        self.assertTrue(isinstance(data['user_id'], basestring))
+        self.assertIn('uid', data)
+        self.assertTrue(isinstance(data['uid'], basestring))
 
     def test_get(self):
         data = self.get_rgw_user('admin')
@@ -277,7 +308,9 @@ class RgwUserTest(RgwTestCase):
         data = self.get_rgw_user('teuth-test-user')
         self.assertStatus(200)
         self._assert_user_data(data)
+        self.assertEqual(data['tenant'], '')
         self.assertEqual(data['user_id'], 'teuth-test-user')
+        self.assertEqual(data['uid'], 'teuth-test-user')
 
         # Update the user.
         self._put(
@@ -294,6 +327,49 @@ class RgwUserTest(RgwTestCase):
         self._delete('/api/rgw/user/teuth-test-user')
         self.assertStatus(204)
         self.get_rgw_user('teuth-test-user')
+        self.assertStatus(500)
+        resp = self.jsonBody()
+        self.assertIn('detail', resp)
+        self.assertIn('failed request with status code 404', resp['detail'])
+        self.assertIn('"Code":"NoSuchUser"', resp['detail'])
+        self.assertIn('"HostId"', resp['detail'])
+        self.assertIn('"RequestId"', resp['detail'])
+
+    def test_create_update_delete_tenanted(self):
+        # Create a new user.
+        self._post('/api/rgw/user', params={
+            'uid': 'test01$teuth-test-user',
+            'display_name': 'display name'
+        })
+        self.assertStatus(201)
+        data = self.jsonBody()
+        self._assert_user_data(data)
+        self.assertEqual(data['user_id'], 'teuth-test-user')
+        self.assertEqual(data['display_name'], 'display name')
+
+        # Get the user.
+        data = self.get_rgw_user('test01$teuth-test-user')
+        self.assertStatus(200)
+        self._assert_user_data(data)
+        self.assertEqual(data['tenant'], 'test01')
+        self.assertEqual(data['user_id'], 'teuth-test-user')
+        self.assertEqual(data['uid'], 'test01$teuth-test-user')
+
+        # Update the user.
+        self._put(
+            '/api/rgw/user/test01$teuth-test-user',
+            params={
+                'display_name': 'new name'
+            })
+        self.assertStatus(200)
+        data = self.jsonBody()
+        self._assert_user_data(data)
+        self.assertEqual(data['display_name'], 'new name')
+
+        # Delete the user.
+        self._delete('/api/rgw/user/test01$teuth-test-user')
+        self.assertStatus(204)
+        self.get_rgw_user('test01$teuth-test-user')
         self.assertStatus(500)
         resp = self.jsonBody()
         self.assertIn('detail', resp)

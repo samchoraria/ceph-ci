@@ -38,7 +38,7 @@ export class RgwUserListComponent {
     this.columns = [
       {
         name: 'Username',
-        prop: 'user_id',
+        prop: 'uid',
         flexGrow: 1
       },
       {
@@ -63,7 +63,8 @@ export class RgwUserListComponent {
         flexGrow: 1
       }
     ];
-    const getUserUri = () => this.selection.first() && this.selection.first().user_id;
+    const getUserUri = () =>
+      this.selection.first() && `${encodeURIComponent(this.selection.first().uid)}`;
     const addAction: CdTableAction = {
       permission: 'create',
       icon: 'fa-plus',
@@ -109,7 +110,7 @@ export class RgwUserListComponent {
             // Delete all selected data table rows.
             observableForkJoin(
               this.selection.selected.map((user: any) => {
-                return this.rgwUserService.delete(user.user_id);
+                return this.rgwUserService.delete(user.uid);
               })
             ).subscribe(
               null,
