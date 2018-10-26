@@ -121,34 +121,34 @@ describe('RgwUserFormComponent', () => {
     });
 
     it('should validate that username is required', () => {
-      const user_id = component.userForm.get('user_id');
-      user_id.markAsDirty();
-      user_id.setValue('');
-      expect(user_id.hasError('required')).toBeTruthy();
-      expect(user_id.valid).toBeFalsy();
+      const uid = component.userForm.get('uid');
+      uid.markAsDirty();
+      uid.setValue('');
+      expect(uid.hasError('required')).toBeTruthy();
+      expect(uid.valid).toBeFalsy();
     });
 
     it(
       'should validate that username is valid',
       fakeAsync(() => {
-        const user_id = component.userForm.get('user_id');
-        user_id.markAsDirty();
-        user_id.setValue('ab');
+        const uid = component.userForm.get('uid');
+        uid.markAsDirty();
+        uid.setValue('ab');
         tick(500);
-        expect(user_id.hasError('notUnique')).toBeFalsy();
-        expect(user_id.valid).toBeTruthy();
+        expect(uid.hasError('notUnique')).toBeFalsy();
+        expect(uid.valid).toBeTruthy();
       })
     );
 
     it(
       'should validate that username is invalid',
       fakeAsync(() => {
-        const user_id = component.userForm.get('user_id');
-        user_id.markAsDirty();
-        user_id.setValue('abc');
+        const uid = component.userForm.get('uid');
+        uid.markAsDirty();
+        uid.setValue('abc');
         tick(500);
-        expect(user_id.hasError('notUnique')).toBeTruthy();
-        expect(user_id.valid).toBeFalsy();
+        expect(uid.hasError('notUnique')).toBeTruthy();
+        expect(uid.valid).toBeFalsy();
       })
     );
   });
