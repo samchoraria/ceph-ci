@@ -319,6 +319,59 @@ You need to tell the dashboard on which url Grafana instance is running/deployed
 The format of url is : `<protocol>:<IP-address>:<port>`
 You can directly access Grafana Instance as well to monitor your cluster.
 
+Enabling Single Sign-On (SSO)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. note::
+  Ceph Dashboard SSO support relies on onelogin's
+  `python-saml <https://pypi.org/project/python-saml/>`_ library.
+  Please ensure that this library is installed on your system, either by using
+  packages provided by your operating system or using Python's ``pip``
+  installation tool:
+
+  **Python 2:**
+
+  ``$ pip2 install python-saml``
+
+  **Python 3:**
+
+  ``$ pip3 install python3-saml``
+
+Ceph Dashboard supports the `SAML 2.0 <https://en.wikipedia.org/wiki/SAML_2.0>`_
+protocol to integrate with an existing Identity Provider (IdP).
+
+To configure SSO on Ceph Dashboard, you should use the following command::
+
+  $ ceph dashboard sso setup saml2 <ceph_dashboard_base_url> <idp_metadata> {<idp_username_attribute>} {<idp_entity_id>} {<sp_x_509_cert>} {<sp_private_key>}
+
+Parameters:
+
+- **<ceph_dashboard_base_url>**: Base URL where Ceph Dashboard is accessible (e.g., `https://cephdashboard.local`)
+- **<idp_metadata>**: URL, file path or content of the IdP metadata XML (e.g., `https://myidp/metadata`)
+- **<idp_username_attribute>** *(optional)*: Attribute that should be used to get the username from the authentication response. Defaults to `uid`.
+- **<idp_entity_id>** *(optional)*: Use this when more than one entity id exists on the IdP metadata.
+- **<sp_x_509_cert> / <sp_private_key>** *(optional)*: File path or content of the certificate that should be used by Ceph Dashboard (Service Provider) for signing and encryption.
+
+
+To display the current SAML 2.0 configuration, use the following command::
+
+  $ ceph dashboard sso show saml2
+
+.. note::
+  For more information about `onelogin_settings`, please check the `onelogin documentation <https://github.com/onelogin/python-saml>`_.
+
+To disable SSO::
+
+  $ ceph dashboard sso disable
+
+To check if SSO is enabled::
+
+  $ ceph dashboard sso status
+
+To enable SSO::
+
+  $ ceph dashboard sso enable saml2
+
 Accessing the dashboard
 ^^^^^^^^^^^^^^^^^^^^^^^
 
