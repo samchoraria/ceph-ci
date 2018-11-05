@@ -2,9 +2,9 @@
 
 from __future__ import absolute_import
 
-import unittest
+import six
 
-from .helper import DashboardTestCase
+from .helper import DashboardTestCase, JObj, JList
 
 
 class ECPTest(DashboardTestCase):
@@ -98,4 +98,14 @@ class ECPTest(DashboardTestCase):
 
         self._delete('/api/erasure_code_profile/lrc')
         self.assertStatus(204)
+
+    def test_ecp_info(self):
+        self._get("/api/erasure_code_profile/_info")
+        self.assertSchemaBody(JObj({
+            'names': JList(six.string_types),
+            'failure_domains': JList(six.string_types),
+            'plugins': JList(six.string_types),
+            'devices': JList(six.string_types),
+            "directory": six.string_types,
+        }))
 
