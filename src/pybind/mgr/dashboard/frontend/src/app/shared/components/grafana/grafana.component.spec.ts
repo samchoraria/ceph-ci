@@ -5,7 +5,7 @@ import { RouterTestingModule } from '@angular/router/testing';
 import { AlertModule } from 'ngx-bootstrap/alert';
 
 import { configureTestBed } from '../../../../testing/unit-test-helper';
-import { SettingsService } from '../../../shared/api/settings.service';
+import { GrafanaService } from '../../../shared/api/grafana.service';
 import { SummaryService } from '../../../shared/services/summary.service';
 import { CephReleaseNamePipe } from '../../pipes/ceph-release-name.pipe';
 import { InfoPanelComponent } from '../info-panel/info-panel.component';
@@ -19,7 +19,7 @@ describe('GrafanaComponent', () => {
   configureTestBed({
     declarations: [GrafanaComponent, InfoPanelComponent, LoadingPanelComponent],
     imports: [AlertModule.forRoot(), HttpClientTestingModule, RouterTestingModule],
-    providers: [CephReleaseNamePipe, SettingsService, SummaryService]
+    providers: [CephReleaseNamePipe, GrafanaService, SummaryService]
   });
 
   beforeEach(() => {

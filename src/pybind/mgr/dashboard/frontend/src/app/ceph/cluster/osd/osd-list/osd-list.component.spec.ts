@@ -47,6 +47,7 @@ describe('OsdListComponent', () => {
     component.selection.selected = selection;
     component.selection.update();
     component.osds = data;
+    component.permissions = fakeAuthStorageService.getPermissions();
   };
 
   const openActionModal = (actionName) => {
@@ -105,7 +106,7 @@ describe('OsdListComponent', () => {
     };
 
     beforeEach(() => {
-      permissionHelper = new PermissionHelper(component.permission, () =>
+      permissionHelper = new PermissionHelper(component.permissions.osd, () =>
         getTableActionComponent()
       );
       scenario = {

@@ -4,7 +4,9 @@ import { RgwDaemonService } from '../../../shared/api/rgw-daemon.service';
 import { CdTableColumn } from '../../../shared/models/cd-table-column';
 import { CdTableFetchDataContext } from '../../../shared/models/cd-table-fetch-data-context';
 import { CdTableSelection } from '../../../shared/models/cd-table-selection';
+import { Permission } from '../../../shared/models/permissions';
 import { CephShortVersionPipe } from '../../../shared/pipes/ceph-short-version.pipe';
+import { AuthStorageService } from '../../../shared/services/auth-storage.service';
 
 @Component({
   selector: 'cd-rgw-daemon-list',
@@ -15,11 +17,14 @@ export class RgwDaemonListComponent {
   columns: CdTableColumn[] = [];
   daemons: object[] = [];
   selection: CdTableSelection = new CdTableSelection();
+  grafanaPermission: Permission;
 
   constructor(
     private rgwDaemonService: RgwDaemonService,
+    private authStorageService: AuthStorageService,
     cephShortVersionPipe: CephShortVersionPipe
   ) {
+    this.grafanaPermission = this.authStorageService.getPermissions().grafana;
     this.columns = [
       {
         name: 'ID',
