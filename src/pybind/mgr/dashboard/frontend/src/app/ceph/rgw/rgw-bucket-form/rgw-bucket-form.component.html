@@ -42,36 +42,36 @@
 
         <!-- Name -->
         <div class="form-group"
-             [ngClass]="{'has-error': bucketForm.showError('bucket', frm)}">
+             [ngClass]="{'has-error': bucketForm.showError('bid', frm)}">
           <label i18n
                  class="control-label col-sm-3"
-                 for="bucket">Name
+                 for="bid">Name
             <span class="required"
                   *ngIf="!editing"></span>
           </label>
           <div class="col-sm-9">
-            <input id="bucket"
-                   name="bucket"
+            <input id="bid"
+                   name="bid"
                    class="form-control"
                    type="text"
                    i18n-placeholder
                    placeholder="Name..."
-                   formControlName="bucket"
+                   formControlName="bid"
                    [readonly]="editing"
                    autofocus>
             <span i18n
                   class="help-block"
-                  *ngIf="bucketForm.showError('bucket', frm, 'required')">
+                  *ngIf="bucketForm.showError('bid', frm, 'required')">
               This field is required.
             </span>
             <span i18n
                   class="help-block"
-                  *ngIf="bucketForm.showError('bucket', frm, 'bucketNameInvalid')">
+                  *ngIf="bucketForm.showError('bid', frm, 'bucketNameInvalid')">
               The value is not valid.
             </span>
             <span i18n
                   class="help-block"
-                  *ngIf="bucketForm.showError('bucket', frm, 'bucketNameExists')">
+                  *ngIf="bucketForm.showError('bid', frm, 'bucketNameExists')">
               The chosen name is already in use.
             </span>
           </div>
