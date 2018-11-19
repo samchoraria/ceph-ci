@@ -11,7 +11,7 @@ import { CellTemplate } from '../../../../shared/enum/cell-template.enum';
 import { CdTableAction } from '../../../../shared/models/cd-table-action';
 import { CdTableColumn } from '../../../../shared/models/cd-table-column';
 import { CdTableSelection } from '../../../../shared/models/cd-table-selection';
-import { Permission } from '../../../../shared/models/permissions';
+import { Permissions } from '../../../../shared/models/permissions';
 import { DimlessBinaryPipe } from '../../../../shared/pipes/dimless-binary.pipe';
 import { AuthStorageService } from '../../../../shared/services/auth-storage.service';
 import { OsdFlagsModalComponent } from '../osd-flags-modal/osd-flags-modal.component';
@@ -39,7 +39,7 @@ export class OsdListComponent implements OnInit {
   @ViewChild('safeToDestroyBodyTpl')
   safeToDestroyBodyTpl: TemplateRef<any>;
 
-  permission: Permission;
+  permissions: Permissions;
   tableActions: CdTableAction[];
   bsModalRef: BsModalRef;
   columns: CdTableColumn[];
@@ -57,7 +57,7 @@ export class OsdListComponent implements OnInit {
     private dimlessBinaryPipe: DimlessBinaryPipe,
     private modalService: BsModalService
   ) {
-    this.permission = this.authStorageService.getPermissions().osd;
+    this.permissions = this.authStorageService.getPermissions();
     this.tableActions = [
       {
         name: 'Scrub',

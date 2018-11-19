@@ -36,7 +36,7 @@ describe('PoolListComponent', () => {
   beforeEach(() => {
     fixture = TestBed.createComponent(PoolListComponent);
     component = fixture.componentInstance;
-    component.permission.read = true;
+    component.permissions.pool.read = true;
     poolService = TestBed.get(PoolService);
     fixture.detectChanges();
   });
