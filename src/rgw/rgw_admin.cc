@@ -180,8 +180,8 @@ void usage()
   cout << "                             (NOTE: required to specify formatting of date\n";
   cout << "                             to \"YYYY-MM-DD-hh\")\n";
   cout << "  log rm                     remove log object\n";
-  cout << "  usage show                 show usage (by user, date range)\n";
-  cout << "  usage trim                 trim usage (by user, date range)\n";
+  cout << "  usage show                 show usage (by user, by bucket, date range)\n";
+  cout << "  usage trim                 trim usage (by user, by bucket, date range)\n";
   cout << "  usage clear                reset all the usage stats for the cluster\n";
   cout << "  gc list                    dump expired garbage collection objects (specify\n";
   cout << "                             --include-all to list all entries, including unexpired)\n";
@@ -934,7 +934,7 @@ static int get_cmd(const char *cmd, const char *prev_cmd, const char *prev_prev_
   } else if (strcmp(prev_cmd, "role") == 0) {
     if (strcmp(cmd, "create") == 0)
       return OPT_ROLE_CREATE;
-    if (strcmp(cmd, "delete") == 0)
+    if (strcmp(cmd, "rm") == 0)
       return OPT_ROLE_DELETE;
     if (strcmp(cmd, "get") == 0)
       return OPT_ROLE_GET;
@@ -5090,26 +5090,20 @@ int main(int argc, const char **argv)
         return -EINVAL;
       }
 
-      /* The following two calls will be replaced by read_decode_json or something
-         similar when the code for AWS Policies is in place */
-      bufferlist bl;
-      int ret = read_input(assume_role_doc, bl);
-      if (ret < 0) {
-        cerr << "ERROR: failed to read input: " << cpp_strerror(-ret) << std::endl;
-        return ret;
-      }
-      JSONParser p;
-      if (!p.parse(bl.c_str(), bl.length())) {
-        cout << "ERROR: failed to parse JSON: " << assume_role_doc << std::endl;
+      bufferlist bl = bufferlist::static_from_string(assume_role_doc);
+      try {
+        const rgw::IAM::Policy p(g_ceph_context, tenant, bl);
+      } catch (rgw::IAM::PolicyParseException& e) {
+        cerr << "failed to parse policy: " << e.what() << std::endl;
         return -EINVAL;
       }
-      string trust_policy = bl.to_str();
+
       RGWRole role(g_ceph_context, store, role_name, tenant);
       ret = role.get();
       if (ret < 0) {
         return -ret;
       }
-      role.update_trust_policy(trust_policy);
+      role.update_trust_policy(assume_role_doc);
       ret = role.update();
       if (ret < 0) {
         return -ret;
@@ -5585,7 +5579,7 @@ next:
     }
 
 
-    ret = RGWUsage::show(store, user_id, start_epoch, end_epoch,
+    ret = RGWUsage::show(store, user_id, bucket_name, start_epoch, end_epoch,
 			 show_log_entries, show_log_sum, &categories,
 			 f);
     if (ret < 0) {
@@ -5595,8 +5589,9 @@ next:
   }
 
   if (opt_cmd == OPT_USAGE_TRIM) {
-    if (user_id.empty() && !yes_i_really_mean_it) {
-      cerr << "usage trim without user specified will remove *all* users data" << std::endl;
+    if (user_id.empty() && bucket_name.empty() &&
+	start_date.empty() && end_date.empty() && !yes_i_really_mean_it) {
+      cerr << "usage trim without user/date/bucket specified will remove *all* users data" << std::endl;
       cerr << "do you really mean it? (requires --yes-i-really-mean-it)" << std::endl;
       return 1;
     }
@@ -5621,7 +5616,7 @@ next:
       }
     }
 
-    ret = RGWUsage::trim(store, user_id, start_epoch, end_epoch);
+    ret = RGWUsage::trim(store, user_id, bucket_name, start_epoch, end_epoch);
     if (ret < 0) {
       cerr << "ERROR: read_usage() returned ret=" << ret << std::endl;
       return 1;

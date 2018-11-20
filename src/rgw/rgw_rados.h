@@ -1442,9 +1442,10 @@ public:
 
   // log bandwidth info
   int log_usage(map<rgw_user_bucket, RGWUsageBatch>& usage_info);
-  int read_usage(const rgw_user& user, uint64_t start_epoch, uint64_t end_epoch, uint32_t max_entries,
-                 bool *is_truncated, RGWUsageIter& read_iter, map<rgw_user_bucket, rgw_usage_log_entry>& usage);
-  int trim_usage(rgw_user& user, uint64_t start_epoch, uint64_t end_epoch);
+  int read_usage(const rgw_user& user, const string& bucket_name, uint64_t start_epoch, uint64_t end_epoch,
+                 uint32_t max_entries, bool *is_truncated, RGWUsageIter& read_iter, map<rgw_user_bucket,
+		 rgw_usage_log_entry>& usage);
+  int trim_usage(const rgw_user& user, const string& bucket_name, uint64_t start_epoch, uint64_t end_epoch);
   int clear_usage();
 
   int create_pool(const rgw_pool& pool);
@@ -2222,9 +2223,11 @@ public:
   int bi_remove(BucketShard& bs);
 
   int cls_obj_usage_log_add(const string& oid, rgw_usage_log_info& info);
-  int cls_obj_usage_log_read(string& oid, string& user, uint64_t start_epoch, uint64_t end_epoch, uint32_t max_entries,
-                             string& read_iter, map<rgw_user_bucket, rgw_usage_log_entry>& usage, bool *is_truncated);
-  int cls_obj_usage_log_trim(string& oid, string& user, uint64_t start_epoch, uint64_t end_epoch);
+  int cls_obj_usage_log_read(const string& oid, const string& user, const string& bucket, uint64_t start_epoch,
+                             uint64_t end_epoch, uint32_t max_entries, string& read_iter, map<rgw_user_bucket,
+			     rgw_usage_log_entry>& usage, bool *is_truncated);
+  int cls_obj_usage_log_trim(const string& oid, const string& user, const string& bucket, uint64_t start_epoch,
+                             uint64_t end_epoch);
   int cls_obj_usage_log_clear(string& oid);
 
   int key_to_shard_id(const string& key, int max_shards);
@@ -2320,7 +2323,7 @@ public:
   int cls_user_get_bucket_stats(const rgw_bucket& bucket, cls_user_bucket_entry& entry);
 
   int check_quota(const rgw_user& bucket_owner, rgw_bucket& bucket,
-                  RGWQuotaInfo& user_quota, RGWQuotaInfo& bucket_quota, uint64_t obj_size);
+                  RGWQuotaInfo& user_quota, RGWQuotaInfo& bucket_quota, uint64_t obj_size, bool check_size_only = false);
 
   int check_bucket_shards(const RGWBucketInfo& bucket_info, const rgw_bucket& bucket,
 			  RGWQuotaInfo& bucket_quota);
