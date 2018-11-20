@@ -3127,11 +3127,14 @@ int RGWPutObj::verify_permission()
           else if (usr_policy_res == Effect::Allow)
             break;
         }
-	auto e = policy->eval(s->env, *s->auth.identity,
+  rgw::IAM::Effect e = Effect::Pass;
+  if (policy) {
+	  e = policy->eval(s->env, *s->auth.identity,
 			      cs_object.instance.empty() ?
 			      rgw::IAM::s3GetObject :
 			      rgw::IAM::s3GetObjectVersion,
 			      rgw::IAM::ARN(obj));
+  }
 	if (e == Effect::Deny) {
 	  return -EACCES; 
 	} else if (usr_policy_res == Effect::Pass && e == Effect::Pass &&
@@ -3154,9 +3157,13 @@ int RGWPutObj::verify_permission()
                                                 rgw_obj(s->bucket, s->object));
     if (usr_policy_res == Effect::Deny)
       return -EACCES;
-    auto e = s->iam_policy->eval(s->env, *s->auth.identity,
-				 rgw::IAM::s3PutObject,
-				 rgw_obj(s->bucket, s->object));
+
+    rgw::IAM::Effect e = Effect::Pass;
+    if (s->iam_policy) {
+      e = s->iam_policy->eval(s->env, *s->auth.identity,
+          rgw::IAM::s3PutObject,
+          rgw_obj(s->bucket, s->object));
+    }
     if (e == Effect::Allow) {
       return 0;
     } else if (e == Effect::Deny) {
@@ -3882,9 +3889,13 @@ void RGWPostObj::execute()
       op_ret = -EACCES;
       return;
     }
-    auto e = s->iam_policy->eval(s->env, *s->auth.identity,
+
+    rgw::IAM::Effect e = Effect::Pass;
+    if (s->iam_policy) {
+      e = s->iam_policy->eval(s->env, *s->auth.identity,
 				 rgw::IAM::s3PutObject,
 				 rgw_obj(s->bucket, s->object));
+    }
     if (e == Effect::Deny) {
       op_ret = -EACCES;
       return;
@@ -4402,11 +4413,15 @@ int RGWDeleteObj::verify_permission()
     if (usr_policy_res == Effect::Deny) {
       return false;
     }
-    auto r = s->iam_policy->eval(s->env, *s->auth.identity,
+
+    rgw::IAM::Effect r = Effect::Pass;
+    if (s->iam_policy) {
+      r = s->iam_policy->eval(s->env, *s->auth.identity,
 				 s->object.instance.empty() ?
 				 rgw::IAM::s3DeleteObject :
 				 rgw::IAM::s3DeleteObjectVersion,
 				 ARN(s->bucket, s->object.name));
+    }
     if (r == Effect::Allow)
       return 0;
     else if (r == Effect::Deny)
@@ -5329,9 +5344,13 @@ int RGWInitMultipart::verify_permission()
     if (usr_policy_res == Effect::Deny) {
       return -EACCES;
     }
-    auto e = s->iam_policy->eval(s->env, *s->auth.identity,
+
+    rgw::IAM::Effect e = Effect::Pass;
+    if (s->iam_policy) {
+      e = s->iam_policy->eval(s->env, *s->auth.identity,
 				 rgw::IAM::s3PutObject,
 				 rgw_obj(s->bucket, s->object));
+    }
     if (e == Effect::Allow) {
       return 0;
     } else if (e == Effect::Deny) {
@@ -5458,9 +5477,13 @@ int RGWCompleteMultipart::verify_permission()
     if (usr_policy_res == Effect::Deny) {
       return -EACCES;
     }
-    auto e = s->iam_policy->eval(s->env, *s->auth.identity,
+
+    rgw::IAM::Effect e = Effect::Pass;
+    if (s->iam_policy) {
+      e = s->iam_policy->eval(s->env, *s->auth.identity,
 				 rgw::IAM::s3PutObject,
 				 rgw_obj(s->bucket, s->object));
+    }
     if (e == Effect::Allow) {
       return 0;
     } else if (e == Effect::Deny) {
@@ -5786,9 +5809,12 @@ int RGWAbortMultipart::verify_permission()
       return -EACCES;
     }
 
-    auto e = s->iam_policy->eval(s->env, *s->auth.identity,
+    rgw::IAM::Effect e = Effect::Pass;
+    if (s->iam_policy) {
+      e = s->iam_policy->eval(s->env, *s->auth.identity,
 				 rgw::IAM::s3AbortMultipartUpload,
 				 rgw_obj(s->bucket, s->object));
+    }
     if (e == Effect::Allow) {
       return 0;
     } else if (e == Effect::Deny) {
@@ -6006,12 +6032,16 @@ void RGWDeleteMultiObj::execute()
         send_partial_response(*iter, false, "", -EACCES);
         continue;
       }
-      auto e = s->iam_policy->eval(s->env,
+
+      rgw::IAM::Effect e = Effect::Pass;
+      if (s->iam_policy) {
+        e = s->iam_policy->eval(s->env,
 				   *s->auth.identity,
 				   iter->instance.empty() ?
 				   rgw::IAM::s3DeleteObject :
 				   rgw::IAM::s3DeleteObjectVersion,
 				   obj);
+      }
       if ((e == Effect::Deny) ||
 	  (usr_policy_res == Effect::Pass && e == Effect::Pass && !acl_allowed)) {
 	send_partial_response(*iter, false, "", -EACCES);
