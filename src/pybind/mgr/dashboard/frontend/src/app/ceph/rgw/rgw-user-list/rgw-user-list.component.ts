@@ -63,7 +63,8 @@ export class RgwUserListComponent {
         flexGrow: 1
       }
     ];
-    const getUserUri = () => this.selection.first() && this.selection.first().user_id;
+    const getUserUri = () =>
+      this.selection.first() && `${encodeURIComponent(this.selection.first().user_id)}`;
     const addAction: CdTableAction = {
       permission: 'create',
       icon: 'fa-plus',

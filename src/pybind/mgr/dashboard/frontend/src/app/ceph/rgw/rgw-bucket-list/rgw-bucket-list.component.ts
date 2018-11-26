@@ -47,7 +47,7 @@ export class RgwBucketListComponent {
       }
     ];
     const getBucketUri = () =>
-      this.selection.first() && `${encodeURI(this.selection.first().bucket)}`;
+      this.selection.first() && `${encodeURIComponent(this.selection.first().bucket)}`;
     const addAction: CdTableAction = {
       permission: 'create',
       icon: 'fa-plus',
