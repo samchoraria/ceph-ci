@@ -5,7 +5,6 @@ from __future__ import absolute_import
 import json
 import logging
 from collections import namedtuple
-import threading
 import time
 
 import requests
@@ -406,7 +405,7 @@ JTuple = namedtuple('JList', ['elem_typs'])
 class JObj(namedtuple('JObj', ['sub_elems', 'allow_unknown', 'none'])):
     def __new__(cls, sub_elems, allow_unknown=False, none=False):
         """
-        :type sub_elems: dict[str, JAny | JLeaf | JList | JObj]
+        :type sub_elems: dict[str, JAny | JLeaf | JList | JObj | type]
         :type allow_unknown: bool
         :return:
         """
