@@ -4,6 +4,8 @@ import { ActivatedRoute } from '@angular/router';
 import { CephReleaseNamePipe } from '../../../shared/pipes/ceph-release-name.pipe';
 import { SummaryService } from '../../../shared/services/summary.service';
 
+import { AppConstants } from '../../../shared/constants/app.constants';
+
 @Component({
   selector: 'cd-rgw-501',
   templateUrl: './rgw-501.component.html',
@@ -13,6 +15,7 @@ export class Rgw501Component implements OnInit, OnDestroy {
   docsUrl: string;
   message = 'The Object Gateway service is not configured.';
   routeParamsSubscribe: any;
+  AppConstants = AppConstants;
 
   constructor(
     private route: ActivatedRoute,

@@ -7,6 +7,8 @@ import { GrafanaService } from '../../../shared/api/grafana.service';
 import { CephReleaseNamePipe } from '../../../shared/pipes/ceph-release-name.pipe';
 import { SummaryService } from '../../../shared/services/summary.service';
 
+import { AppConstants } from '../../../shared/constants/app.constants';
+
 @Component({
   selector: 'cd-grafana',
   templateUrl: './grafana.component.html',
@@ -27,6 +29,7 @@ export class GrafanaComponent implements OnInit, OnChanges {
   modeText = 'Change time selection';
   loading = true;
   styles = {};
+  AppConstants = AppConstants;
 
   @Input()
   grafanaPath: string;

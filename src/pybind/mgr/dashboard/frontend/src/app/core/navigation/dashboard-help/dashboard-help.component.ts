@@ -6,14 +6,16 @@ import { CephReleaseNamePipe } from '../../../shared/pipes/ceph-release-name.pip
 import { SummaryService } from '../../../shared/services/summary.service';
 import { AboutComponent } from '../about/about.component';
 
+import { AppConstants } from '../../../shared/constants/app.constants';
+
 @Component({
   selector: 'cd-dashboard-help',
   templateUrl: './dashboard-help.component.html',
   styleUrls: ['./dashboard-help.component.scss']
 })
 export class DashboardHelpComponent implements OnInit {
-  docsUrl: string;
   modalRef: BsModalRef;
+  AppConstants = AppConstants;
 
   constructor(
     private summaryService: SummaryService,
@@ -28,7 +30,6 @@ export class DashboardHelpComponent implements OnInit {
       }
 
       const releaseName = this.cephReleaseNamePipe.transform(summary.version);
-      this.docsUrl = `http://docs.ceph.com/docs/${releaseName}/mgr/dashboard/`;
 
       setTimeout(() => {
         subs.unsubscribe();

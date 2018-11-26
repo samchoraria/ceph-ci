@@ -11,8 +11,8 @@
     <li>
       <a i18n
          class="dropdown-item"
-         [ngClass]="{'disabled': !docsUrl}"
-         href="{{ docsUrl }}"
+         [ngClass]="{'disabled': !AppConstants.docs_uri }"
+         href="{{ AppConstants.docs_uri }}"
          target="_blank">Documentation</a>
     </li>
     <li>
