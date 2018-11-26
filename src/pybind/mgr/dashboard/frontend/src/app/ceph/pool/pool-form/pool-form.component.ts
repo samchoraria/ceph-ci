@@ -22,6 +22,8 @@ import { Pool } from '../pool';
 import { PoolFormData } from './pool-form-data';
 import { PoolFormInfo } from './pool-form-info';
 
+import { AppConstants } from '../../../shared/constants/app.constants';
+
 @Component({
   selector: 'cd-pool-form',
   templateUrl: './pool-form.component.html',
@@ -40,6 +42,8 @@ export class PoolFormComponent implements OnInit {
   current = {
     rules: []
   };
+
+  AppConstants = AppConstants;
 
   constructor(
     private dimlessBinaryPipe: DimlessBinaryPipe,

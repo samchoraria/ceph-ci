@@ -5,4 +5,5 @@ export class AppConstants {
   public static readonly copyRight = 'Copyright(c) 2018 Red Hat Inc. and contributors.';
   public static readonly license = 'Licensed under Creative Commons Attribution Share Alike';
   public static readonly licenseNumber = '3.0 (CC-BY-SA-3.0).';
+  public static readonly pg_calculator_uri = 'https://access.redhat.com/labs/cephpgc/';
 }
