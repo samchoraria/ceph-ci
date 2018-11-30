@@ -13182,7 +13182,7 @@ int RGWRados::bi_get_instance(const RGWBucketInfo& bucket_info, const rgw_obj& o
                               rgw_bucket_dir_entry *dirent)
 {
   rgw_cls_bi_entry bi_entry;
-  int r = bi_get(bucket_info, obj, InstanceIdx, &bi_entry);
+  int r = bi_get(bucket_info, obj, BIIndexType::Instance, &bi_entry);
   if (r < 0 && r != -ENOENT) {
     ldout(cct, 0) << "ERROR: bi_get() returned r=" << r << dendl;
   }
@@ -13204,7 +13204,7 @@ int RGWRados::bi_get_olh(const RGWBucketInfo& bucket_info, const rgw_obj& obj,
                          rgw_bucket_olh_entry *olh)
 {
   rgw_cls_bi_entry bi_entry;
-  int r = bi_get(bucket_info, obj, OLHIdx, &bi_entry);
+  int r = bi_get(bucket_info, obj, BIIndexType::Instance, &bi_entry);
   if (r < 0 && r != -ENOENT) {
     ldout(cct, 0) << "ERROR: bi_get() returned r=" << r << dendl;
   }
