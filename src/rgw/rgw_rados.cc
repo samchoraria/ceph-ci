@@ -1755,46 +1755,6 @@ int RGWRados::open_bucket_index_ctx(const RGWBucketInfo& bucket_info, librados::
   return 0;
 }
 
-/**
- * set up a bucket listing.
- * handle is filled in.
- * Returns 0 on success, -ERR# otherwise.
- */
-int RGWRados::list_buckets_init(RGWAccessHandle *handle)
-{
-  librados::NObjectIterator *state = new librados::NObjectIterator(root_pool_ctx.nobjects_begin());
-  *handle = (RGWAccessHandle)state;
-  return 0;
-}
-
-/** 
- * get the next bucket in the listing.
- * obj is filled in,
- * handle is updated.
- * returns 0 on success, -ERR# otherwise.
- */
-int RGWRados::list_buckets_next(rgw_bucket_dir_entry& obj, RGWAccessHandle *handle)
-{
-  librados::NObjectIterator *state = (librados::NObjectIterator *)*handle;
-
-  do {
-    if (*state == root_pool_ctx.nobjects_end()) {
-      delete state;
-      return -ENOENT;
-    }
-
-    obj.key.name = (*state)->get_oid();
-    if (obj.key.name[0] == '_') {
-      obj.key.name = obj.key.name.substr(1);
-    }
-
-    (*state)++;
-  } while (obj.key.name[0] == '.'); /* skip all entries starting with '.' */
-
-  return 0;
-}
-
-
 /**** logs ****/
 
 struct log_list_state {
@@ -1986,8 +1946,9 @@ int RGWRados::log_usage(map<rgw_user_bucket, RGWUsageBatch>& usage_info)
   return 0;
 }
 
-int RGWRados::read_usage(const rgw_user& user, uint64_t start_epoch, uint64_t end_epoch, uint32_t max_entries,
-                         bool *is_truncated, RGWUsageIter& usage_iter, map<rgw_user_bucket, rgw_usage_log_entry>& usage)
+int RGWRados::read_usage(const rgw_user& user, const string& bucket_name, uint64_t start_epoch, uint64_t end_epoch,
+                         uint32_t max_entries, bool *is_truncated, RGWUsageIter& usage_iter, map<rgw_user_bucket,
+			 rgw_usage_log_entry>& usage)
 {
   uint32_t num = max_entries;
   string hash, first_hash;
@@ -2006,7 +1967,7 @@ int RGWRados::read_usage(const rgw_user& user, uint64_t start_epoch, uint64_t en
     map<rgw_user_bucket, rgw_usage_log_entry> ret_usage;
     map<rgw_user_bucket, rgw_usage_log_entry>::iterator iter;
 
-    int ret =  cls_obj_usage_log_read(hash, user_str, start_epoch, end_epoch, num,
+    int ret =  cls_obj_usage_log_read(hash, user_str, bucket_name, start_epoch, end_epoch, num,
                                     usage_iter.read_iter, ret_usage, is_truncated);
     if (ret == -ENOENT)
       goto next;
@@ -2029,7 +1990,7 @@ next:
   return 0;
 }
 
-int RGWRados::trim_usage(rgw_user& user, uint64_t start_epoch, uint64_t end_epoch)
+int RGWRados::trim_usage(const rgw_user& user, const string& bucket_name, uint64_t start_epoch, uint64_t end_epoch)
 {
   uint32_t index = 0;
   string hash, first_hash;
@@ -2038,7 +1999,7 @@ int RGWRados::trim_usage(rgw_user& user, uint64_t start_epoch, uint64_t end_epoc
 
   hash = first_hash;
   do {
-    int ret =  cls_obj_usage_log_trim(hash, user_str, start_epoch, end_epoch);
+    int ret =  cls_obj_usage_log_trim(hash, user_str, bucket_name, start_epoch, end_epoch);
 
     if (ret < 0 && ret != -ENOENT)
       return ret;
@@ -3803,63 +3764,6 @@ int RGWRados::Object::Write::write_meta(uint64_t size, uint64_t accounted_size,
     r = _do_write_meta(size, accounted_size, attrs, assume_noent, meta.modify_tail, (void *)&index_op);
   }
   return r;
-}
-
-/**
- * Write/overwrite an object to the bucket storage.
- * bucket: the bucket to store the object in
- * obj: the object name/key
- * data: the object contents/value
- * offset: the offet to write to in the object
- *         If this is -1, we will overwrite the whole object.
- * size: the amount of data to write (data must be this long)
- * attrs: all the given attrs are written to bucket storage for the given object
- * Returns: 0 on success, -ERR# otherwise.
- */
-
-int RGWRados::aio_put_obj_data(void *ctx, rgw_raw_obj& obj, bufferlist& bl,
-			       off_t ofs, bool exclusive,
-                               void **handle)
-{
-  rgw_rados_ref ref;
-  int r = get_raw_obj_ref(obj, &ref);
-  if (r < 0) {
-    return r;
-  }
-
-  AioCompletion *c = librados::Rados::aio_create_completion(NULL, NULL, NULL);
-  *handle = c;
-  
-  ObjectWriteOperation op;
-
-  if (exclusive)
-    op.create(true);
-
-  if (ofs == -1) {
-    op.write_full(bl);
-  } else {
-    op.write(ofs, bl);
-  }
-  r = ref.ioctx.aio_operate(ref.oid, c, &op);
-  if (r < 0)
-    return r;
-
-  return 0;
-}
-
-int RGWRados::aio_wait(void *handle)
-{
-  AioCompletion *c = (AioCompletion *)handle;
-  c->wait_for_safe();
-  int ret = c->get_return_value();
-  c->release();
-  return ret;
-}
-
-bool RGWRados::aio_completed(void *handle)
-{
-  AioCompletion *c = (AioCompletion *)handle;
-  return c->is_safe();
 }
 
 class RGWRadosPutObj : public RGWHTTPStreamRWRequest::ReceiveCB
@@ -8472,9 +8376,19 @@ int RGWRados::pool_iterate_begin(const rgw_pool& pool, const string& cursor, RGW
     return -EINVAL;
   }
 
-  iter = io_ctx.nobjects_begin(oc);
-
-  return 0;
+  try {
+    iter = io_ctx.nobjects_begin(oc);
+    return 0;
+  } catch (const std::system_error& e) {
+    r = -e.code().value();
+    ldout(cct, 10) << "nobjects_begin threw " << e.what()
+       << ", returning " << r << dendl;
+    return r;
+  } catch (const std::exception& e) {
+    ldout(cct, 10) << "nobjects_begin threw " << e.what()
+       << ", returning -5" << dendl;
+    return -EIO;
+  }
 }
 
 string RGWRados::pool_iterate_get_cursor(RGWPoolIterCtx& ctx)
@@ -8482,7 +8396,8 @@ string RGWRados::pool_iterate_get_cursor(RGWPoolIterCtx& ctx)
   return ctx.iter.get_cursor().to_str();
 }
 
-int RGWRados::pool_iterate(RGWPoolIterCtx& ctx, uint32_t num, vector<rgw_bucket_dir_entry>& objs,
+static int do_pool_iterate(CephContext* cct, RGWPoolIterCtx& ctx, uint32_t num,
+                           vector<rgw_bucket_dir_entry>& objs,
                            bool *is_truncated, RGWAccessListFilter *filter)
 {
   librados::IoCtx& io_ctx = ctx.io_ctx;
@@ -8511,6 +8426,24 @@ int RGWRados::pool_iterate(RGWPoolIterCtx& ctx, uint32_t num, vector<rgw_bucket_
     *is_truncated = (iter != io_ctx.nobjects_end());
 
   return objs.size();
+}
+
+int RGWRados::pool_iterate(RGWPoolIterCtx& ctx, uint32_t num, vector<rgw_bucket_dir_entry>& objs,
+                           bool *is_truncated, RGWAccessListFilter *filter)
+{
+  // catch exceptions from NObjectIterator::operator++()
+  try {
+    return do_pool_iterate(cct, ctx, num, objs, is_truncated, filter);
+  } catch (const std::system_error& e) {
+    int r = -e.code().value();
+    ldout(cct, 10) << "NObjectIterator threw exception " << e.what()
+       << ", returning " << r << dendl;
+    return r;
+  } catch (const std::exception& e) {
+    ldout(cct, 10) << "NObjectIterator threw exception " << e.what()
+       << ", returning -5" << dendl;
+    return -EIO;
+  }
 }
 
 int RGWRados::list_raw_objects_init(const rgw_pool& pool, const string& marker, RGWListRawObjsCtx *ctx)
@@ -9249,8 +9182,10 @@ int RGWRados::cls_obj_usage_log_add(const string& oid,
   return r;
 }
 
-int RGWRados::cls_obj_usage_log_read(string& oid, string& user, uint64_t start_epoch, uint64_t end_epoch, uint32_t max_entries,
-                                     string& read_iter, map<rgw_user_bucket, rgw_usage_log_entry>& usage, bool *is_truncated)
+int RGWRados::cls_obj_usage_log_read(const string& oid, const string& user, const string& bucket,
+                                     uint64_t start_epoch, uint64_t end_epoch, uint32_t max_entries,
+                                     string& read_iter, map<rgw_user_bucket, rgw_usage_log_entry>& usage,
+				     bool *is_truncated)
 {
   rgw_raw_obj obj(svc.zone->get_zone_params().usage_log_pool, oid);
 
@@ -9262,13 +9197,14 @@ int RGWRados::cls_obj_usage_log_read(string& oid, string& user, uint64_t start_e
 
   *is_truncated = false;
 
-  r = cls_rgw_usage_log_read(ref.ioctx, ref.oid, user, start_epoch, end_epoch,
+  r = cls_rgw_usage_log_read(ref.ioctx, ref.oid, user, bucket, start_epoch, end_epoch,
 			     max_entries, read_iter, usage, is_truncated);
 
   return r;
 }
 
-int RGWRados::cls_obj_usage_log_trim(string& oid, string& user, uint64_t start_epoch, uint64_t end_epoch)
+int RGWRados::cls_obj_usage_log_trim(const string& oid, const string& user, const string& bucket,
+                                    uint64_t start_epoch, uint64_t end_epoch)
 {
   rgw_raw_obj obj(svc.zone->get_zone_params().usage_log_pool, oid);
 
@@ -9278,7 +9214,7 @@ int RGWRados::cls_obj_usage_log_trim(string& oid, string& user, uint64_t start_e
     return r;
   }
 
-  r = cls_rgw_usage_log_trim(ref.ioctx, ref.oid, user, start_epoch, end_epoch);
+  r = cls_rgw_usage_log_trim(ref.ioctx, ref.oid, user, bucket, start_epoch, end_epoch);
   return r;
 }
 
@@ -9750,8 +9686,12 @@ int RGWRados::add_bucket_to_reshard(const RGWBucketInfo& bucket_info, uint32_t n
 }
 
 int RGWRados::check_quota(const rgw_user& bucket_owner, rgw_bucket& bucket,
-                          RGWQuotaInfo& user_quota, RGWQuotaInfo& bucket_quota, uint64_t obj_size)
+                          RGWQuotaInfo& user_quota, RGWQuotaInfo& bucket_quota, uint64_t obj_size, bool check_size_only)
 {
+  // if we only check size, then num_objs will set to 0
+  if(check_size_only)
+    return quota_handler->check_quota(bucket_owner, bucket, user_quota, bucket_quota, 0, obj_size);
+
   return quota_handler->check_quota(bucket_owner, bucket, user_quota, bucket_quota, 1, obj_size);
 }
 

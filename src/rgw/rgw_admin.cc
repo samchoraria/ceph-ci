@@ -180,8 +180,8 @@ void usage()
   cout << "                             (NOTE: required to specify formatting of date\n";
   cout << "                             to \"YYYY-MM-DD-hh\")\n";
   cout << "  log rm                     remove log object\n";
-  cout << "  usage show                 show usage (by user, date range)\n";
-  cout << "  usage trim                 trim usage (by user, date range)\n";
+  cout << "  usage show                 show usage (by user, by bucket, date range)\n";
+  cout << "  usage trim                 trim usage (by user, by bucket, date range)\n";
   cout << "  usage clear                reset all the usage stats for the cluster\n";
   cout << "  gc list                    dump expired garbage collection objects (specify\n";
   cout << "                             --include-all to list all entries, including unexpired)\n";
@@ -219,6 +219,8 @@ void usage()
   cout << "  reshard status             read bucket resharding status\n";
   cout << "  reshard process            process of scheduled reshard jobs\n";
   cout << "  reshard cancel             cancel resharding a bucket\n";
+  cout << "  reshard stale-instances list list stale-instances from bucket resharding\n";
+  cout << "  reshard stale-instances rm   cleanup stale-instances from bucket resharding\n";
   cout << "  sync error list            list sync error\n";
   cout << "  sync error trim            trim sync error\n";
   cout << "  mfa create                 create a new MFA TOTP token\n";
@@ -525,6 +527,8 @@ enum {
   OPT_MFA_LIST,
   OPT_MFA_CHECK,
   OPT_MFA_RESYNC,
+  OPT_RESHARD_STALE_INSTANCES_LIST,
+  OPT_RESHARD_STALE_INSTANCES_DELETE
 };
 
 static int get_cmd(const char *cmd, const char *prev_cmd, const char *prev_prev_cmd, bool *need_more)
@@ -560,6 +564,7 @@ static int get_cmd(const char *cmd, const char *prev_cmd, const char *prev_prev_
       strcmp(cmd, "realm") == 0 ||
       strcmp(cmd, "role") == 0 ||
       strcmp(cmd, "role-policy") == 0 ||
+      strcmp(cmd, "stale-instances") == 0 ||
       strcmp(cmd, "subuser") == 0 ||
       strcmp(cmd, "sync") == 0 ||
       strcmp(cmd, "usage") == 0 ||
@@ -934,7 +939,7 @@ static int get_cmd(const char *cmd, const char *prev_cmd, const char *prev_prev_
   } else if (strcmp(prev_cmd, "role") == 0) {
     if (strcmp(cmd, "create") == 0)
       return OPT_ROLE_CREATE;
-    if (strcmp(cmd, "delete") == 0)
+    if (strcmp(cmd, "rm") == 0)
       return OPT_ROLE_DELETE;
     if (strcmp(cmd, "get") == 0)
       return OPT_ROLE_GET;
@@ -977,8 +982,13 @@ static int get_cmd(const char *cmd, const char *prev_cmd, const char *prev_prev_
       return OPT_MFA_CHECK;
     if (strcmp(cmd, "resync") == 0)
       return OPT_MFA_RESYNC;
+  } else if ((prev_prev_cmd && strcmp(prev_prev_cmd, "reshard") == 0) &&
+	     (strcmp(prev_cmd, "stale-instances") == 0)) {
+    if (strcmp(cmd, "list") == 0)
+      return OPT_RESHARD_STALE_INSTANCES_LIST;
+    if (match_str(cmd, "rm", "delete"))
+      return OPT_RESHARD_STALE_INSTANCES_DELETE;
   }
-
   return -EINVAL;
 }
 
@@ -4854,6 +4864,10 @@ int main(int argc, const char **argv)
 
   switch (opt_cmd) {
   case OPT_USER_INFO:
+    if (user_id.empty()) {
+      cerr << "ERROR: uid not specified" << std::endl;
+      return EINVAL;
+    }
     break;
   case OPT_USER_CREATE:
     if (!user_op.has_existing_user()) {
@@ -5090,26 +5104,20 @@ int main(int argc, const char **argv)
         return -EINVAL;
       }
 
-      /* The following two calls will be replaced by read_decode_json or something
-         similar when the code for AWS Policies is in place */
-      bufferlist bl;
-      int ret = read_input(assume_role_doc, bl);
-      if (ret < 0) {
-        cerr << "ERROR: failed to read input: " << cpp_strerror(-ret) << std::endl;
-        return ret;
-      }
-      JSONParser p;
-      if (!p.parse(bl.c_str(), bl.length())) {
-        cout << "ERROR: failed to parse JSON: " << assume_role_doc << std::endl;
+      bufferlist bl = bufferlist::static_from_string(assume_role_doc);
+      try {
+        const rgw::IAM::Policy p(g_ceph_context, tenant, bl);
+      } catch (rgw::IAM::PolicyParseException& e) {
+        cerr << "failed to parse policy: " << e.what() << std::endl;
         return -EINVAL;
       }
-      string trust_policy = bl.to_str();
+
       RGWRole role(g_ceph_context, store, role_name, tenant);
       ret = role.get();
       if (ret < 0) {
         return -ret;
       }
-      role.update_trust_policy(trust_policy);
+      role.update_trust_policy(assume_role_doc);
       ret = role.update();
       if (ret < 0) {
         return -ret;
@@ -5585,7 +5593,7 @@ next:
     }
 
 
-    ret = RGWUsage::show(store, user_id, start_epoch, end_epoch,
+    ret = RGWUsage::show(store, user_id, bucket_name, start_epoch, end_epoch,
 			 show_log_entries, show_log_sum, &categories,
 			 f);
     if (ret < 0) {
@@ -5595,8 +5603,9 @@ next:
   }
 
   if (opt_cmd == OPT_USAGE_TRIM) {
-    if (user_id.empty() && !yes_i_really_mean_it) {
-      cerr << "usage trim without user specified will remove *all* users data" << std::endl;
+    if (user_id.empty() && bucket_name.empty() &&
+	start_date.empty() && end_date.empty() && !yes_i_really_mean_it) {
+      cerr << "usage trim without user/date/bucket specified will remove *all* users data" << std::endl;
       cerr << "do you really mean it? (requires --yes-i-really-mean-it)" << std::endl;
       return 1;
     }
@@ -5621,7 +5630,7 @@ next:
       }
     }
 
-    ret = RGWUsage::trim(store, user_id, start_epoch, end_epoch);
+    ret = RGWUsage::trim(store, user_id, bucket_name, start_epoch, end_epoch);
     if (ret < 0) {
       cerr << "ERROR: read_usage() returned ret=" << ret << std::endl;
       return 1;
@@ -7631,7 +7640,21 @@ next:
       return -ret;
     }
 
-  }
+ }
 
-  return 0;
+ if (opt_cmd == OPT_RESHARD_STALE_INSTANCES_LIST) {
+   ret = RGWBucketAdminOp::list_stale_instances(store, bucket_op,f);
+   if (ret < 0) {
+     cerr << "ERROR: listing stale instances" << cpp_strerror(-ret) << std::endl;
+   }
+ }
+
+ if (opt_cmd == OPT_RESHARD_STALE_INSTANCES_DELETE) {
+   ret = RGWBucketAdminOp::clear_stale_instances(store, bucket_op,f);
+   if (ret < 0) {
+     cerr << "ERROR: deleting stale instances" << cpp_strerror(-ret) << std::endl;
+   }
+ }
+
+ return 0;
 }

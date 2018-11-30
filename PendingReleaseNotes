@@ -66,6 +66,9 @@
 * The `ceph` command line tool now accepts keyword arguments in
   the format "--arg=value" or "--arg value".
 
+* librados::IoCtx::nobjects_begin() and librados::NObjectIterator now communicate
+  errors by throwing a std::system_error exception instead of std::runtime_error.
+
 >=13.1.0
 --------
 
@@ -138,6 +141,10 @@
   option, you will need to adjust your config to set the new global option
   or revert to the default of .05 (5%).
 
+* By default, Ceph no longer issues a health warning when there are
+  misplaced objects (objects that are fully replicated but not stored
+  on the intended OSDs).  You can reenable the old warning by setting
+  ``mon_warn_on_misplaced`` to ``true``.
 
 Upgrading from Luminous
 -----------------------

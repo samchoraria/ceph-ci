@@ -121,7 +121,7 @@ class Module(MgrModule):
         self.event = Event()
 
     def is_valid_daemon_name(self, who):
-        l = cmd.get('who', '').split('.')
+        l = who.split('.')
         if len(l) != 2:
             return False
         if l[0] not in ('osd', 'mon'):
@@ -399,7 +399,9 @@ class Module(MgrModule):
         # fetch metrics
         res = {}
         ioctx = self.open_connection(create_if_missing=False)
-        if ioctx:
+        if not ioctx:
+            return 0, json.dumps(res, indent=4), ''
+        with ioctx:
             with rados.ReadOpCtx() as op:
                 omap_iter, ret = ioctx.get_omap_vals(op, "", sample or '', 500)  # fixme
                 assert ret == 0
@@ -583,8 +585,9 @@ class Module(MgrModule):
         else:
             return -1, '', 'unable to enable any disk prediction model[local/cloud]'
         try:
-            if self.remote(plugin_name, 'can_run'):
-                return self.remote(plugin_name, 'predict_life_expentancy', devid=devid)
+            can_run, _ = self.remote(plugin_name, 'can_run')
+            if can_run:
+                return self.remote(plugin_name, 'predict_life_expectancy', devid=devid)
         except:
             return -1, '', 'unable to invoke diskprediction local or remote plugin'
 
@@ -598,7 +601,8 @@ class Module(MgrModule):
         else:
             return -1, '', 'unable to enable any disk prediction model[local/cloud]'
         try:
-            if self.remote(plugin_name, 'can_run'):
+            can_run, _ = self.remote(plugin_name, 'can_run')
+            if can_run:
                 return self.remote(plugin_name, 'predict_all_devices')
         except:
             return -1, '', 'unable to invoke diskprediction local or remote plugin'

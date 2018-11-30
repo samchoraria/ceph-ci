@@ -153,6 +153,16 @@ Note:
   When using docker, as your device, you might need to run the script with sudo
   permissions.
 
+Writing End-to-End Tests
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+When writing e2e tests you don't want to recompile every time from scratch to
+try out if your test has succeeded. As usual you have your development server
+open (``npm start``) which already has compiled all files. To attach
+`Protractor <http://www.protractortest.org/>`__ to this process, instead of
+spinning up it's own server, you can use ``npm run e2e -- --dev-server-target``
+or just ``npm run e2e:dev`` which is equivalent.
+
 Further Help
 ~~~~~~~~~~~~
 
@@ -225,7 +235,7 @@ How to extract messages from source code?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 To extract the I18N messages from the templates and the TypeScript files just
-run the following command in ``src/pybind/mgr/dashboard/frontend``:
+run the following command in ``src/pybind/mgr/dashboard/frontend``::
 
   $ npm run i18n
 
@@ -238,6 +248,10 @@ parse the TypeScript files.
 
 When the command ran successfully, it should have created or updated the file
 ``src/locale/messages.xlf``.
+
+To make sure this file is always up to date in master branch, we added a
+validation in ``run-frontend-unittests.sh`` that will fail if it finds
+uncommitted translations.
 
 Supported languages
 ~~~~~~~~~~~~~~~~~~~
@@ -273,6 +287,72 @@ Each language file should be placed in ``src/locale/messages.<locale-id>.xlf``.
 For example, the path for german would be ``src/locale/messages.de-DE.xlf``.
 ``<locale-id>`` should match the id previouisly inserted in
 ``supported-languages.enum.ts``.
+
+Suggestions
+~~~~~~~~~~~
+
+Strings need to start and end in the same line as the element:
+
+.. code-block:: xml
+
+  <!-- avoid -->
+  <span i18n>
+    Foo
+  </span>
+
+  <!-- recommended -->
+  <span i18n>Foo</span>
+
+
+  <!-- avoid -->
+  <span i18n>
+    Foo bar baz.
+    Foo bar baz.
+  </span>
+
+  <!-- recommended -->
+  <span i18n>Foo bar baz.
+    Foo bar baz.</span>
+
+Isolated interpolations should not be translated:
+
+.. code-block:: xml
+
+  <!-- avoid -->
+  <span i18n>{{ foo }}</span>
+
+  <!-- recommended -->
+  <span>{{ foo }}</span>
+
+Interpolations used in a sentence should be kept in the translation:
+
+.. code-block:: xml
+
+  <!-- recommended -->
+  <span i18n>There are {{ x }} OSDs.</span>
+
+Remove elements that are outside the context of the translation:
+
+.. code-block:: xml
+
+  <!-- avoid -->
+  <label i18n>
+    Profile
+    <span class="required"></span>
+  </label>
+
+  <!-- recommended -->
+  <label>
+    <ng-container i18n>Profile<ng-container>
+    <span class="required"></span>
+  </label>
+
+Keep elements that affect the sentence:
+
+.. code-block:: xml
+
+  <!-- recommended -->
+  <span i18n>Profile <b>foo</b> will be removed.</span>
 
 Backend Development
 -------------------

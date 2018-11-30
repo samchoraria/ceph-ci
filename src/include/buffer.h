@@ -395,8 +395,7 @@ namespace buffer CEPH_BUFFER_API {
 
   private:
     template <bool is_const>
-    class CEPH_BUFFER_API iterator_impl
-      : public std::iterator<std::forward_iterator_tag, char> {
+    class CEPH_BUFFER_API iterator_impl {
     protected:
       typedef typename std::conditional<is_const,
 					const list,
@@ -407,10 +406,16 @@ namespace buffer CEPH_BUFFER_API {
       typedef typename std::conditional<is_const,
 					typename std::list<ptr>::const_iterator,
 					typename std::list<ptr>::iterator>::type list_iter_t;
+      using iterator_category = std::forward_iterator_tag;
+      using value_type = typename std::conditional<is_const, const char, char>::type;
+      using difference_type = std::ptrdiff_t;
+      using pointer = typename std::add_pointer<value_type>::type;
+      using reference = typename std::add_lvalue_reference<value_type>::type;
+
       bl_t* bl;
       list_t* ls;  // meh.. just here to avoid an extra pointer dereference..
-      unsigned off; // in bl
       list_iter_t p;
+      unsigned off; // in bl
       unsigned p_off;   // in *p
       friend class iterator_impl<true>;
 
@@ -420,7 +425,7 @@ namespace buffer CEPH_BUFFER_API {
 	: bl(0), ls(0), off(0), p_off(0) {}
       iterator_impl(bl_t *l, unsigned o=0);
       iterator_impl(bl_t *l, unsigned o, list_iter_t ip, unsigned po)
-	: bl(l), ls(&bl->_buffers), off(o), p(ip), p_off(po) {}
+	: bl(l), ls(&bl->_buffers), p(ip), off(o), p_off(po) {}
       iterator_impl(const list::iterator& i);
 
       /// get current iterator offset in buffer::list

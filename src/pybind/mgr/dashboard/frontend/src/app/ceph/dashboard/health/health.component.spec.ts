@@ -7,9 +7,8 @@ import { PopoverModule } from 'ngx-bootstrap/popover';
 import { of } from 'rxjs';
 
 import { configureTestBed, i18nProviders } from '../../../../testing/unit-test-helper';
-import { DashboardService } from '../../../shared/api/dashboard.service';
+import { HealthService } from '../../../shared/api/health.service';
 import { SharedModule } from '../../../shared/shared.module';
-import { LogColorPipe } from '../log-color.pipe';
 import { MdsSummaryPipe } from '../mds-summary.pipe';
 import { MgrSummaryPipe } from '../mgr-summary.pipe';
 import { MonSummaryPipe } from '../mon-summary.pipe';
@@ -47,7 +46,6 @@ describe('HealthComponent', () => {
       MdsSummaryPipe,
       MgrSummaryPipe,
       PgStatusStylePipe,
-      LogColorPipe,
       PgStatusPipe
     ],
     schemas: [NO_ERRORS_SCHEMA],
@@ -57,7 +55,7 @@ describe('HealthComponent', () => {
   beforeEach(() => {
     fixture = TestBed.createComponent(HealthComponent);
     component = fixture.componentInstance;
-    getHealthSpy = spyOn(TestBed.get(DashboardService), 'getHealth');
+    getHealthSpy = spyOn(TestBed.get(HealthService), 'getMinimalHealth');
   });
 
   it('should create', () => {
@@ -139,22 +137,5 @@ describe('HealthComponent', () => {
     _.each(infoGroups, (infoGroup) => {
       expect(infoGroup.querySelectorAll('cd-info-card').length).toBe(1);
     });
-  });
-
-  // @TODO: remove this test when logs are no longer in landing page
-  // See https://tracker.ceph.com/issues/24571 & https://github.com/ceph/ceph/pull/23834
-  it('should render Logs group & cards in addition to the other ones', () => {
-    const payload = _.cloneDeep(healthPayload);
-    payload['clog'] = [];
-    payload['audit_log'] = [];
-
-    getHealthSpy.and.returnValue(of(payload));
-    fixture.detectChanges();
-
-    const infoGroups = fixture.debugElement.nativeElement.querySelectorAll('cd-info-group');
-    expect(infoGroups.length).toBe(4);
-
-    const infoCards = fixture.debugElement.nativeElement.querySelectorAll('cd-info-card');
-    expect(infoCards.length).toBe(20);
   });
 });

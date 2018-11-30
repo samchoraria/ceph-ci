@@ -8,7 +8,7 @@
               (updateSelection)="updateSelection($event)"
               [updateSelectionOnRefresh]="'never'">
       <div class="table-actions btn-toolbar">
-        <cd-table-actions [permission]="permission"
+        <cd-table-actions [permission]="permissions.osd"
                           [selection]="selection"
                           class="btn-group"
                           [tableActions]="tableActions">
@@ -46,6 +46,7 @@
     </ng-template>
   </tab>
   <tab i18n-heading
+       *ngIf="permissions.grafana.read"
        heading="Overall Performance">
     <cd-grafana [grafanaPath]="'lo02I1Aiz/osd-overview?'"
                 grafanaStyle="three">
@@ -68,11 +69,9 @@
 <ng-template #criticalConfirmationTpl
              let-safeToDestroyResult="result"
              let-actionDescription="actionDescription">
-  <div *ngIf="!safeToDestroyResult['safe-to-destroy']"
+  <div *ngIf="!safeToDestroyResult['is_safe_to_destroy']"
        class="danger">
-    <cd-warning-panel>
-      {{ safeToDestroyResult.message }}
-    </cd-warning-panel>
+    <cd-warning-panel i18n>The OSD is not safe to destroy!</cd-warning-panel>
   </div>
   <ng-container i18n><strong>OSD {{ selection.first().id }}</strong> will be
   <strong>{{ actionDescription }}</strong> if you proceed.</ng-container>

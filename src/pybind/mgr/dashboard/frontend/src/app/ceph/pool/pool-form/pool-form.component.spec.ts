@@ -217,10 +217,11 @@ describe('PoolFormComponent', () => {
       ['crushRule', 'size', 'erasureProfile', 'ecOverwrites'].forEach((name) =>
         formHelper.expectValid(name)
       );
-      expect(component.compressionForm.valid).toBeTruthy();
+      expect(component.form.get('compression').valid).toBeTruthy();
     });
 
     it('validates name', () => {
+      expect(component.editing).toBeFalsy();
       formHelper.expectError('name', 'required');
       formHelper.expectValidChange('name', 'some-name');
       component.info.pool_names.push('someExistingPoolName');
@@ -298,7 +299,7 @@ describe('PoolFormComponent', () => {
       });
 
       it('is valid', () => {
-        expect(component.compressionForm.valid).toBeTruthy();
+        expect(component.form.get('compression').valid).toBeTruthy();
       });
 
       it('validates minBlobSize to be only valid between 0 and maxBlobSize', () => {
@@ -990,18 +991,19 @@ describe('PoolFormComponent', () => {
       });
 
       it('disabled inputs', () => {
-        const disabled = [
-          'name',
-          'poolType',
-          'crushRule',
-          'size',
-          'erasureProfile',
-          'ecOverwrites'
-        ];
+        const disabled = ['poolType', 'crushRule', 'size', 'erasureProfile', 'ecOverwrites'];
         disabled.forEach((controlName) => {
           return expect(form.get(controlName).disabled).toBeTruthy();
         });
-        const enabled = ['pgNum', 'mode', 'algorithm', 'minBlobSize', 'maxBlobSize', 'ratio'];
+        const enabled = [
+          'name',
+          'pgNum',
+          'mode',
+          'algorithm',
+          'minBlobSize',
+          'maxBlobSize',
+          'ratio'
+        ];
         enabled.forEach((controlName) => {
           return expect(form.get(controlName).enabled).toBeTruthy();
         });

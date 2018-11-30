@@ -17,6 +17,7 @@ import socket
 
 from paramiko import SSHException
 from ceph_manager import CephManager, write_conf
+from tarfile import ReadError
 from tasks.cephfs.filesystem import Filesystem
 from teuthology import misc as teuthology
 from teuthology import contextutil
@@ -65,6 +66,35 @@ def generate_caps(type_):
         yield '--cap'
         yield subsystem
         yield capability
+
+
+@contextlib.contextmanager
+def ceph_crash(ctx, config):
+    """
+    Gather crash dumps from /var/lib/crash
+    """
+    try:
+        yield
+
+    finally:
+        if ctx.archive is not None:
+            log.info('Archiving crash dumps...')
+            path = os.path.join(ctx.archive, 'remote')
+            try:
+                os.makedirs(path)
+            except OSError as e:
+                pass
+            for remote in ctx.cluster.remotes.iterkeys():
+                sub = os.path.join(path, remote.shortname)
+                try:
+                    os.makedirs(sub)
+                except OSError as e:
+                    pass
+                try:
+                    teuthology.pull_directory(remote, '/var/lib/ceph/crash',
+                                              os.path.join(sub, 'crash'))
+                except ReadError as e:
+                    pass
 
 
 @contextlib.contextmanager
@@ -235,10 +265,16 @@ def ceph_log(ctx, config):
 
             log.info('Archiving logs...')
             path = os.path.join(ctx.archive, 'remote')
-            os.makedirs(path)
+            try:
+                os.makedirs(path)
+            except OSError as e:
+                pass
             for remote in ctx.cluster.remotes.iterkeys():
                 sub = os.path.join(path, remote.shortname)
-                os.makedirs(sub)
+                try:
+                    os.makedirs(sub)
+                except OSError as e:
+                    pass
                 teuthology.pull_directory(remote, '/var/log/ceph',
                                           os.path.join(sub, 'log'))
 
@@ -1439,20 +1475,21 @@ def restart(ctx, config):
 
     daemons = ctx.daemons.resolve_role_list(config.get('daemons', None), CEPH_ROLE_TYPES, True)
     clusters = set()
-    manager = ctx.managers['ceph']
 
     with tweaked_option(ctx, config):
         for role in daemons:
             cluster, type_, id_ = teuthology.split_role(role)
             ctx.daemons.get_daemon(type_, id_, cluster).restart()
             clusters.add(cluster)
-
-    for dmon in daemons:
-        if '.' in dmon:
-            dm_parts = dmon.split('.')
-            if dm_parts[1].isdigit():
-                if dm_parts[0] == 'osd':
-                    manager.mark_down_osd(int(dm_parts[1]))
+    
+    for cluster in clusters:
+        manager = ctx.managers[cluster]
+        for dmon in daemons:
+            if '.' in dmon:
+                dm_parts = dmon.split('.')
+                if dm_parts[1].isdigit():
+                    if dm_parts[0] == 'osd':
+                        manager.mark_down_osd(int(dm_parts[1]))
 
     if config.get('wait-for-healthy', True):
         for cluster in clusters:
@@ -1701,6 +1738,7 @@ def task(ctx, config):
         # so they should only be run once
         subtasks = [
             lambda: ceph_log(ctx=ctx, config=None),
+            lambda: ceph_crash(ctx=ctx, config=None),
             lambda: valgrind_post(ctx=ctx, config=config),
         ]
 

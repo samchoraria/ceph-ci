@@ -6,10 +6,10 @@ import { ApiModule } from './api.module';
 @Injectable({
   providedIn: ApiModule
 })
-export class SettingsService {
+export class LogsService {
   constructor(private http: HttpClient) {}
 
-  getGrafanaApiUrl() {
-    return this.http.get('api/settings/GRAFANA_API_URL');
+  getLogs() {
+    return this.http.get('api/logs/all');
   }
 }

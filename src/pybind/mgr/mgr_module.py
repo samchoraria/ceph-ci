@@ -2,10 +2,12 @@
 import ceph_module  # noqa
 
 import logging
+import json
 import six
 import threading
-from collections import defaultdict
+from collections import defaultdict, namedtuple
 import rados
+import time
 
 PG_STATES = [
         "active",
@@ -82,7 +84,7 @@ class CommandResult(object):
     """
     Use with MgrModule.send_command
     """
-    def __init__(self, tag):
+    def __init__(self, tag=None):
         self.ev = threading.Event()
         self.outs = ""
         self.outb = ""
@@ -90,7 +92,7 @@ class CommandResult(object):
 
         # This is just a convenience for notifications from
         # C++ land, to avoid passing addresses around in messages.
-        self.tag = tag
+        self.tag = tag if tag else ""
 
     def complete(self, r, outb, outs):
         self.r = r
@@ -101,6 +103,17 @@ class CommandResult(object):
     def wait(self):
         self.ev.wait()
         return self.r, self.outb, self.outs
+
+
+class HandleCommandResult(namedtuple('HandleCommandResult', ['retval', 'stdout', 'stderr'])):
+    def __new__(cls, retval=0, odata="", rs=""):
+        """
+        Tuple containing the result of `handle_command()`
+        :param retval: return code. E.g. 0 or -errno.EINVAL
+        :param odata: data of this result.
+        :param rs: Typically used for error or status messages.
+        """
+        return super(HandleCommandResult, cls).__new__(cls, retval, odata, rs)
 
 
 class OSDMap(ceph_module.BasePyOSDMap):
@@ -563,6 +576,28 @@ class MgrModule(ceph_module.BaseMgrModule):
         """
         return self._ceph_get_daemon_status(svc_type, svc_id)
 
+    def mon_command(self, cmd_dict):
+        """
+        Helper for modules that do simple, synchronous mon command
+        execution.
+
+        See send_command for general case.
+
+        :return: status int, out std, err str
+        """
+
+        t1 = time.time()
+        result = CommandResult()
+        self.send_command(result, "mon", "", json.dumps(cmd_dict), "")
+        r = result.wait()
+        t2 = time.time()
+
+        self.log.debug("mon_command: '{0}' -> {1} in {2:.3f}s".format(
+            cmd_dict['prefix'], r[0], t2 - t1
+        ))
+
+        return r
+
     def send_command(self, *args, **kwargs):
         """
         Called by the plugin to send a command to the mon
@@ -619,10 +654,12 @@ class MgrModule(ceph_module.BaseMgrModule):
         output string.  The output buffer is for data results,
         the output string is for informative text.
 
-        :param string inbuf: content of any "-i <file>" supplied to ceph cli
-        :param dict cmd: from Ceph's cmdmap_t
+        :param inbuf: content of any "-i <file>" supplied to ceph cli
+        :type inbuf: str
+        :param cmd: from Ceph's cmdmap_t
+        :type cmd: dict
 
-        :return: 3-tuple of (int, str, str)
+        :return: HandleCommandResult or a 3-tuple of (int, str, str)
         """
 
         # Should never get called if they didn't declare
@@ -917,7 +954,25 @@ class MgrModule(ceph_module.BaseMgrModule):
 
     def add_osd_perf_query(self, query):
         """
-        Fetch the daemon metadata for a particular service.
+        Register an OSD perf query.  Argument is a
+        dict of the query parameters, in this form:
+
+        ::
+
+           {
+             'key_descriptor': [
+               {'type': subkey_type, 'regex': regex_pattern},
+               ...
+             ],
+             'performance_counter_descriptors': [
+               list, of, descriptor, types
+             ],
+           }
+
+        Valid subkey types: 'client_id', 'pool_id', 'object_name'
+        Valid performance counter types:
+           'write_ops', 'read_ops', 'write_bytes', 'read_bytes',
+           'write_latency', 'read_latency'
 
         :param object query: query
         :rtype: int (query id)
@@ -926,8 +981,16 @@ class MgrModule(ceph_module.BaseMgrModule):
 
     def remove_osd_perf_query(self, query_id):
         """
-        Fetch the daemon metadata for a particular service.
+        Unregister an OSD perf query.
 
         :param int query_id: query ID
         """
         return self._ceph_remove_osd_perf_query(query_id)
+
+    def get_osd_perf_counters(self, query_id):
+        """
+        Get stats collected for an OSD perf query.
+
+        :param int query_id: query ID
+        """
+        return self._ceph_get_osd_perf_counters(query_id)

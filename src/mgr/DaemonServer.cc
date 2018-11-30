@@ -905,11 +905,7 @@ bool DaemonServer::_handle_command(
       f.reset(Formatter::create("json-pretty"));
     // only include state from services that are in the persisted service map
     f->open_object_section("service_status");
-    ServiceMap s;
-    cluster_state.with_servicemap([&](const ServiceMap& service_map) {
-	s = service_map;
-      });
-    for (auto& p : s.services) {
+    for (auto& p : pending_service_map.services) {
       f->open_object_section(p.first.c_str());
       for (auto& q : p.second.daemons) {
 	f->open_object_section(q.first.c_str());
@@ -1630,12 +1626,16 @@ bool DaemonServer::_handle_command(
     key.first = who.substr(0, dot);
     key.second = who.substr(dot + 1);
     DaemonStatePtr daemon = daemon_state.get(key);
-    std::lock_guard l(daemon->lock);
     string name;
     if (!daemon) {
       ss << "no config state for daemon " << who;
-      r = -ENOENT;
-    } else if (cmd_getval(g_ceph_context, cmdctx->cmdmap, "key", name)) {
+      cmdctx->reply(-ENOENT, ss);
+      return true;
+    }
+
+    std::lock_guard l(daemon->lock);
+
+    if (cmd_getval(g_ceph_context, cmdctx->cmdmap, "key", name)) {
       auto p = daemon->config.find(name);
       if (p != daemon->config.end() &&
 	  !p->second.empty()) {
@@ -2050,9 +2050,11 @@ bool DaemonServer::_handle_command(
 
     if (f) {
       f->close_section();
-      f->flush(cmdctx->odata);
     }
     if (r != -EOPNOTSUPP) {
+      if (f) {
+	f->flush(cmdctx->odata);
+      }
       cmdctx->reply(r, ss);
       return true;
     }
@@ -2690,4 +2692,11 @@ OSDPerfMetricQueryID DaemonServer::add_osd_perf_query(
 int DaemonServer::remove_osd_perf_query(OSDPerfMetricQueryID query_id)
 {
   return osd_perf_metric_collector.remove_query(query_id);
+}
+
+int DaemonServer::get_osd_perf_counters(
+    OSDPerfMetricQueryID query_id,
+    std::map<OSDPerfMetricKey, PerformanceCounters> *counters)
+{
+  return osd_perf_metric_collector.get_counters(query_id, counters);
 }

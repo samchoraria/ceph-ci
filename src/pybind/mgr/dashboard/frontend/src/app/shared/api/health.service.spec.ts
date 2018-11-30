@@ -2,19 +2,19 @@ import { HttpClientTestingModule, HttpTestingController } from '@angular/common/
 import { TestBed } from '@angular/core/testing';
 
 import { configureTestBed } from '../../../testing/unit-test-helper';
-import { SettingsService } from './settings.service';
+import { HealthService } from './health.service';
 
-describe('SettingsService', () => {
-  let service: SettingsService;
+describe('HealthService', () => {
+  let service: HealthService;
   let httpTesting: HttpTestingController;
 
   configureTestBed({
-    providers: [SettingsService],
+    providers: [HealthService],
     imports: [HttpClientTestingModule]
   });
 
   beforeEach(() => {
-    service = TestBed.get(SettingsService);
+    service = TestBed.get(HealthService);
     httpTesting = TestBed.get(HttpTestingController);
   });
 
@@ -26,9 +26,15 @@ describe('SettingsService', () => {
     expect(service).toBeTruthy();
   });
 
-  it('should get protocol', () => {
-    service.getGrafanaApiUrl().subscribe();
-    const req = httpTesting.expectOne('api/settings/GRAFANA_API_URL');
+  it('should call getFullHealth', () => {
+    service.getFullHealth().subscribe();
+    const req = httpTesting.expectOne('api/health/full');
+    expect(req.request.method).toBe('GET');
+  });
+
+  it('should call getMinimalHealth', () => {
+    service.getMinimalHealth().subscribe();
+    const req = httpTesting.expectOne('api/health/minimal');
     expect(req.request.method).toBe('GET');
   });
 });

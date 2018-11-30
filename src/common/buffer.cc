@@ -45,7 +45,7 @@ using namespace ceph;
 #define CEPH_BUFFER_APPEND_SIZE (CEPH_BUFFER_ALLOC_UNIT - sizeof(raw_combined))
 
 #ifdef BUFFER_DEBUG
-# define bdout { std::lock_guard<ceph::spinlock> lg(ceph::spinlock()); std::cout
+# define bdout { std::lock_guard lg(ceph::spinlock()); std::cout
 # define bendl std::endl; }
 #else
 # define bdout if (0) { std::cout
@@ -824,7 +824,7 @@ using namespace ceph;
 
   template<bool is_const>
   buffer::list::iterator_impl<is_const>::iterator_impl(bl_t *l, unsigned o)
-    : bl(l), ls(&bl->_buffers), off(0), p(ls->begin()), p_off(0)
+    : bl(l), ls(&bl->_buffers), p(ls->begin()), off(0), p_off(0)
   {
     advance(o);
   }

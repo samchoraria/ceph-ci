@@ -2,19 +2,19 @@ import { HttpClientTestingModule, HttpTestingController } from '@angular/common/
 import { TestBed } from '@angular/core/testing';
 
 import { configureTestBed } from '../../../testing/unit-test-helper';
-import { DashboardService } from './dashboard.service';
+import { GrafanaService } from './grafana.service';
 
-describe('DashboardService', () => {
-  let service: DashboardService;
+describe('GrafanaService', () => {
+  let service: GrafanaService;
   let httpTesting: HttpTestingController;
 
   configureTestBed({
-    providers: [DashboardService],
+    providers: [GrafanaService],
     imports: [HttpClientTestingModule]
   });
 
   beforeEach(() => {
-    service = TestBed.get(DashboardService);
+    service = TestBed.get(GrafanaService);
     httpTesting = TestBed.get(HttpTestingController);
   });
 
@@ -26,9 +26,9 @@ describe('DashboardService', () => {
     expect(service).toBeTruthy();
   });
 
-  it('should call getHealth', () => {
-    service.getHealth().subscribe();
-    const req = httpTesting.expectOne('api/dashboard/health');
+  it('should get protocol', () => {
+    service.getGrafanaApiUrl().subscribe();
+    const req = httpTesting.expectOne('api/grafana/url');
     expect(req.request.method).toBe('GET');
   });
 });

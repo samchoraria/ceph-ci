@@ -1,7 +1,10 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 
+import { Observable } from 'rxjs';
+
 import { cdEncode } from '../decorators/cd-encode';
+import { PoolFormInfo } from '../models/pool-form-info';
 import { ApiModule } from './api.module';
 
 @cdEncode
@@ -18,8 +21,14 @@ export class PoolService {
   }
 
   update(pool) {
-    const name = pool.pool;
-    delete pool.pool;
+    let name: string;
+    if (pool.hasOwnProperty('srcpool')) {
+      name = pool.srcpool;
+      delete pool.srcpool;
+    } else {
+      name = pool.pool;
+      delete pool.pool;
+    }
     return this.http.put(`${this.apiPath}/${name}`, pool, { observe: 'response' });
   }
 
@@ -35,8 +44,8 @@ export class PoolService {
     return this.http.get(this.apiPath);
   }
 
-  getInfo() {
-    return this.http.get(`${this.apiPath}/_info`);
+  getInfo(): Observable<PoolFormInfo> {
+    return this.http.get<PoolFormInfo>(`${this.apiPath}/_info`);
   }
 
   list(attrs = []) {

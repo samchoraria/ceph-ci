@@ -104,8 +104,8 @@
                                (NOTE: required to specify formatting of date
                                to "YYYY-MM-DD-hh")
     log rm                     remove log object
-    usage show                 show usage (by user, date range)
-    usage trim                 trim usage (by user, date range)
+    usage show                 show usage (by user, by bucket, date range)
+    usage trim                 trim usage (by user, by bucket, date range)
     usage clear                reset all the usage stats for the cluster
     gc list                    dump expired garbage collection objects (specify
                                --include-all to list all entries, including unexpired)
@@ -143,6 +143,8 @@
     reshard status             read bucket resharding status
     reshard process            process of scheduled reshard jobs
     reshard cancel             cancel resharding a bucket
+    reshard stale-instances list list stale-instances from bucket resharding
+    reshard stale-instances rm   cleanup stale-instances from bucket resharding
     sync error list            list sync error
     sync error trim            trim sync error
     mfa create                 create a new MFA TOTP token
