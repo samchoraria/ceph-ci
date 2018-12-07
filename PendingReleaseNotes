@@ -48,3 +48,4 @@ notes (?))
   'damaged' state when upgrading Ceph cluster from previous version.
   The bug is fixed in v13.2.3. For ceph v13.2.2 installation, upgrading
   to v13.2.3 does not requires special action.
+
