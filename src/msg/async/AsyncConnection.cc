@@ -1044,6 +1044,8 @@ ssize_t AsyncConnection::_process_connection()
         connect_msg.protocol_version = async_msgr->get_proto_version(peer_type, true);
         connect_msg.authorizer_protocol = authorizer ? authorizer->protocol : 0;
         connect_msg.authorizer_len = authorizer ? authorizer->bl.length() : 0;
+	ldout(async_msgr->cct, 10) << __func__ << " features 0x" << std::hex
+				   << connect_msg.features << std::dec << dendl;
         if (authorizer)
           ldout(async_msgr->cct, 10) << __func__ <<  " connect_msg.authorizer_len="
                                      << connect_msg.authorizer_len << " protocol="
@@ -1090,8 +1092,8 @@ ssize_t AsyncConnection::_process_connection()
         ldout(async_msgr->cct, 20) << __func__ << " connect got reply tag " << (int)connect_reply.tag
                              << " connect_seq " << connect_reply.connect_seq << " global_seq "
                              << connect_reply.global_seq << " proto " << connect_reply.protocol_version
-                             << " flags " << (int)connect_reply.flags << " features "
-                             << connect_reply.features << dendl;
+                             << " flags " << (int)connect_reply.flags << " features 0x"
+				   << std::hex << connect_reply.features << std::dec << dendl;
         state = STATE_CONNECTING_WAIT_CONNECT_REPLY_AUTH;
 
         break;
