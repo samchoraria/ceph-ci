@@ -6615,14 +6615,19 @@ void OSD::probe_smart(const string& only_devid, ostream& ss)
   // == typedef std::map<std::string, mValue> mObject;
   json_spirit::mObject json_map;
   json_spirit::mValue smart_json;
+  json_spirit::mValue nvme_json;
 
   for (auto dev : devnames) {
+    bool is_nvme = false;
+
     // smartctl works only on physical devices; filter out any logical device
     if (dev.find("dm-") == 0) {
       continue;
     }
+    is_nvme = dev.find("nvme") == 0 ? true : false;
 
     string devid = get_device_id(dev);
+    string dev_vendor = get_device_vendor(dev);
     if (devid.size() == 0) {
       dout(10) << __func__ << " no unique id for dev " << dev << ", skipping"
 	       << dendl;
@@ -6631,6 +6636,12 @@ void OSD::probe_smart(const string& only_devid, ostream& ss)
     if (only_devid.size() && devid != only_devid) {
       continue;
     }
+    if (dev_vendor.size() == 0) {
+      dout(10) << __func__ << " unable to get vendor for dev " << dev << dendl;
+    } else {
+      dout(10) << __func__ << " get vendor for dev " << dev << " " << dev_vendor << dendl;
+    }
+
 
     std::string result;
     if (block_device_run_smartctl(("/dev/" + dev).c_str(), smart_timeout,
@@ -6648,6 +6659,33 @@ void OSD::probe_smart(const string& only_devid, ostream& ss)
       json_map[devid] = smart_json;
     }
     // no need to result.clear() or clear smart_json
+
+    // add nvme information
+    if (is_nvme) {
+      json_spirit::mObject smart_obj = smart_json.get_obj();    
+      if (dev_vendor.size() > 0) 
+      {
+        std::string nvme_result;
+        std::transform(dev_vendor.begin(), dev_vendor.end(), dev_vendor.begin(), ::tolower);
+        dout(10) << "vendor:" << dev_vendor << dendl;
+        if (block_device_run_nvme(("/dev/" + dev).c_str(), dev_vendor.c_str(), smart_timeout,
+				  &nvme_result)) {
+          dout(10) << "block_device_run_nvme failed for /dev/" << dev << dendl;
+          result = "{\"error\": \"nvme failed\", \"dev\": \"" + dev + "\", \"nvme_error\": \"" +
+            nvme_result + "\"}";            
+        }
+        if (nvme_result.size()) {          
+          dout(10) << "nvme result:" << nvme_result << dendl; 
+        }
+        if (!json_spirit::read(nvme_result, nvme_json)) {
+          derr << "nvme JSON output of /dev/" + dev + " is invalid" << dendl;
+        } else { //json is valid, assigning
+          json_spirit::mObject smart_output = smart_json.get_obj();
+          smart_output["nvme_smart_health_information_add_log"] = nvme_json;
+          json_map[devid] = smart_json;
+        }        
+      }
+    }
   }
   json_spirit::write(json_map, ss, json_spirit::pretty_print);
 }
