@@ -605,7 +605,10 @@ int block_device_run_nvme(const char *device, const char *vendor, int timeout,
   bufferlist output;
   ret = output.read_fd(nvmecli.get_stdout(), 100*1024);
   if (ret < 0) {
-    *result = std::string("failed read nvme output: ") + cpp_strerror(-ret);
+    // *result = std::string("failed read nvme output: ") + cpp_strerror(-ret);
+    bufferlist err;
+    err.read_fd(nvmecli.get_stderr(), 100 * 1024);
+    *result = std::string("failed to execute nvme: ") + err.to_str();
   } else {
     ret = 0;
     *result = output.to_str();
