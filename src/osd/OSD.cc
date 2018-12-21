@@ -6617,6 +6617,8 @@ void OSD::probe_smart(const string& only_devid, ostream& ss)
   json_spirit::mValue smart_json;
   json_spirit::mValue nvme_json;
 
+  dout(0) << __func__ << "probe_smart: " << devnames << dendl;
+
   for (auto dev : devnames) {
     bool is_nvme = false;
 
@@ -6625,11 +6627,11 @@ void OSD::probe_smart(const string& only_devid, ostream& ss)
       continue;
     }
     is_nvme = dev.find("nvme") == 0 ? true : false;
-    dout(10) << __func__ << " dev name: " << dev << dendl;
+    dout(0) << __func__ << " dev name: " << dev << dendl;
     string devid = get_device_id(dev);
     string dev_vendor = get_device_vendor(dev);
     if (devid.size() == 0) {
-      dout(10) << __func__ << " no unique id for dev " << dev << ", skipping"
+      dout(0) << __func__ << " no unique id for dev " << dev << ", skipping"
 	       << dendl;
       continue;
     }
@@ -6637,15 +6639,15 @@ void OSD::probe_smart(const string& only_devid, ostream& ss)
       continue;
     }
     if (dev_vendor.size() == 0) {
-      dout(10) << __func__ << " unable to get vendor for dev " << dev << dendl;
+      dout(0) << __func__ << " unable to get vendor for dev " << dev << dendl;
     } else {
-      dout(10) << __func__ << " get vendor for dev " << dev << " " << dev_vendor << dendl;
+      dout(0) << __func__ << " get vendor for dev " << dev << " " << dev_vendor << dendl;
     }
 
     std::string result;
     if (block_device_run_smartctl(("/dev/" + dev).c_str(), smart_timeout,
 				  &result)) {
-      dout(10) << "probe_smart_device failed for /dev/" << dev << dendl;
+      dout(0) << "probe_smart_device failed for /dev/" << dev << dendl;
       //continue;
       result = "{\"error\": \"smartctl failed\", \"dev\": \"" + dev +
 	"\", \"smartctl_error\": \"" + result + "\"}";
@@ -6656,32 +6658,32 @@ void OSD::probe_smart(const string& only_devid, ostream& ss)
       derr << "smartctl JSON output of /dev/" + dev + " is invalid" << dendl;
     } else { //json is valid, assigning
       json_map[devid] = smart_json;
-      dout(10) << "smartctl output:" << result.c_str() << dendl;
+      dout(0) << "smartctl output:" << result.c_str() << dendl;
     }
     // no need to result.clear() or clear smart_json
 
     // add nvme information
-    if (is_nvme) {
-      json_spirit::mObject smart_obj = smart_json.get_obj();    
+    if (is_nvme) { 
       if (dev_vendor.size() > 0) 
       {
         std::string nvme_result;
         std::transform(dev_vendor.begin(), dev_vendor.end(), dev_vendor.begin(), ::tolower);
-        dout(10) << "vendor:" << dev_vendor << dendl;
+        dout(0) << "vendor:" << dev_vendor << dendl;
         if (block_device_run_nvme(("/dev/" + dev).c_str(), dev_vendor.c_str(), smart_timeout,
 				  &nvme_result)) {
-          dout(10) << "block_device_run_nvme failed for /dev/" << dev << dendl;         
+          dout(0) << "block_device_run_nvme failed for /dev/" << dev << dendl;         
         } else {
+          //smart_json.insert(make_pair("nvme_smart_health_information_add_log", nvme_result));
           if (!json_spirit::read(nvme_result, nvme_json)) {
             derr << "nvme JSON output of /dev/" + dev + " is invalid" << dendl;
           } else { //json is valid, assigning
-            json_spirit::mObject smart_output = smart_json.get_obj();
-            smart_output["nvme_smart_health_information_add_log"] = nvme_json;
-            json_map[devid] = smart_json;
-          }          
+            json_spirit::mObject nvme_obj = json_map[devid].get_obj();
+            nvme_obj["nvme_smart_health_information_add_log"] = nvme_json;
+            json_map[devid] = nvme_obj;          
+          }
         }
         if (nvme_result.size()) {          
-          dout(10) << "nvme result:" << nvme_result << dendl; 
+          dout(0) << "nvme result:" << nvme_result << dendl; 
         }        
       }
     }
