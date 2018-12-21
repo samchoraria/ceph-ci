@@ -2333,10 +2333,10 @@ public:
 
   RGWWriteRequest(CephContext* _cct, RGWUserInfo *_user, RGWFileHandle* _fh,
 		  const std::string& _bname, const std::string& _oname)
-    : RGWLibContinuedReq(_cct, _user), bucket_name(_bname), obj_name(_oname),
+    : RGWLibContinuedReq(_cct, _user, rgwlib.get_store()->get_new_req_id()),
+      bucket_name(_bname), obj_name(_oname),
       rgw_fh(_fh), processor(nullptr), filter(nullptr), real_ofs(0),
       bytes_written(0), multipart(false), eio(false) {
-
     int ret = header_init();
     if (ret == 0) {
       ret = init_from_header(get_state());
