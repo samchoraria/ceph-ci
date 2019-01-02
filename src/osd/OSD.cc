@@ -399,7 +399,6 @@ void OSDService::identify_splits_and_merges(
 		       << " pg_num " << pgnum << " -> " << q->second
 		       << " is merge source, target " << parent
 		       << ", source(s) " << children << dendl;
-	      merge_pgs->insert(make_pair(cur, q->first));
 	      merge_pgs->insert(make_pair(parent, q->first));
 	      for (auto c : children) {
 		merge_pgs->insert(make_pair(c, q->first));
@@ -3647,7 +3646,10 @@ int OSD::shutdown()
 #ifdef PG_DEBUG_REFS
   service.dump_live_pgids();
 #endif
+
+  osd_lock.Unlock();
   cct->_conf.remove_observer(this);
+  osd_lock.Lock();
 
   service.meta_ch.reset();
 
@@ -6125,6 +6127,22 @@ void OSD::do_command(
   }
 }
 
+namespace {
+  class unlock_guard {
+    Mutex& m;
+  public:
+    explicit unlock_guard(Mutex& mutex)
+      : m(mutex)
+    {
+      m.unlock();
+    }
+    unlock_guard(unlock_guard&) = delete;
+    ~unlock_guard() {
+      m.lock();
+    }
+  };
+}
+
 int OSD::_do_command(
   Connection *con, cmdmap_t& cmdmap, ceph_tid_t tid, bufferlist& data,
   bufferlist& odata, stringstream& ss, stringstream& ds)
@@ -6184,37 +6202,34 @@ int OSD::_do_command(
     string args = argsvec.front();
     for (vector<string>::iterator a = ++argsvec.begin(); a != argsvec.end(); ++a)
       args += " " + *a;
-    osd_lock.Unlock();
+    unlock_guard unlock{osd_lock};
     r = cct->_conf.injectargs(args, &ss);
-    osd_lock.Lock();
   }
   else if (prefix == "config set") {
     std::string key;
     std::string val;
     cmd_getval(cct, cmdmap, "key", key);
     cmd_getval(cct, cmdmap, "value", val);
-    osd_lock.Unlock();
+    unlock_guard unlock{osd_lock};
     r = cct->_conf.set_val(key, val, &ss);
     if (r == 0) {
       cct->_conf.apply_changes(nullptr);
     }
-    osd_lock.Lock();
   }
   else if (prefix == "config get") {
     std::string key;
     cmd_getval(cct, cmdmap, "key", key);
-    osd_lock.Unlock();
+    unlock_guard unlock{osd_lock};
     std::string val;
     r = cct->_conf.get_val(key, &val);
     if (r == 0) {
       ds << val;
     }
-    osd_lock.Lock();
   }
   else if (prefix == "config unset") {
     std::string key;
     cmd_getval(cct, cmdmap, "key", key);
-    osd_lock.Unlock();
+    unlock_guard unlock{osd_lock};
     r = cct->_conf.rm_val(key);
     if (r == 0) {
       cct->_conf.apply_changes(nullptr);
@@ -6222,7 +6237,6 @@ int OSD::_do_command(
     if (r == -ENOENT) {
       r = 0;  // make command idempotent
     }
-    osd_lock.Lock();
   }
   else if (prefix == "cluster_log") {
     vector<string> msg;
@@ -6494,6 +6508,7 @@ int OSD::_do_command(
     cmd_getval(cct, cmdmap, "delay", delay);
     ostringstream oss;
     oss << delay;
+    unlock_guard unlock{osd_lock};
     r = cct->_conf.set_val("osd_recovery_delay_start", oss.str().c_str());
     if (r != 0) {
       ss << "kick_recovery_wq: error setting "
@@ -6626,6 +6641,7 @@ void OSD::probe_smart(const string& only_devid, ostream& ss)
     if (dev.find("dm-") == 0) {
       continue;
     }
+
     is_nvme = dev.find("nvme") == 0 ? true : false;
     dout(0) << __func__ << " dev name: " << dev << dendl;
     string devid = get_device_id(dev);
@@ -6637,11 +6653,6 @@ void OSD::probe_smart(const string& only_devid, ostream& ss)
     }
     if (only_devid.size() && devid != only_devid) {
       continue;
-    }
-    if (dev_vendor.size() == 0) {
-      dout(0) << __func__ << " unable to get vendor for dev " << dev << dendl;
-    } else {
-      dout(0) << __func__ << " get vendor for dev " << dev << " " << dev_vendor << dendl;
     }
 
     std::string result;
@@ -6664,16 +6675,21 @@ void OSD::probe_smart(const string& only_devid, ostream& ss)
 
     // add nvme information
     if (is_nvme) { 
+      string dev_vendor = get_device_vendor(dev);
+      std::string nvme_result;
+      if (dev_vendor.size() == 0) {
+        derr << __func__ << " unable to get vendor for dev " << dev << dendl;
+      } else {
+        dout(10) << __func__ << " get vendor for dev " << dev << " " << dev_vendor << dendl;
+      }  
       if (dev_vendor.size() > 0) 
-      {
-        std::string nvme_result;
+      {     
         std::transform(dev_vendor.begin(), dev_vendor.end(), dev_vendor.begin(), ::tolower);
         dout(0) << "vendor:" << dev_vendor << dendl;
         if (block_device_run_nvme(("/dev/" + dev).c_str(), dev_vendor.c_str(), smart_timeout,
 				  &nvme_result)) {
           dout(0) << "block_device_run_nvme failed for /dev/" << dev << dendl;         
         } else {
-          //smart_json.insert(make_pair("nvme_smart_health_information_add_log", nvme_result));
           if (!json_spirit::read(nvme_result, nvme_json)) {
             derr << "nvme JSON output of /dev/" + dev + " is invalid" << dendl;
           } else { //json is valid, assigning
@@ -7551,9 +7567,8 @@ void OSD::handle_osd_map(MOSDMap *m)
 		   << ", map cache is " << cct->_conf->osd_map_cache_size
 		   << ", max_lag_factor " << m_osd_pg_epoch_max_lag_factor
 		   << ")" << dendl;
-          osd_lock.Unlock();
+	  unlock_guard unlock{osd_lock};
 	  shard->wait_min_pg_epoch(need);
-          osd_lock.Lock();
 	}
       }
     }
@@ -9542,6 +9557,7 @@ const char** OSD::get_tracked_conf_keys() const
 void OSD::handle_conf_change(const ConfigProxy& conf,
 			     const std::set <std::string> &changed)
 {
+  Mutex::Locker l(osd_lock);
   if (changed.count("osd_max_backfills")) {
     service.local_reserver.set_max(cct->_conf->osd_max_backfills);
     service.remote_reserver.set_max(cct->_conf->osd_max_backfills);
@@ -10226,11 +10242,11 @@ void OSDShard::prime_merges(const OSDMapRef& as_of_osdmap,
     slot = r.first->second.get();
     if (slot->pg) {
       // already have pg
-      dout(20) << __func__ << "  have merge target pg " << pgid
+      dout(20) << __func__ << "  have merge participant pg " << pgid
 	       << " " << slot->pg << dendl;
     } else if (!slot->waiting_for_split.empty() &&
 	       *slot->waiting_for_split.begin() < epoch) {
-      dout(20) << __func__ << "  pending split on merge target pg " << pgid
+      dout(20) << __func__ << "  pending split on merge participant pg " << pgid
 	       << " " << slot->waiting_for_split << dendl;
     } else {
       dout(20) << __func__ << "  creating empty merge participant " << pgid
