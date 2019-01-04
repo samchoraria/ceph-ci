@@ -2661,6 +2661,10 @@ void pg_history_t::encode(bufferlist &bl) const
   ::encode(last_interval_started, bl);
   ::encode(last_interval_clean, bl);
   ::encode(epoch_pool_created, bl);
+
+  assert(last_epoch_clean >= epoch_created);
+  assert(last_epoch_clean >= epoch_pool_created);
+
   ENCODE_FINISH(bl);
 }
 
