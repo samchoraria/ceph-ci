@@ -249,7 +249,7 @@ def run_tests(ctx, config):
     assert isinstance(config, dict)
     testdir = teuthology.get_testdir(ctx)
     # civetweb > 1.8 && beast parsers are strict on rfc2616
-    attrs = ["!fails_on_rgw", "!lifecycle_expiration", "!fails_strict_rfc2616"]
+    attrs = ["!fails_on_rgw", "!lifecycle_expiration", "!fails_strict_rfc2616", "!encryption"]
     for client, client_config in config.iteritems():
         (remote,) = ctx.cluster.only(client).remotes.keys()
         args = [
