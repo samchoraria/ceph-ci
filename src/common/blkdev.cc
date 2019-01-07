@@ -26,13 +26,27 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <dirent.h>
-//#include "common/debug.h"
+#include "common/debug.h"
 #include "include/scope_guard.h"
 #include "include/uuid.h"
 #include "include/stringify.h"
 #include "blkdev.h"
 
 #include "json_spirit/json_spirit_reader.h"
+
+// -----------------------------------------------------------------------------
+#define dout_context g_ceph_context
+#define dout_subsys ceph_subsys_osd
+#undef dout_prefix
+#define dout_prefix _tc_prefix(_dout)
+// -----------------------------------------------------------------------------
+
+// -----------------------------------------------------------------------------
+
+static ostream&
+_tc_prefix(std::ostream* _dout) {
+  return *_dout << "blkdev: ";
+}
 
 int get_device_by_path(const char *path, char* partition, char* device,
 		       size_t max)
@@ -649,14 +663,18 @@ static int block_device_run_smartctl(const string& devname, int timeout,
     device.c_str(),
     NULL);
 
+  dout(0) << "block_device_run_smartctl" << dendl;
   int ret = smartctl.spawn();
+  dout(0) << "block_device_run_smartctl spawn" << dendl;
   if (ret != 0) {
     *result = std::string("error spawning smartctl: ") + smartctl.err();
     return ret;
   }
 
   bufferlist output;
+  dout(0) << "block_device_run_smartctl start get_stdout" << dendl;
   ret = output.read_fd(smartctl.get_stdout(), 100*1024);
+  dout(0) << "block_device_run_smartctl end get_stdout" << dendl;
   if (ret < 0) {
     *result = std::string("failed read smartctl output: ") + cpp_strerror(-ret);
   } else {
@@ -677,6 +695,7 @@ int block_device_get_metrics(const string& devname, int timeout,
 {
   std::string s;
 
+  dout(0) << "block_device_get_metrics" << dendl;
   // smartctl
   if (int r = block_device_run_smartctl(devname, timeout, &s);
       r != 0) {
@@ -691,12 +710,15 @@ int block_device_get_metrics(const string& devname, int timeout,
     s += devname;
     s += "\"}";
   }
+  dout(0) << "block_device_get_metrics end smartctl" << dendl;  
   if (!json_spirit::read(s, *result)) {
     return -EINVAL;
   }
 
   json_spirit::mObject& base = result->get_obj();
+  dout(0) << "block_device_get_metrics start get_device_vendor" << dendl;  
   string vendor = get_device_vendor(devname);
+  dout(0) << "block_device_get_metrics end get_device_vendor" << devname << dendl;  
   if (vendor.size()) {
     base["nvme_vendor"] = vendor;
     s.clear();
@@ -716,7 +738,7 @@ int block_device_get_metrics(const string& devname, int timeout,
   } else {
     base["nvme_vendor"] = "unknown";
   }
-
+  dout(0) << "block_device_get_metrics end block_device_get_metrics" << dendl;  
   return 0;
 }
 
@@ -1001,6 +1023,13 @@ int block_device_run_smartctl(const char *device, int timeout,
   return -EOPNOTSUPP;  
 }
 
+int block_device_get_metrics(const string& devname, int timeout,
+                             json_spirit::mValue *result)
+{
+  // FIXME: implement me for freebsd
+  return -EOPNOTSUPP;  
+}
+
 int block_device_run_nvme(const char *device, const char *vendor, int timeout,
              std::string *result)
 {
@@ -1138,6 +1167,12 @@ std::string get_device_id(const std::string& devname,
 
 int block_device_run_smartctl(const char *device, int timeout,
 			      std::string *result)
+{
+  return -EOPNOTSUPP;
+}
+
+int block_device_get_metrics(const string& devname, int timeout,
+                             json_spirit::mValue *result)
 {
   return -EOPNOTSUPP;
 }

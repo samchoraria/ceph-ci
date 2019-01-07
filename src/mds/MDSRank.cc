@@ -1254,9 +1254,23 @@ bool MDSRank::is_stale_message(const Message::const_ref &m) const
   // from bad mds?
   if (m->get_source().is_mds()) {
     mds_rank_t from = mds_rank_t(m->get_source().num());
-    if (!mdsmap->have_inst(from) ||
-	mdsmap->get_addrs(from) != m->get_source_addrs() ||
-	mdsmap->is_down(from)) {
+    bool bad = false;
+    if (mdsmap->is_down(from)) {
+      bad = true;
+    } else {
+      // FIXME: this is a convoluted check.  we should be maintaining a nice
+      // clean map of current ConnectionRefs for current mdses!!!
+      auto c = messenger->connect_to(CEPH_ENTITY_TYPE_MDS,
+				     mdsmap->get_addrs(from));
+      if (c != m->get_connection()) {
+	bad = true;
+	dout(5) << " mds." << from << " should be " << c << " "
+		<< c->get_peer_addrs() << " but this message is "
+		<< m->get_connection() << " " << m->get_source_addrs()
+		<< dendl;
+      }
+    }
+    if (bad) {
       // bogus mds?
       if (m->get_type() == CEPH_MSG_MDS_MAP) {
 	dout(5) << "got " << *m << " from old/bad/imposter mds " << m->get_source()
@@ -3058,9 +3072,9 @@ bool MDSRank::command_dirfrag_ls(
     f->open_object_section("frag");
     f->dump_int("value", leaf.value());
     f->dump_int("bits", leaf.bits());
-    CachedStackStringStream ss;
-    ss.get_stream() << std::hex << leaf.value() << "/" << std::dec << leaf.bits();
-    f->dump_string("str", ss.strv());
+    CachedStackStringStream css;
+    *css << std::hex << leaf.value() << "/" << std::dec << leaf.bits();
+    f->dump_string("str", css->strv());
     f->close_section();
   }
   f->close_section();
@@ -3309,12 +3323,11 @@ bool MDSRank::evict_client(int64_t session_id,
 
   auto& addr = session->info.inst.addr;
   {
-    CachedStackStringStream _ss;
-    auto& ss = _ss.get_stream();
-    ss << "Evicting " << (blacklist ? "(and blacklisting) " : "")
-       << "client session " << session_id << " (" << addr << ")";
-    dout(1) << ss.strv() << dendl;
-    clog->info() << ss.strv();
+    CachedStackStringStream css;
+    *css << "Evicting " << (blacklist ? "(and blacklisting) " : "")
+         << "client session " << session_id << " (" << addr << ")";
+    dout(1) << css->strv() << dendl;
+    clog->info() << css->strv();
   }
 
   dout(4) << "Preparing blacklist command... (wait=" << wait << ")" << dendl;

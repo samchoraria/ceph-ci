@@ -909,7 +909,7 @@ std::vector<Option> get_global_options() {
     .add_see_also("ms_bind_msgr2"),
 
     Option("ms_bind_msgr2", Option::TYPE_BOOL, Option::LEVEL_ADVANCED)
-    .set_default(false)
+    .set_default(true)
     .set_description("Bind servers to msgr2 (nautilus+) protocol address(es)")
     .add_see_also("ms_bind_msgr1"),
 
@@ -6653,6 +6653,18 @@ std::vector<Option> get_rgw_options() {
     .set_default(43200)
     .set_description("Session token max duration")
     .set_long_description("Max duration in seconds for which the session token is valid."),
+
+    Option("rgw_max_listing_results", Option::TYPE_UINT,
+	   Option::LEVEL_ADVANCED)
+    .set_default(1000)
+    .set_min_max(1, 100000)
+    .add_service("rgw")
+    .set_description("Upper bound on results in listing operations, ListBucket max-keys")
+    .set_long_description("This caps the maximum permitted value for listing-like operations in RGW S3. "
+			  "Affects ListBucket(max-keys), "
+			  "ListBucketVersions(max-keys), "
+			  "ListBucketMultiPartUploads(max-uploads), "
+			  "ListMultipartUploadParts(max-parts)"),
   });
 }
 
