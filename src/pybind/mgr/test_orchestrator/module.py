@@ -194,12 +194,16 @@ class TestOrchestrator(MgrModule, orchestrator.Orchestrator):
         """
         try:
             c_v_out = check_output(['ceph_volume', 'inventory', '--format', 'json'])
-        except OSError:
-            cmd = """
-            . /tmp/ceph-volume-virtualenv/bin/activate
-            ceph-volume inventory --format json
-            """
-            c_v_out = check_output(cmd, shell=True)
+        except OSError as e:
+            try:
+                cmd = """
+                . /tmp/ceph-volume-virtualenv/bin/activate
+                ceph-volume inventory --format json
+                """
+                c_v_out = check_output(cmd, shell=True)
+            except Exception:
+                self.log.exception('running from c-v venv failed.')
+                raise e  # raise original Exception
 
         for out in c_v_out.splitlines():
             if not out.startswith(b'-->') and not out.startswith(b' stderr'):
