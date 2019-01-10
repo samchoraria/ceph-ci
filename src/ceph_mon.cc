@@ -374,10 +374,8 @@ int main(int argc, const char **argv)
 	exit(1);
       }
 
-      dout(10) << "imported monmap:\n";
-      JSONFormatter jf(true);
-      jf.dump_object("monmap", monmap);
-      jf.flush(*_dout);
+      dout(1) << "imported monmap:\n";
+      monmap.print(*_dout);
       *_dout << dendl;
       
     } else {
@@ -389,10 +387,8 @@ int main(int argc, const char **argv)
 	derr << argv[0] << ": warning: no initial monitors; must use admin socket to feed hints" << dendl;
       }
 
-      dout(10) << "initial generated monmap:\n";
-      JSONFormatter jf(true);
-      jf.dump_object("monmap", monmap);
-      jf.flush(*_dout);
+      dout(1) << "initial generated monmap:\n";
+      monmap.print(*_dout);
       *_dout << dendl;
 
       // am i part of the initial quorum?
