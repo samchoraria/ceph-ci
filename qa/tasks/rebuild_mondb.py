@@ -131,9 +131,10 @@ def _rebuild_db(ctx, manager, cluster_name, mon, mon_id, keyring_path):
     mon.run(args=['sudo', '-u', 'ceph',
                   'CEPH_ARGS=--no-mon-config',
                   'ceph-monstore-tool', mon_store_dir,
-                  'rebuild', '--', '--keyring',
+                  'rebuild', '--',
+                  '--keyring', keyring_path,
                   '--monmap', '/tmp/monmap',
-                  keyring_path])
+                  ])
 
 
 def _revive_mons(manager, mons, recovered, keyring_path):
