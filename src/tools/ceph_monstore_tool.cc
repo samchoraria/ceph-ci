@@ -496,13 +496,25 @@ static int update_auth(MonitorDBStore& st, const string& keyring_path)
   return 0;
 }
 
-static int update_mkfs(MonitorDBStore& st)
+static int update_mkfs(MonitorDBStore& st, const string& monmap_path)
 {
   MonMap monmap;
-  int r = monmap.build_initial(g_ceph_context, true, cerr);
-  if (r) {
-    cerr << "no initial monitors" << std::endl;
-    return -EINVAL;
+  if (!monmap_path.empty()) {
+    bufferlist bl;
+    string err;
+    int r = bl.read_file(monmap_path.c_str(), &err);
+    if (r < 0) {
+      cerr << "failed to read monmap from " << monmap_path << ": "
+	   << cpp_strerror(r) << std::endl;
+      return r;
+    }
+    monmap.decode(bl);
+  } else {
+    int r = monmap.build_initial(g_ceph_context, true, cerr);
+    if (r) {
+      cerr << "no initial monitors" << std::endl;
+      return -EINVAL;
+    }
   }
   monmap.print(cout);
   bufferlist bl;
@@ -626,9 +638,12 @@ int rebuild_monstore(const char* progname,
 {
   po::options_description op_desc("Allowed 'rebuild' options");
   string keyring_path;
+  string monmap_path;
   op_desc.add_options()
     ("keyring", po::value<string>(&keyring_path),
-     "path to the client.admin key");
+     "path to the client.admin key")
+    ("monmap", po::value<string>(&monmap_path),
+     "path to the initial monmap");
   po::variables_map op_vm;
   int r = parse_cmd_args(&op_desc, nullptr, nullptr, subcmds, &op_vm);
   if (r) {
@@ -649,7 +664,7 @@ int rebuild_monstore(const char* progname,
   if ((r = update_paxos(st))) {
     return r;
   }
-  if ((r = update_mkfs(st))) {
+  if ((r = update_mkfs(st, monmap_path))) {
     return r;
   }
   if ((r = update_monitor(st))) {
