@@ -90,6 +90,8 @@ ProtocolV1::~ProtocolV1() {
   ceph_assert(out_q.empty());
   ceph_assert(sent.empty());
 
+  ldout(cct, 20) << __func__ << ": end of instance" << dendl;
+
   delete[] temp_buffer;
 
   if (authorizer) {

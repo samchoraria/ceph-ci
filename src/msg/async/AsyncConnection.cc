@@ -142,6 +142,7 @@ AsyncConnection::AsyncConnection(CephContext *cct, AsyncMessenger *m, DispatchQu
 
 AsyncConnection::~AsyncConnection()
 {
+  ldout(async_msgr->cct, 20) << __func__ << ": end of instance" << dendl;
   if (recv_buf)
     delete[] recv_buf;
   ceph_assert(!delay_state);
