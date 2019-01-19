@@ -60,6 +60,7 @@
 #include "common/ceph_argparse.h"
 #include "common/perf_counters.h"
 #include "common/strtol.h"
+#include "common/numa.h"
 
 #include "common/config.h"
 #include "common/errno.h"
@@ -326,7 +327,8 @@ void OSDMonitor::create_initial()
 
   newmap.flags |=
     CEPH_OSDMAP_RECOVERY_DELETES |
-    CEPH_OSDMAP_PURGED_SNAPDIRS;
+    CEPH_OSDMAP_PURGED_SNAPDIRS |
+    CEPH_OSDMAP_PGLOG_HARDLIMIT;
   newmap.full_ratio = g_conf()->mon_osd_full_ratio;
   if (newmap.full_ratio > 1.0) newmap.full_ratio /= 100;
   newmap.backfillfull_ratio = g_conf()->mon_osd_backfillfull_ratio;
@@ -2832,6 +2834,17 @@ bool OSDMonitor::preprocess_boot(MonOpRequestRef op)
     goto ignore;
   }
 
+  // The release check here is required because for OSD_PGLOG_HARDLIMIT,
+  // we are reusing a jewel feature bit that was retired in luminous.
+  if (osdmap.require_osd_release >= CEPH_RELEASE_LUMINOUS &&
+      osdmap.test_flag(CEPH_OSDMAP_PGLOG_HARDLIMIT) &&
+      !(m->osd_features & CEPH_FEATURE_OSD_PGLOG_HARDLIMIT)) {
+    mon->clog->info() << "disallowing boot of OSD "
+		      << m->get_orig_source_inst()
+		      << " because 'pglog_hardlimit' osdmap flag is set and OSD lacks the OSD_PGLOG_HARDLIMIT feature";
+    goto ignore;
+  }
+
   // already booted?
   if (osdmap.is_up(from) &&
       osdmap.get_addrs(from) == m->get_orig_source_addrs() &&
@@ -4468,6 +4481,22 @@ bool OSDMonitor::handle_osd_timeouts(const utime_t &now,
   return new_down;
 }
 
+static void dump_cpu_list(Formatter *f, const char *name,
+			  const string& strlist)
+{
+  cpu_set_t cpu_set;
+  size_t cpu_set_size;
+  if (parse_cpu_set_list(strlist.c_str(), &cpu_set_size, &cpu_set) < 0) {
+    return;
+  }
+  set<int> cpus = cpu_set_to_set(cpu_set_size, &cpu_set);
+  f->open_array_section(name);
+  for (auto cpu : cpus) {
+    f->dump_int("cpu", cpu);
+  }
+  f->close_section();
+}
+
 void OSDMonitor::dump_info(Formatter *f)
 {
   f->open_object_section("osdmap");
@@ -4785,6 +4814,7 @@ bool OSDMonitor::preprocess_command(MonOpRequestRef op)
     f->open_object_section("osd_location");
     f->dump_int("osd", osd);
     f->dump_object("addrs", osdmap.get_addrs(osd));
+    f->dump_stream("osd_fsid") << osdmap.get_uuid(osd);
 
     // try to identify host, pod/container name, etc.
     map<string,string> m;
@@ -4869,6 +4899,93 @@ bool OSDMonitor::preprocess_command(MonOpRequestRef op)
     count_metadata(field, f.get());
     f->flush(rdata);
     r = 0;
+  } else if (prefix == "osd numa-status") {
+    TextTable tbl;
+    if (f) {
+      f->open_array_section("osds");
+    } else {
+      tbl.define_column("OSD", TextTable::LEFT, TextTable::RIGHT);
+      tbl.define_column("HOST", TextTable::LEFT, TextTable::LEFT);
+      tbl.define_column("NETWORK", TextTable::RIGHT, TextTable::RIGHT);
+      tbl.define_column("STORAGE", TextTable::RIGHT, TextTable::RIGHT);
+      tbl.define_column("AFFINITY", TextTable::RIGHT, TextTable::RIGHT);
+      tbl.define_column("CPUS", TextTable::LEFT, TextTable::LEFT);
+    }
+    for (int i=0; i<osdmap.get_max_osd(); ++i) {
+      if (osdmap.exists(i)) {
+	map<string,string> m;
+	ostringstream err;
+	if (load_metadata(i, m, &err) < 0) {
+	  continue;
+	}
+	string host;
+	auto p = m.find("hostname");
+	if (p != m.end()) {
+	  host = p->second;
+	}
+	if (f) {
+	  f->open_object_section("osd");
+	  f->dump_int("osd", i);
+	  f->dump_string("host", host);
+	  for (auto n : { "network_numa_node", "objectstore_numa_node",
+		"numa_node" }) {
+	    p = m.find(n);
+	    if (p != m.end()) {
+	      f->dump_int(n, atoi(p->second.c_str()));
+	    }
+	  }
+	  for (auto n : { "network_numa_nodes", "objectstore_numa_nodes" }) {
+	    p = m.find(n);
+	    if (p != m.end()) {
+	      list<string> ls = get_str_list(p->second, ",");
+	      f->open_array_section(n);
+	      for (auto node : ls) {
+		f->dump_int("node", atoi(node.c_str()));
+	      }
+	      f->close_section();
+	    }
+	  }
+	  for (auto n : { "numa_node_cpus" }) {
+	    p = m.find(n);
+	    if (p != m.end()) {
+	      dump_cpu_list(f.get(), n, p->second);
+	    }
+	  }
+	  f->close_section();
+	} else {
+	  tbl << i;
+	  tbl << host;
+	  p = m.find("network_numa_nodes");
+	  if (p != m.end()) {
+	    tbl << p->second;
+	  } else {
+	    tbl << "-";
+	  }
+	  p = m.find("objectstore_numa_nodes");
+	  if (p != m.end()) {
+	    tbl << p->second;
+	  } else {
+	    tbl << "-";
+	  }
+	  p = m.find("numa_node");
+	  auto q = m.find("numa_node_cpus");
+	  if (p != m.end() && q != m.end()) {
+	    tbl << p->second;
+	    tbl << q->second;
+	  } else {
+	    tbl << "-";
+	    tbl << "-";
+	  }
+	  tbl << TextTable::endrow;
+	}
+      }
+    }
+    if (f) {
+      f->close_section();
+      f->flush(rdata);
+    } else {
+      rdata.append(stringify(tbl));
+    }
   } else if (prefix == "osd map") {
     string poolstr, objstr, namespacestr;
     cmd_getval(cct, cmdmap, "pool", poolstr);
@@ -10075,6 +10192,24 @@ bool OSDMonitor::prepare_command_impl(MonOpRequestRef op,
 	return prepare_set_flag(op, CEPH_OSDMAP_RECOVERY_DELETES);
       } else {
 	ss << "not all up OSDs have OSD_RECOVERY_DELETES feature";
+	err = -EPERM;
+	goto reply;
+      }
+    } else if (key == "pglog_hardlimit") {
+      if (!osdmap.get_num_up_osds() && !sure) {
+        ss << "Not advisable to continue since no OSDs are up. Pass "
+           << "--yes-i-really-mean-it if you really wish to continue.";
+        err = -EPERM;
+        goto reply;
+      }
+      // The release check here is required because for OSD_PGLOG_HARDLIMIT,
+      // we are reusing a jewel feature bit that was retired in luminous.
+      if (osdmap.require_osd_release >= CEPH_RELEASE_LUMINOUS &&
+         (HAVE_FEATURE(osdmap.get_up_osd_features(), OSD_PGLOG_HARDLIMIT)
+          || sure)) {
+	return prepare_set_flag(op, CEPH_OSDMAP_PGLOG_HARDLIMIT);
+      } else {
+	ss << "not all up OSDs have OSD_PGLOG_HARDLIMIT feature";
 	err = -EPERM;
 	goto reply;
       }

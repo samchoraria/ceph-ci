@@ -193,7 +193,7 @@ class TestOrchestrator(MgrModule, orchestrator.Orchestrator):
         There is no guarantee which devices are returned by get_inventory.
         """
         try:
-            c_v_out = check_output(['ceph_volume', 'inventory', '--format', 'json'])
+            c_v_out = check_output(['ceph-volume', 'inventory', '--format', 'json'])
         except OSError:
             cmd = """
             . /tmp/ceph-volume-virtualenv/bin/activate
@@ -238,7 +238,7 @@ class TestOrchestrator(MgrModule, orchestrator.Orchestrator):
         for p in processes:
             sd = orchestrator.ServiceDescription()
             sd.nodename = 'localhost'
-            sd.daemon_name = re.search('ceph-[^ ]+', p).group()
+            sd.service_instance = re.search('ceph-[^ ]+', p).group()
             result.append(sd)
 
         return result
@@ -246,6 +246,12 @@ class TestOrchestrator(MgrModule, orchestrator.Orchestrator):
     def add_stateless_service(self, service_type, spec):
         raise NotImplementedError(service_type)
 
-    def create_osds(self, spec):
-        raise NotImplementedError(str(spec))
+    def create_osds(self, drive_group, all_hosts):
+        raise NotImplementedError(str(drive_group))
+
+    def service_action(self, action, service_type, service_name=None, service_id=None):
+        return TestWriteCompletion(
+            lambda: True, None,
+            "Pretending to {} service {} (name={}, id={})".format(
+                action, service_type, service_name, service_id))
 

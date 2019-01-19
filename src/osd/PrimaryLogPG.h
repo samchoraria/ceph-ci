@@ -402,6 +402,22 @@ public:
     release_object_locks(manager);
   }
 
+  bool pg_is_remote_backfilling() override {
+    return is_remote_backfilling();
+  }
+  void pg_add_local_num_bytes(int64_t num_bytes) override {
+    add_local_num_bytes(num_bytes);
+  }
+  void pg_sub_local_num_bytes(int64_t num_bytes) override {
+    sub_local_num_bytes(num_bytes);
+  }
+  void pg_add_num_bytes(int64_t num_bytes) override {
+    add_num_bytes(num_bytes);
+  }
+  void pg_sub_num_bytes(int64_t num_bytes) override {
+    sub_num_bytes(num_bytes);
+  }
+
   void pgb_set_object_snap_mapping(
     const hobject_t &soid,
     const set<snapid_t> &snaps,
@@ -1350,6 +1366,7 @@ protected:
   void apply_and_flush_repops(bool requeue);
 
   void calc_trim_to() override;
+  void calc_trim_to_aggressive() override;
   int do_xattr_cmp_u64(int op, __u64 v1, bufferlist& xattr);
   int do_xattr_cmp_str(int op, string& v1s, bufferlist& xattr);
 

@@ -445,10 +445,6 @@ public:
    *
    * @return 0 on success, or -errno on failure.
    */
-  virtual int send_message(Message *m, const entity_inst_t& dest) {
-    return send_to(m, dest.name.type(), entity_addrvec_t(dest.addr));
-  }
-
   virtual int send_to(
     Message *m,
     int type,
@@ -485,12 +481,6 @@ public:
    *
    * @param dest The entity to get a connection for.
    */
-  virtual ConnectionRef get_connection(const entity_inst_t& dest) {
-    // temporary
-    return connect_to(dest.name.type(),
-		      entity_addrvec_t(dest.addr));
-  }
-
   virtual ConnectionRef connect_to(
     int type, const entity_addrvec_t& dest) = 0;
   ConnectionRef connect_to_mon(const entity_addrvec_t& dest) {
@@ -762,10 +752,10 @@ public:
    * @param force_new True if we want to wait for new keys, false otherwise.
    * @return A pointer to the AuthAuthorizer, if we have one; NULL otherwise
    */
-  AuthAuthorizer *ms_deliver_get_authorizer(int peer_type, bool force_new) {
+  AuthAuthorizer *ms_deliver_get_authorizer(int peer_type) {
     AuthAuthorizer *a = 0;
     for (const auto& dispatcher : dispatchers) {
-      if (dispatcher->ms_get_authorizer(peer_type, &a, force_new))
+      if (dispatcher->ms_get_authorizer(peer_type, &a))
 	return a;
     }
     return NULL;

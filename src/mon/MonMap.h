@@ -133,7 +133,8 @@ class MonMap {
 
   void _add_ambiguous_addr(const string& name,
 			   entity_addr_t addr,
-			   int priority);
+			   int priority,
+			   bool for_mkfs=false);
 
 public:
   void calc_legacy_ranks();
@@ -274,21 +275,27 @@ public:
    * @returns true if monmap contains a monitor with address @p;
    *          false otherwise.
    */
-  bool contains(const entity_addr_t &a) const {
+  bool contains(const entity_addr_t &a, string *name=nullptr) const {
     for (auto& i : mon_info) {
       for (auto& j : i.second.public_addrs.v) {
 	if (j == a) {
+	  if (name) {
+	    *name = i.first;
+	  }
 	  return true;
 	}
       }
     }
     return false;
   }
-  bool contains(const entity_addrvec_t &av) const {
+  bool contains(const entity_addrvec_t &av, string *name=nullptr) const {
     for (auto& i : mon_info) {
       for (auto& j : i.second.public_addrs.v) {
 	for (auto& k : av.v) {
 	  if (j == k) {
+	    if (name) {
+	      *name = i.first;
+	    }
 	    return true;
 	  }
 	}
@@ -327,10 +334,17 @@ public:
   }
   int get_rank(const entity_addr_t& a) const {
     string n = get_name(a);
-    if (n.empty())
-      return -1;
-
-    return get_rank(n);
+    if (!n.empty()) {
+      return get_rank(n);
+    }
+    return -1;
+  }
+  int get_rank(const entity_addrvec_t& av) const {
+    string n = get_name(av);
+    if (!n.empty()) {
+      return get_rank(n);
+    }
+    return -1;
   }
   bool get_addr_name(const entity_addr_t& a, string& name) {
     if (addr_mons.count(a) == 0)
@@ -351,6 +365,7 @@ public:
   void set_addrvec(const string& n, const entity_addrvec_t& a) {
     ceph_assert(mon_info.count(n));
     mon_info[n].public_addrs = a;
+    calc_addr_mons();
   }
 
   void encode(bufferlist& blist, uint64_t con_features) const;

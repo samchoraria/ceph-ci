@@ -15,8 +15,9 @@
 #define dout_prefix _conn_prefix(_dout)
 ostream &ProtocolV1::_conn_prefix(std::ostream *_dout) {
   return *_dout << "--1- " << messenger->get_myaddrs().legacy_addr() << " >> "
-                << connection->peer_addrs.legacy_addr() << " conn("
-                << connection << (connection->msgr2 ? " msgr2" : " legacy")
+                << connection->peer_addrs->legacy_addr()
+		<< " conn("
+                << connection << " " << this
                 << " :" << connection->port << " s=" << get_state_name(state)
                 << " pgs=" << peer_global_seq << " cs=" << connect_seq
                 << " l=" << connection->policy.lossy << ").";
@@ -79,7 +80,6 @@ ProtocolV1::ProtocolV1(AsyncConnection *connection)
       once_ready(false),
       state(NONE),
       global_seq(0),
-      got_bad_auth(false),
       authorizer(nullptr),
       wait_for_seq(false) {
   temp_buffer = new char[4096];
@@ -100,7 +100,6 @@ void ProtocolV1::connect() {
   this->state = START_CONNECT;
 
   // reset connect state variables
-  got_bad_auth = false;
   if (authorizer) {
     delete authorizer;
     authorizer = nullptr;
@@ -176,7 +175,8 @@ void ProtocolV1::fault() {
 
   reset_recv_state();
 
-  if (connection->policy.standby && out_q.empty() && state != WAIT) {
+  if (connection->policy.standby && out_q.empty() && !keepalive &&
+      state != WAIT) {
     ldout(cct, 10) << __func__ << " with nothing to send, going to standby"
                    << dendl;
     state = STANDBY;
@@ -199,6 +199,7 @@ void ProtocolV1::fault() {
         backoff.set_from_double(cct->_conf->ms_max_backoff);
     }
 
+    global_seq = messenger->get_global_seq();
     state = START_CONNECT;
     connection->state = AsyncConnection::STATE_CONNECTING;
     ldout(cct, 10) << __func__ << " waiting " << backoff << dendl;
@@ -214,6 +215,7 @@ void ProtocolV1::fault() {
     } else {
       ldout(cct, 0) << __func__ << " initiating reconnect" << dendl;
       connect_seq++;
+      global_seq = messenger->get_global_seq();
       state = START_CONNECT;
       connection->state = AsyncConnection::STATE_CONNECTING;
     }
@@ -1238,7 +1240,6 @@ void ProtocolV1::reset_recv_state() {
       delete authorizer;
     }
     authorizer = nullptr;
-    got_bad_auth = false;
   }
 
   // clean read and write callbacks
@@ -1356,7 +1357,7 @@ CtPtr ProtocolV1::handle_server_banner_and_identify(char *buffer, int r) {
   ldout(cct, 20) << __func__ << " connect read peer addr " << paddr
                  << " on socket " << connection->cs.fd() << dendl;
 
-  entity_addr_t peer_addr = connection->peer_addrs.legacy_addr();
+  entity_addr_t peer_addr = connection->peer_addrs->legacy_addr();
   if (peer_addr != paddr) {
     if (paddr.is_blank_ip() && peer_addr.get_port() == paddr.get_port() &&
         peer_addr.get_nonce() == paddr.get_nonce()) {
@@ -1418,8 +1419,7 @@ CtPtr ProtocolV1::send_connect_message() {
   ldout(cct, 20) << __func__ << dendl;
 
   if (!authorizer) {
-    authorizer = messenger->ms_deliver_get_authorizer(connection->peer_type,
-						      false);
+    authorizer = messenger->ms_deliver_get_authorizer(connection->peer_type);
   }
 
   ceph_msg_connect connect;
@@ -1565,14 +1565,7 @@ CtPtr ProtocolV1::handle_connect_reply_2() {
 
   if (connect_reply.tag == CEPH_MSGR_TAG_BADAUTHORIZER) {
     ldout(cct, 0) << __func__ << " connect got BADAUTHORIZER" << dendl;
-    if (got_bad_auth) {
-      return _fault();
-    }
-    got_bad_auth = true;
-    delete authorizer;
-    authorizer = messenger->ms_deliver_get_authorizer(connection->peer_type,
-						      true);  // try harder
-    return CONTINUE(send_connect_message);
+    return _fault();
   }
 
   if (connect_reply.tag == CEPH_MSGR_TAG_RESETSESSION) {
@@ -1792,7 +1785,7 @@ CtPtr ProtocolV1::handle_client_banner(char *buffer, int r) {
   if (peer_addr.is_blank_ip()) {
     // peer apparently doesn't know what ip they have; figure it out for them.
     int port = peer_addr.get_port();
-    peer_addr.u = connection->socket_addr.u;
+    peer_addr.set_sockaddr(connection->target_addr.get_sockaddr());
     peer_addr.set_port(port);
 
     ldout(cct, 0) << __func__ << " accept peer addr is really " << peer_addr
@@ -1960,7 +1953,7 @@ CtPtr ProtocolV1::handle_connect_message_2() {
   ldout(cct, 10) << __func__ << " accept setting up session_security." << dendl;
 
   // existing?
-  AsyncConnectionRef existing = messenger->lookup_conn(connection->peer_addrs);
+  AsyncConnectionRef existing = messenger->lookup_conn(*connection->peer_addrs);
 
   connection->inject_delay();
 
@@ -1984,6 +1977,8 @@ CtPtr ProtocolV1::handle_connect_message_2() {
                             // AsyncConnection here)
 
     ProtocolV1 *exproto = dynamic_cast<ProtocolV1 *>(existing->protocol.get());
+    ldout(cct,10) << __func__ << " existing=" << existing << " exproto="
+		  << exproto << dendl;
     assert(exproto->proto_type == 1);
 
     if (!exproto) {
@@ -2089,7 +2084,7 @@ CtPtr ProtocolV1::handle_connect_message_2() {
       }
 
       // connection race?
-      if (connection->peer_addrs.legacy_addr() < messenger->get_myaddr() ||
+      if (connection->peer_addrs->legacy_addr() < messenger->get_myaddr() ||
           existing->policy.server) {
         // incoming wins
         ldout(cct, 10) << __func__ << " accept connection race, existing "
@@ -2103,9 +2098,13 @@ CtPtr ProtocolV1::handle_connect_message_2() {
             << __func__ << " accept connection race, existing " << existing
             << ".cseq " << exproto->connect_seq
             << " == " << connect_msg.connect_seq << ", sending WAIT" << dendl;
-        ceph_assert(connection->peer_addrs.legacy_addr() >
+        ceph_assert(connection->peer_addrs->legacy_addr() >
                     messenger->get_myaddr());
         existing->lock.unlock();
+	// make sure we follow through with opening the existing
+	// connection (if it isn't yet open) since we know the peer
+	// has something to send to us.
+	existing->send_keepalive();
         return send_connect_message_reply(CEPH_MSGR_TAG_WAIT, reply,
                                           authorizer_reply);
       }
@@ -2382,7 +2381,7 @@ CtPtr ProtocolV1::open(ceph_msg_connect_reply &reply,
   replacing = false;
   if (r < 0) {
     ldout(cct, 1) << __func__ << " existing race replacing process for addr = "
-                  << connection->peer_addrs.legacy_addr()
+                  << connection->peer_addrs->legacy_addr()
                   << " just fail later one(this)" << dendl;
     ldout(cct, 10) << "accept fault after register" << dendl;
     connection->inject_delay();
@@ -2394,6 +2393,7 @@ CtPtr ProtocolV1::open(ceph_msg_connect_reply &reply,
                   << dendl;
     ceph_assert(state == CLOSED || state == NONE);
     ldout(cct, 10) << "accept fault after register" << dendl;
+    messenger->unregister_conn(connection);
     connection->inject_delay();
     return _fault();
   }

@@ -217,18 +217,14 @@ int DaemonServer::ms_handle_authentication(Connection *con)
   return ret;
 }
 
-bool DaemonServer::ms_get_authorizer(int dest_type,
-    AuthAuthorizer **authorizer, bool force_new)
+bool DaemonServer::ms_get_authorizer(
+  int dest_type,
+  AuthAuthorizer **authorizer)
 {
   dout(10) << "type=" << ceph_entity_type_name(dest_type) << dendl;
 
   if (dest_type == CEPH_ENTITY_TYPE_MON) {
     return true;
-  }
-
-  if (force_new) {
-    if (monc->wait_auth_rotating(10) < 0)
-      return false;
   }
 
   *authorizer = monc->build_authorizer(dest_type);

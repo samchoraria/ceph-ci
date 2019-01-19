@@ -230,10 +230,11 @@ bool SocketConnection::update_rx_seq(seq_num_t seq)
 seastar::future<> SocketConnection::write_message(MessageRef msg)
 {
   msg->set_seq(++out_seq);
+  auto& header = msg->get_header();
+  header.src = messenger.get_myname();
   msg->encode(features, messenger.get_crc_flags());
   bufferlist bl;
   bl.append(CEPH_MSGR_TAG_MSG);
-  auto& header = msg->get_header();
   bl.append((const char*)&header, sizeof(header));
   bl.append(msg->get_payload());
   bl.append(msg->get_middle());
@@ -551,8 +552,12 @@ SocketConnection::handle_keepalive2()
   return socket->read_exactly(sizeof(ceph_timespec))
     .then([this] (auto buf) {
       k.ack.stamp = *reinterpret_cast<const ceph_timespec*>(buf.get());
-      logger().info("{} keepalive2 {}", *this, k.ack.stamp.tv_sec);
-      return socket->write_flush(make_static_packet(k.ack));
+      seastar::shared_future<> f = send_ready.then([this] {
+          logger().info("{} keepalive2 {}", *this, k.ack.stamp.tv_sec);
+          return socket->write_flush(make_static_packet(k.ack));
+        });
+      send_ready = f.get_future();
+      return f.get_future();
     });
 }
 
@@ -644,17 +649,8 @@ SocketConnection::handle_connect_reply(msgr_tag_t tag)
     logger().error("{} connect protocol version mispatch", __func__);
     throw std::system_error(make_error_code(error::negotiation_failure));
   case CEPH_MSGR_TAG_BADAUTHORIZER:
-    if (h.got_bad_auth) {
-      logger().error("{} got bad authorizer", __func__);
-      throw std::system_error(make_error_code(error::negotiation_failure));
-    }
-    h.got_bad_auth = true;
-    // try harder
-    return dispatcher.ms_get_authorizer(peer_type, true)
-      .then([this](auto&& auth) {
-        h.authorizer = std::move(auth);
-        return stop_t::no;
-      });
+    logger().error("{} got bad authorizer", __func__);
+    throw std::system_error(make_error_code(error::negotiation_failure));
   case CEPH_MSGR_TAG_RESETSESSION:
     reset_session();
     return seastar::make_ready_future<stop_t>(stop_t::no);
@@ -742,7 +738,7 @@ SocketConnection::repeat_connect()
   // this is fyi, actually, server decides!
   h.connect.flags = policy.lossy ? CEPH_MSG_CONNECT_LOSSY : 0;
 
-  return dispatcher.ms_get_authorizer(peer_type, false)
+  return dispatcher.ms_get_authorizer(peer_type)
     .then([this](auto&& auth) {
       h.authorizer = std::move(auth);
       bufferlist bl;

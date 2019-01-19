@@ -237,7 +237,7 @@ struct entity_addr_t {
     TYPE_ANY = 3,  ///< ambiguous
   } type_t;
   static const type_t TYPE_DEFAULT = TYPE_MSGR2;
-  static const char *get_type_name(int t) {
+  static std::string_view get_type_name(int t) {
     switch (t) {
     case TYPE_NONE: return "none";
     case TYPE_LEGACY: return "v1";
@@ -285,6 +285,13 @@ struct entity_addr_t {
     u.sa.sa_family = f;
   }
 
+  bool is_ipv4() const {
+    return u.sa.sa_family == AF_INET;
+  }
+  bool is_ipv6() const {
+    return u.sa.sa_family == AF_INET6;
+  }
+
   sockaddr_in &in4_addr() {
     return u.sin;
   }
@@ -313,10 +320,17 @@ struct entity_addr_t {
   {
     switch (sa->sa_family) {
     case AF_INET:
+      // pre-zero, since we're only copying a portion of the source
+      memset(&u, 0, sizeof(u));
       memcpy(&u.sin, sa, sizeof(u.sin));
       break;
     case AF_INET6:
+      // pre-zero, since we're only copying a portion of the source
+      memset(&u, 0, sizeof(u));
       memcpy(&u.sin6, sa, sizeof(u.sin6));
+      break;
+    case AF_UNSPEC:
+      memset(&u, 0, sizeof(u));
       break;
     default:
       return false;
@@ -433,11 +447,15 @@ struct entity_addr_t {
     __u16 rest;
     decode(marker, bl);
     decode(rest, bl);
-    type = TYPE_LEGACY;
     decode(nonce, bl);
     sockaddr_storage ss;
     decode(ss, bl);
     set_sockaddr((sockaddr*)&ss);
+    if (get_family() == AF_UNSPEC) {
+      type = TYPE_NONE;
+    } else {
+      type = TYPE_LEGACY;
+    }
   }
 
   // Right now, these only deal with sockaddr_storage that have only family and content.
@@ -597,6 +615,14 @@ struct entity_addrvec_t {
       }
     }
     return entity_addr_t();
+  }
+  bool has_msgr2() const {
+    for (auto& a : v) {
+      if (a.is_msgr2()) {
+	return true;
+      }
+    }
+    return false;
   }
 
   bool parse(const char *s, const char **end = 0);

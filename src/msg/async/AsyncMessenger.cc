@@ -594,41 +594,49 @@ AsyncConnectionRef AsyncMessenger::create_connect(
   conn->connect(addrs, type, target);
   ceph_assert(!conns.count(addrs));
   ldout(cct, 10) << __func__ << " " << conn << " " << addrs << " "
-		 << conn->peer_addrs << dendl;
+		 << *conn->peer_addrs << dendl;
   conns[addrs] = conn;
   w->get_perf_counter()->inc(l_msgr_active_connections);
 
   return conn;
 }
 
-ConnectionRef AsyncMessenger::connect_to(int type, const entity_addrvec_t& addrs)
-{
-  Mutex::Locker l(lock);
-  if (*my_addrs == addrs ||
-      (addrs.v.size() == 1 &&
-       my_addrs->contains(addrs.front()))) {
-    // local
-    return local_connection;
-  }
-
-  AsyncConnectionRef conn = _lookup_conn(addrs);
-  if (conn) {
-    ldout(cct, 10) << __func__ << " " << addrs << " existing " << conn << dendl;
-  } else {
-    conn = create_connect(addrs, type);
-    ldout(cct, 10) << __func__ << " " << addrs << " new " << conn << dendl;
-  }
-
-  return conn;
-}
 
 ConnectionRef AsyncMessenger::get_loopback_connection()
 {
   return local_connection;
 }
 
-int AsyncMessenger::_send_to(Message *m, int type, const entity_addrvec_t& addrs)
+entity_addrvec_t AsyncMessenger::_filter_addrs(int type,
+					       const entity_addrvec_t& addrs)
 {
+  if (did_bind &&
+      !get_myaddrs().has_msgr2() &&
+      get_mytype() == type) {
+    // if we are bound to v1 only, and we are connecting to a peer, we cannot
+    // use the peer's v2 address (yet). otherwise the connection is assymetrical,
+    // because they would have to use v1 to connect to us, and we would use v2,
+    // and connection race detection etc would totally break down (among other
+    // things).
+    ldout(cct, 10) << __func__ << " " << addrs << " type " << type
+		   << " limiting to v1 ()" << dendl;
+    entity_addrvec_t r;
+    for (auto& i : addrs.v) {
+      if (i.is_msgr2()) {
+	continue;
+      }
+      r.v.push_back(i);
+    }
+    return r;
+  } else {
+    return addrs;
+  }
+}
+
+int AsyncMessenger::send_to(Message *m, int type, const entity_addrvec_t& addrs)
+{
+  Mutex::Locker l(lock);
+
   FUNCTRACE(cct);
   ceph_assert(m);
 
@@ -648,9 +656,33 @@ int AsyncMessenger::_send_to(Message *m, int type, const entity_addrvec_t& addrs
     return -EINVAL;
   }
 
-  AsyncConnectionRef conn = _lookup_conn(addrs);
-  submit_message(m, conn, addrs, type);
+  auto av = _filter_addrs(type, addrs);
+  AsyncConnectionRef conn = _lookup_conn(av);
+  submit_message(m, conn, av, type);
   return 0;
+}
+
+ConnectionRef AsyncMessenger::connect_to(int type, const entity_addrvec_t& addrs)
+{
+  Mutex::Locker l(lock);
+  if (*my_addrs == addrs ||
+      (addrs.v.size() == 1 &&
+       my_addrs->contains(addrs.front()))) {
+    // local
+    return local_connection;
+  }
+
+  auto av = _filter_addrs(type, addrs);
+
+  AsyncConnectionRef conn = _lookup_conn(av);
+  if (conn) {
+    ldout(cct, 10) << __func__ << " " << av << " existing " << conn << dendl;
+  } else {
+    conn = create_connect(av, type);
+    ldout(cct, 10) << __func__ << " " << av << " new " << conn << dendl;
+  }
+
+  return conn;
 }
 
 void AsyncMessenger::submit_message(Message *m, AsyncConnectionRef con,
@@ -816,7 +848,7 @@ int AsyncMessenger::get_proto_version(int peer_type, bool connect) const
 int AsyncMessenger::accept_conn(AsyncConnectionRef conn)
 {
   Mutex::Locker l(lock);
-  auto it = conns.find(conn->peer_addrs);
+  auto it = conns.find(*conn->peer_addrs);
   if (it != conns.end()) {
     AsyncConnectionRef existing = it->second;
 
@@ -830,8 +862,8 @@ int AsyncMessenger::accept_conn(AsyncConnectionRef conn)
       return -1;
     }
   }
-  ldout(cct, 10) << __func__ << " " << conn << " " << conn->peer_addrs << dendl;
-  conns[conn->peer_addrs] = conn;
+  ldout(cct, 10) << __func__ << " " << conn << " " << *conn->peer_addrs << dendl;
+  conns[*conn->peer_addrs] = conn;
   conn->get_perf_counter()->inc(l_msgr_active_connections);
   accepting_conns.erase(conn);
   return 0;
@@ -891,7 +923,7 @@ int AsyncMessenger::reap_dead()
     auto it = deleted_conns.begin();
     AsyncConnectionRef p = *it;
     ldout(cct, 5) << __func__ << " delete " << p << dendl;
-    auto conns_it = conns.find(p->peer_addrs);
+    auto conns_it = conns.find(*p->peer_addrs);
     if (conns_it != conns.end() && conns_it->second == p)
       conns.erase(conns_it);
     accepting_conns.erase(p);

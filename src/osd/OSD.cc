@@ -50,6 +50,7 @@
 #include "common/version.h"
 #include "common/pick_address.h"
 #include "common/blkdev.h"
+#include "common/numa.h"
 
 #include "os/ObjectStore.h"
 #ifdef HAVE_LIBFUSE
@@ -268,7 +269,7 @@ OSDService::OSDService(OSD *osd) :
   stat_lock("OSDService::stat_lock"),
   full_status_lock("OSDService::full_status_lock"),
   cur_state(NONE),
-  cur_ratio(0),
+  cur_ratio(0), physical_ratio(0),
   epoch_lock("OSDService::epoch_lock"),
   boot_epoch(0), up_epoch(0), bind_epoch(0),
   is_stopping_lock("OSDService::is_stopping_lock")
@@ -683,20 +684,15 @@ float OSDService::get_failsafe_full_ratio()
   return full_ratio;
 }
 
-void OSDService::check_full_status(float ratio)
+OSDService::s_names OSDService::recalc_full_state(float ratio, float pratio, string &inject)
 {
-  std::lock_guard l(full_status_lock);
-
-  cur_ratio = ratio;
-
   // The OSDMap ratios take precendence.  So if the failsafe is .95 and
   // the admin sets the cluster full to .96, the failsafe moves up to .96
   // too.  (Not that having failsafe == full is ideal, but it's better than
   // dropping writes before the clusters appears full.)
   OSDMapRef osdmap = get_osdmap();
   if (!osdmap || osdmap->get_epoch() == 0) {
-    cur_state = NONE;
-    return;
+    return NONE;
   }
   float nearfull_ratio = osdmap->get_nearfull_ratio();
   float backfillfull_ratio = std::max(osdmap->get_backfillfull_ratio(), nearfull_ratio);
@@ -720,27 +716,34 @@ void OSDService::check_full_status(float ratio)
     nearfull_ratio = failsafe_ratio;
   }
 
+  if (injectfull_state > NONE && injectfull) {
+    inject = "(Injected)";
+    return injectfull_state;
+  } else if (pratio > failsafe_ratio) {
+    return FAILSAFE;
+  } else if (ratio > full_ratio) {
+    return FULL;
+  } else if (ratio > backfillfull_ratio) {
+    return BACKFILLFULL;
+  } else if (ratio > nearfull_ratio) {
+    return NEARFULL;
+  }
+   return NONE;
+}
+
+void OSDService::check_full_status(float ratio, float pratio)
+{
+  std::lock_guard l(full_status_lock);
+
+  cur_ratio = ratio;
+  physical_ratio = pratio;
+
   string inject;
   s_names new_state;
-  if (injectfull_state > NONE && injectfull) {
-    new_state = injectfull_state;
-    inject = "(Injected)";
-  } else if (ratio > failsafe_ratio) {
-    new_state = FAILSAFE;
-  } else if (ratio > full_ratio) {
-    new_state = FULL;
-  } else if (ratio > backfillfull_ratio) {
-    new_state = BACKFILLFULL;
-  } else if (ratio > nearfull_ratio) {
-    new_state = NEARFULL;
-  } else {
-    new_state = NONE;
-  }
+  new_state = recalc_full_state(ratio, pratio, inject);
+
   dout(20) << __func__ << " cur ratio " << ratio
-	   << ". nearfull_ratio " << nearfull_ratio
-	   << ". backfillfull_ratio " << backfillfull_ratio
-	   << ", full_ratio " << full_ratio
-	   << ", failsafe_ratio " << failsafe_ratio
+           << ", physical ratio " << pratio
 	   << ", new state " << get_full_state_name(new_state)
 	   << " " << inject
 	   << dendl;
@@ -783,10 +786,8 @@ bool OSDService::need_fullness_update()
   return want != cur;
 }
 
-bool OSDService::_check_full(DoutPrefixProvider *dpp, s_names type) const
+bool OSDService::_check_inject_full(DoutPrefixProvider *dpp, s_names type) const
 {
-  std::lock_guard l(full_status_lock);
-
   if (injectfull && injectfull_state >= type) {
     // injectfull is either a count of the number of times to return failsafe full
     // or if -1 then always return full
@@ -797,10 +798,43 @@ bool OSDService::_check_full(DoutPrefixProvider *dpp, s_names type) const
              << dendl;
     return true;
   }
+  return false;
+}
+
+bool OSDService::_check_full(DoutPrefixProvider *dpp, s_names type) const
+{
+  std::lock_guard l(full_status_lock);
+
+  if (_check_inject_full(dpp, type))
+    return true;
+
   if (cur_state >= type)
-    ldpp_dout(dpp, 10) << __func__ << " current usage is " << cur_ratio << dendl;
+    ldpp_dout(dpp, 10) << __func__ << " current usage is " << cur_ratio
+                       << " physical " << physical_ratio << dendl;
 
   return cur_state >= type;
+}
+
+bool OSDService::_tentative_full(DoutPrefixProvider *dpp, s_names type, uint64_t adjust_used, osd_stat_t adjusted_stat)
+{
+  ldpp_dout(dpp, 20) << __func__ << " type " << get_full_state_name(type) << " adjust_used " << (adjust_used >> 10) << "KiB" << dendl;
+  {
+    std::lock_guard l(full_status_lock);
+    if (_check_inject_full(dpp, type)) {
+      return true;
+    }
+  }
+
+  float pratio;
+  float ratio = compute_adjusted_ratio(adjusted_stat, &pratio, adjust_used);
+
+  string notused;
+  s_names tentative_state = recalc_full_state(ratio, pratio, notused);
+
+  if (tentative_state >= type)
+    ldpp_dout(dpp, 10) << __func__ << " tentative usage is " << ratio << dendl;
+
+  return tentative_state >= type;
 }
 
 bool OSDService::check_failsafe_full(DoutPrefixProvider *dpp) const
@@ -811,6 +845,11 @@ bool OSDService::check_failsafe_full(DoutPrefixProvider *dpp) const
 bool OSDService::check_full(DoutPrefixProvider *dpp) const
 {
   return _check_full(dpp, FULL);
+}
+
+bool OSDService::tentative_backfill_full(DoutPrefixProvider *dpp, uint64_t adjust_used, osd_stat_t stats)
+{
+  return _tentative_full(dpp, BACKFILLFULL, adjust_used, stats);
 }
 
 bool OSDService::check_backfill_full(DoutPrefixProvider *dpp) const
@@ -860,12 +899,38 @@ void OSDService::set_statfs(const struct store_statfs_t &stbuf)
   uint64_t avail = stbuf.available;
   uint64_t used = stbuf.get_used_raw();
 
+  // For testing fake statfs values so it doesn't matter if all
+  // OSDs are using the same partition.
+  if (cct->_conf->fake_statfs_for_testing) {
+    uint64_t total_num_bytes = 0;
+    vector<PGRef> pgs;
+    osd->_get_pgs(&pgs);
+    for (auto p : pgs) {
+      total_num_bytes += p->get_stats_num_bytes();
+    }
+    bytes = cct->_conf->fake_statfs_for_testing;
+    if (total_num_bytes < bytes)
+      avail = bytes - total_num_bytes;
+    else
+      avail = 0;
+    dout(0) << __func__ << " fake total " << cct->_conf->fake_statfs_for_testing
+            << " adjust available " << avail
+            << dendl;
+    used = bytes - avail;
+  }
+
   osd->logger->set(l_osd_stat_bytes, bytes);
   osd->logger->set(l_osd_stat_bytes_used, used);
   osd->logger->set(l_osd_stat_bytes_avail, avail);
 
   std::lock_guard l(stat_lock);
   osd_stat.statfs = stbuf;
+  if (cct->_conf->fake_statfs_for_testing) {
+    osd_stat.statfs.total = bytes;
+    osd_stat.statfs.available = avail;
+    // For testing don't want used to go negative, so clear reserved
+    osd_stat.statfs.internally_reserved = 0;
+  }
 }
 
 osd_stat_t OSDService::set_osd_stat(vector<int>& hb_peers,
@@ -876,6 +941,34 @@ osd_stat_t OSDService::set_osd_stat(vector<int>& hb_peers,
   osd->op_tracker.get_age_ms_histogram(&osd_stat.op_queue_age_hist);
   osd_stat.num_pgs = num_pgs;
   return osd_stat;
+}
+
+float OSDService::compute_adjusted_ratio(osd_stat_t new_stat, float *pratio,
+				         uint64_t adjust_used)
+{
+  *pratio =
+   ((float)new_stat.statfs.get_used()) / ((float)new_stat.statfs.total);
+
+  if (adjust_used) {
+    dout(20) << __func__ << " Before kb_used() " << new_stat.statfs.kb_used()  << dendl;
+    if (new_stat.statfs.available > adjust_used)
+      new_stat.statfs.available -= adjust_used;
+    else
+      new_stat.statfs.available = 0;
+    dout(20) << __func__ << " After kb_used() " << new_stat.statfs.kb_used() << dendl;
+  }
+
+  // Check all pgs and adjust kb_used to include all pending backfill data
+  int backfill_adjusted = 0;
+  vector<PGRef> pgs;
+  osd->_get_pgs(&pgs);
+  for (auto p : pgs) {
+    backfill_adjusted += p->pg_stat_adjust(&new_stat);
+  }
+  if (backfill_adjusted) {
+    dout(20) << __func__ << " backfill adjusted " << new_stat << dendl;
+  }
+  return ((float)new_stat.statfs.get_used()) / ((float)new_stat.statfs.total);
 }
 
 bool OSDService::check_osdmap_full(const set<pg_shard_t> &missing_on)
@@ -2236,6 +2329,75 @@ int OSD::pre_init()
   return 0;
 }
 
+int OSD::set_numa_affinity()
+{
+  // storage numa node
+  int store_node = -1;
+  store->get_numa_node(&store_node, nullptr, nullptr);
+  if (store_node >= 0) {
+    dout(1) << __func__ << " storage numa node " << store_node << dendl;
+  }
+
+  // check network numa node(s)
+  int front_node = -1, back_node = -1;
+  string front_iface = pick_iface(
+    cct,
+    client_messenger->get_myaddrs().front().get_sockaddr_storage());
+  string back_iface = pick_iface(
+    cct,
+    cluster_messenger->get_myaddrs().front().get_sockaddr_storage());
+  int r = get_iface_numa_node(front_iface, &front_node);
+  if (r >= 0) {
+    dout(1) << __func__ << " public network " << front_iface << " numa node "
+	      << front_node << dendl;
+    r = get_iface_numa_node(back_iface, &back_node);
+    if (r >= 0) {
+      dout(1) << __func__ << " cluster network " << back_iface << " numa node "
+	      << back_node << dendl;
+      if (front_node == back_node &&
+	  front_node == store_node) {
+	dout(1) << " objectstore and network numa nodes all match" << dendl;
+	if (g_conf().get_val<bool>("osd_numa_auto_affinity")) {
+	  numa_node = front_node;
+	}
+      } else {
+	derr << __func__ << " objectstore and network numa nodes to not match"
+	     << dendl;
+      }
+    }
+  } else {
+    derr << __func__ << " unable to identify public interface '" << front_iface
+	 << "' numa node: " << cpp_strerror(r) << dendl;
+  }
+  if (int node = g_conf().get_val<int64_t>("osd_numa_node"); node >= 0) {
+    // this takes precedence over the automagic logic above
+    numa_node = node;
+  }
+  if (numa_node >= 0) {
+    int r = get_numa_node_cpu_set(numa_node, &numa_cpu_set_size, &numa_cpu_set);
+    if (r < 0) {
+      dout(1) << __func__ << " unable to determine numa node " << numa_node
+	      << " CPUs" << dendl;
+      numa_node = -1;
+    } else {
+      dout(1) << __func__ << " setting numa affinity to node " << numa_node
+	      << " cpus "
+	      << cpu_set_to_str_list(numa_cpu_set_size, &numa_cpu_set)
+	      << dendl;
+      r = sched_setaffinity(getpid(), numa_cpu_set_size, &numa_cpu_set);
+      if (r < 0) {
+	r = -errno;
+	derr << __func__ << " failed to set numa affinity: " << cpp_strerror(r)
+	     << dendl;
+	numa_node = -1;
+      }
+    }
+  } else {
+    dout(1) << __func__ << " not setting numa affinity" << dendl;
+  }
+  return 0;
+}
+
 // asok
 
 class OSDSocketHook : public AdminSocketHook {
@@ -2677,6 +2839,8 @@ int OSD::init()
   }
 
   int rotating_auth_attempts = 0;
+  auto rotating_auth_timeout =
+    g_conf().get_val<int64_t>("rotating_keys_bootstrap_timeout");
 
   // sanity check long object name handling
   {
@@ -2923,7 +3087,7 @@ int OSD::init()
     exit(1);
   }
 
-  while (monc->wait_auth_rotating(30.0) < 0) {
+  while (monc->wait_auth_rotating(rotating_auth_timeout) < 0) {
     derr << "unable to obtain rotating service keys; retrying" << dendl;
     ++rotating_auth_attempts;
     if (rotating_auth_attempts > g_conf()->max_rotating_auth_attempts) {
@@ -4981,9 +5145,10 @@ void OSD::heartbeat()
   dout(5) << __func__ << " " << new_stat << dendl;
   ceph_assert(new_stat.statfs.total);
 
-  float ratio =
-   ((float)new_stat.statfs.get_used()) / ((float)new_stat.statfs.total);
-  service.check_full_status(ratio);
+  float pratio;
+  float ratio = service.compute_adjusted_ratio(new_stat, &pratio);
+
+  service.check_full_status(ratio, pratio);
 
   utime_t now = ceph_clock_now();
   utime_t deadline = now;
@@ -5742,6 +5907,11 @@ void OSD::_send_boot()
     hb_front_server_messenger->ms_deliver_handle_fast_connect(local_connection);
   }
 
+  // we now know what our front and back addrs will be, and we are
+  // about to tell the mon what our metadata (including numa bindings)
+  // are, so now is a good time!
+  set_numa_affinity();
+
   MOSDBoot *mboot = new MOSDBoot(
     superblock, get_osdmap_epoch(), service.get_boot_epoch(),
     hb_back_addrs, hb_front_addrs, cluster_addrs,
@@ -5784,6 +5954,44 @@ void OSD::_collect_metadata(map<string,string> *pm)
   (*pm)["back_iface"] = pick_iface(
     cct,
     cluster_messenger->get_myaddrs().front().get_sockaddr_storage());
+
+  // network numa
+  {
+    int node = -1;
+    set<int> nodes;
+    set<string> unknown;
+    for (auto nm : { "front_iface", "back_iface" }) {
+      if (!(*pm)[nm].size()) {
+	unknown.insert(nm);
+	continue;
+      }
+      int n = -1;
+      int r = get_iface_numa_node((*pm)[nm], &n);
+      if (r < 0) {
+	unknown.insert((*pm)[nm]);
+	continue;
+      }
+      nodes.insert(n);
+      if (node < 0) {
+	node = n;
+      }
+    }
+    if (unknown.size()) {
+      (*pm)["network_numa_unknown_ifaces"] = stringify(unknown);
+    }
+    if (!nodes.empty()) {
+      (*pm)["network_numa_nodes"] = stringify(nodes);
+    }
+    if (node >= 0 && nodes.size() == 1 && unknown.empty()) {
+      (*pm)["network_numa_node"] = stringify(node);
+    }
+  }
+
+  if (numa_node >= 0) {
+    (*pm)["numa_node"] = stringify(numa_node);
+    (*pm)["numa_node_cpus"] = cpu_set_to_str_list(numa_cpu_set_size,
+						  &numa_cpu_set);
+  }
 
   set<string> devnames;
   store->get_devices(&devnames);
@@ -6920,7 +7128,7 @@ void OSD::ms_fast_preprocess(Message *m)
   }
 }
 
-bool OSD::ms_get_authorizer(int dest_type, AuthAuthorizer **authorizer, bool force_new)
+bool OSD::ms_get_authorizer(int dest_type, AuthAuthorizer **authorizer)
 {
   dout(10) << "OSD::ms_get_authorizer type=" << ceph_entity_type_name(dest_type) << dendl;
 
@@ -6931,15 +7139,6 @@ bool OSD::ms_get_authorizer(int dest_type, AuthAuthorizer **authorizer, bool for
 
   if (dest_type == CEPH_ENTITY_TYPE_MON)
     return true;
-
-  if (force_new) {
-    /* the MonClient checks keys every tick(), so we should just wait for that cycle
-       to get through */
-    if (monc->wait_auth_rotating(10) < 0) {
-      derr << "OSD::ms_get_authorizer wait_auth_rotating failed" << dendl;
-      return false;
-    }
-  }
 
   *authorizer = monc->build_authorizer(dest_type);
   return *authorizer != NULL;

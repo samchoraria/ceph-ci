@@ -507,7 +507,9 @@ int MDSDaemon::init()
   }
 
   int rotating_auth_attempts = 0;
-  while (monc->wait_auth_rotating(30.0) < 0) {
+  auto rotating_auth_timeout =
+    g_conf().get_val<int64_t>("rotating_keys_bootstrap_timeout");
+  while (monc->wait_auth_rotating(rotating_auth_timeout) < 0) {
     if (++rotating_auth_attempts <= g_conf()->max_rotating_auth_attempts) {
       derr << "unable to obtain rotating service keys; retrying" << dendl;
       continue;
@@ -631,7 +633,7 @@ void MDSDaemon::handle_command(const MCommand::const_ref &m)
   if (!session->auth_caps.allow_all()) {
     dout(1) << __func__
       << ": received command from client without `tell` capability: "
-      << m->get_connection()->peer_addrs << dendl;
+      << *m->get_connection()->peer_addrs << dendl;
 
     ss << "permission denied";
     r = -EPERM;
@@ -1167,7 +1169,7 @@ bool MDSDaemon::ms_dispatch2(const Message::ref &m)
   }
 }
 
-bool MDSDaemon::ms_get_authorizer(int dest_type, AuthAuthorizer **authorizer, bool force_new)
+bool MDSDaemon::ms_get_authorizer(int dest_type, AuthAuthorizer **authorizer)
 {
   dout(10) << "MDSDaemon::ms_get_authorizer type="
            << ceph_entity_type_name(dest_type) << dendl;
@@ -1175,11 +1177,6 @@ bool MDSDaemon::ms_get_authorizer(int dest_type, AuthAuthorizer **authorizer, bo
   /* monitor authorization is being handled on different layer */
   if (dest_type == CEPH_ENTITY_TYPE_MON)
     return true;
-
-  if (force_new) {
-    if (monc->wait_auth_rotating(10) < 0)
-      return false;
-  }
 
   *authorizer = monc->build_authorizer(dest_type);
   return *authorizer != NULL;

@@ -1998,23 +1998,32 @@ std::vector<Option> get_global_options() {
 
     Option("auth_cluster_required", Option::TYPE_STR, Option::LEVEL_ADVANCED)
     .set_default("cephx")
-    .set_description(""),
+    .set_description("authentication methods required by the cluster"),
 
     Option("auth_service_required", Option::TYPE_STR, Option::LEVEL_ADVANCED)
     .set_default("cephx")
-    .set_description(""),
+    .set_description("authentication methods required by service daemons"),
 
     Option("auth_client_required", Option::TYPE_STR, Option::LEVEL_ADVANCED)
     .set_default("cephx, none")
-    .set_description(""),
+    .set_flag(Option::FLAG_MINIMAL_CONF)
+    .set_description("authentication methods allowed by clients"),
 
     Option("auth_supported", Option::TYPE_STR, Option::LEVEL_ADVANCED)
     .set_default("")
-    .set_description(""),
+    .set_description("authentication methods required (deprecated)"),
 
     Option("max_rotating_auth_attempts", Option::TYPE_INT, Option::LEVEL_ADVANCED)
     .set_default(10)
-    .set_description(""),
+    .set_description("number of attempts to initialize rotating keys before giving up"),
+
+    Option("rotating_keys_bootstrap_timeout", Option::TYPE_INT, Option::LEVEL_ADVANCED)
+    .set_default(30)
+    .set_description("timeout for obtaining rotating keys during bootstrap phase (seconds)"),
+
+    Option("rotating_keys_renewal_timeout", Option::TYPE_INT, Option::LEVEL_ADVANCED)
+    .set_default(10)
+    .set_description("timeout for updating rotating keys (seconds)"),
 
     Option("cephx_require_signatures", Option::TYPE_BOOL, Option::LEVEL_ADVANCED)
     .set_default(false)
@@ -2057,7 +2066,7 @@ std::vector<Option> get_global_options() {
     .set_description(""),
 
     Option("mon_client_hunt_parallel", Option::TYPE_UINT, Option::LEVEL_ADVANCED)
-    .set_default(2)
+    .set_default(3)
     .set_description(""),
 
     Option("mon_client_hunt_interval", Option::TYPE_FLOAT, Option::LEVEL_ADVANCED)
@@ -2073,7 +2082,7 @@ std::vector<Option> get_global_options() {
     .set_description(""),
 
     Option("mon_client_hunt_interval_backoff", Option::TYPE_FLOAT, Option::LEVEL_ADVANCED)
-    .set_default(2.0)
+    .set_default(1.5)
     .set_description(""),
 
     Option("mon_client_hunt_interval_min_multiple", Option::TYPE_FLOAT, Option::LEVEL_ADVANCED)
@@ -2173,6 +2182,23 @@ std::vector<Option> get_global_options() {
     .set_description("Number of striping periods to zero head of MDS journal write position"),
 
     // -- OSD --
+    Option("osd_numa_prefer_iface", Option::TYPE_BOOL, Option::LEVEL_ADVANCED)
+    .set_default(true)
+    .set_flag(Option::FLAG_STARTUP)
+    .set_description("prefer IP on network interface on same numa node as storage")
+    .add_see_also("osd_numa_auto_affinity"),
+
+    Option("osd_numa_auto_affinity", Option::TYPE_BOOL, Option::LEVEL_ADVANCED)
+    .set_default(true)
+    .set_flag(Option::FLAG_STARTUP)
+    .set_description("automatically set affinity to numa node when storage and network match"),
+
+    Option("osd_numa_node", Option::TYPE_INT, Option::LEVEL_ADVANCED)
+    .set_default(-1)
+    .set_flag(Option::FLAG_STARTUP)
+    .set_description("set affinity to a numa node (-1 for none)")
+    .add_see_also("osd_numa_auto_affinity"),
+
     Option("osd_smart_report_timeout", Option::TYPE_UINT, Option::LEVEL_ADVANCED)
     .set_default(5)
     .set_description("Timeout (in seconds) for smarctl to run, default is set to 5"),
@@ -3861,7 +3887,7 @@ std::vector<Option> get_global_options() {
     .set_description(""),
 
     Option("osd_objectstore", Option::TYPE_STR, Option::LEVEL_ADVANCED)
-    .set_default("filestore")
+    .set_default("bluestore")
     .set_enum_allowed({"bluestore", "filestore", "memstore", "kstore"})
     .set_flag(Option::FLAG_CREATE)
     .set_description("backend type for an OSD (like filestore or bluestore)"),
@@ -4090,10 +4116,16 @@ std::vector<Option> get_global_options() {
     .set_default(1)
     .set_description("How frequently (in seconds) to balance free space between BlueFS and BlueStore"),
 
-    Option("bluestore_bluefs_balance_failure_dump_interval", Option::TYPE_FLOAT, Option::LEVEL_ADVANCED)
+    Option("bluestore_bluefs_alloc_failure_dump_interval", Option::TYPE_FLOAT, Option::LEVEL_ADVANCED)
     .set_default(0)
-    .set_description("How frequently (in seconds) to dump information on "
-      "allocation failure occurred during BlueFS space rebalance"),
+    .set_description("How frequently (in seconds) to dump allocator on"
+      "BlueFS space allocation failure"),
+
+    Option("bluestore_bluefs_db_compatibility", Option::TYPE_BOOL, Option::LEVEL_DEV)
+    .set_default(true)
+    .set_description("Sync db with legacy bluefs extents info")
+    .set_long_description("Enforces db sync with legacy bluefs extents information on close."
+                          " Enables downgrades to pre-nautilus releases"),
 
     Option("bluestore_spdk_mem", Option::TYPE_SIZE, Option::LEVEL_DEV)
     .set_default(512)
@@ -4363,11 +4395,6 @@ std::vector<Option> get_global_options() {
     .add_see_also("bluestore_cache_size")
     .add_see_also("bluestore_cache_meta_ratio")
     .set_description("Automatically tune the ratio of caches while respecting min values."),
-
-    Option("bluestore_cache_autotune_chunk_size", Option::TYPE_SIZE, Option::LEVEL_DEV)
-    .set_default(33554432)
-    .add_see_also("bluestore_cache_autotune")
-    .set_description("The chunk size in bytes to allocate to caches when cache autotune is enabled."),
 
     Option("bluestore_cache_autotune_interval", Option::TYPE_FLOAT, Option::LEVEL_DEV)
     .set_default(5)
@@ -7089,6 +7116,15 @@ static std::vector<Option> get_rbd_mirror_options() {
     Option("rbd_mirror_image_policy_rebalance_timeout", Option::TYPE_FLOAT, Option::LEVEL_ADVANCED)
     .set_default(0)
     .set_description("number of seconds policy should be idle before trigerring reshuffle (rebalance) of images"),
+
+    Option("rbd_mirror_perf_stats_prio", Option::TYPE_INT, Option::LEVEL_ADVANCED)
+    .set_default((int64_t)PerfCountersBuilder::PRIO_USEFUL)
+    .set_description("Priority level for mirror daemon replication perf counters")
+    .set_long_description("The daemon will send perf counter data to the "
+                          "manager daemon if the priority is not lower than "
+                          "mgr_stats_threshold.")
+    .set_min_max((int64_t)PerfCountersBuilder::PRIO_DEBUGONLY,
+                 (int64_t)PerfCountersBuilder::PRIO_CRITICAL + 1),
   });
 }
 
@@ -7804,12 +7840,17 @@ std::vector<Option> get_mds_client_options() {
 
     Option("client_mds_namespace", Option::TYPE_STR, Option::LEVEL_ADVANCED)
     .set_default("")
+
     .set_description("CephFS file system name to mount")
     .set_long_description("Use this with ceph-fuse, or with any process "
         "that uses libcephfs.  Programs using libcephfs may also pass "
         "the filesystem name into mount(), which will override this setting. "
         "If no filesystem name is given in mount() or this setting, the default "
         "filesystem will be mounted (usually the first created)."),
+
+    Option("fake_statfs_for_testing", Option::TYPE_INT, Option::LEVEL_DEV)
+    .set_default(0)
+    .set_description("Set a value for kb and compute kb_used from total of num_bytes"),
   });
 }
 

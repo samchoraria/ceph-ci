@@ -290,6 +290,64 @@ class CRUSHMap(ceph_module.BasePyCRUSH):
         return dict(result)
 
 
+class CLICommand(object):
+    COMMANDS = {}
+
+    def __init__(self, prefix, args="", desc="", perm="rw"):
+        self.prefix = prefix
+        self.args = args
+        self.args_dict = {}
+        self.desc = desc
+        self.perm = perm
+        self.func = None
+        self._parse_args()
+
+    def _parse_args(self):
+        if not self.args:
+            return
+        args = self.args.split(" ")
+        for arg in args:
+            arg_desc = arg.strip().split(",")
+            arg_d = {}
+            for kv in arg_desc:
+                k, v = kv.split("=")
+                if k != "name":
+                    arg_d[k] = v
+                else:
+                    self.args_dict[v] = arg_d
+
+    def __call__(self, func):
+        self.func = func
+        self.COMMANDS[self.prefix] = self
+        return self.func
+
+    def call(self, mgr, cmd_dict, inbuf):
+        kwargs = {}
+        for a, d in self.args_dict.items():
+            if 'req' in d and d['req'] == "false" and a not in cmd_dict:
+                continue
+            kwargs[a.replace("-", "_")] = cmd_dict[a]
+        if inbuf:
+            kwargs['inbuf'] = inbuf
+        return self.func(mgr, **kwargs)
+
+    @classmethod
+    def dump_cmd_list(cls):
+        return [{
+            'cmd': '{} {}'.format(cmd.prefix, cmd.args),
+            'desc': cmd.desc,
+            'perm': cmd.perm
+        } for _, cmd in cls.COMMANDS.items()]
+
+
+def CLIReadCommand(prefix, args="", desc=""):
+    return CLICommand(prefix, args, desc, "r")
+
+
+def CLIWriteCommand(prefix, args="", desc=""):
+    return CLICommand(prefix, args, desc, "w")
+
+
 class MgrStandbyModule(ceph_module.BaseMgrStandbyModule):
     """
     Standby modules only implement a serve and shutdown method, they
@@ -436,6 +494,10 @@ class MgrModule(ceph_module.BaseMgrModule):
     def __del__(self):
         unconfigure_logger(self, self.module_name)
 
+    @classmethod
+    def _register_commands(cls):
+        cls.COMMANDS.extend(CLICommand.dump_cmd_list())
+
     @property
     def log(self):
         return self._logger
@@ -512,7 +574,7 @@ class MgrModule(ceph_module.BaseMgrModule):
         """
         Called by the plugin to fetch named cluster-wide objects from ceph-mgr.
 
-        :param str data_name: Valid things to fetch are osd_crush_map_text, 
+        :param str data_name: Valid things to fetch are osd_crush_map_text,
                 osd_map, osd_map_tree, osd_map_crush, config, mon_map, fs_map,
                 osd_metadata, pg_summary, io_rate, pg_dump, df, osd_stats,
                 health, mon_status, devices, device <devid>.
@@ -524,7 +586,7 @@ class MgrModule(ceph_module.BaseMgrModule):
         return self._ceph_get(data_name)
 
     def _stattype_to_str(self, stattype):
-        
+
         typeonly = stattype & self.PERFCOUNTER_TYPE_MASK
         if typeonly == 0:
             return 'gauge'
@@ -535,7 +597,7 @@ class MgrModule(ceph_module.BaseMgrModule):
             return 'counter'
         if typeonly == self.PERFCOUNTER_HISTOGRAM:
             return 'histogram'
-        
+
         return ''
 
     def _perfvalue_to_value(self, stattype, value):
@@ -549,7 +611,7 @@ class MgrModule(ceph_module.BaseMgrModule):
         if unit == self.NONE:
             return "/s"
         elif unit == self.BYTES:
-            return "B/s"  
+            return "B/s"
 
     def to_pretty_iec(self, n):
         for bits, suffix in [(60, 'Ei'), (50, 'Pi'), (40, 'Ti'), (30, 'Gi'),
@@ -762,6 +824,11 @@ class MgrModule(ceph_module.BaseMgrModule):
         """
         self._ceph_set_health_checks(checks)
 
+    def _handle_command(self, inbuf, cmd):
+        if cmd['prefix'] not in CLICommand.COMMANDS:
+            return self.handle_command(inbuf, cmd)
+        return CLICommand.COMMANDS[cmd['prefix']].call(self, cmd, inbuf)
+
     def handle_command(self, inbuf, cmd):
         """
         Called by ceph-mgr to request the plugin to handle one
@@ -797,7 +864,7 @@ class MgrModule(ceph_module.BaseMgrModule):
 
     def _validate_module_option(self, key):
         """
-        Helper: don't allow get/set config callers to 
+        Helper: don't allow get/set config callers to
         access config options that they didn't declare
         in their schema.
         """
@@ -822,6 +889,23 @@ class MgrModule(ceph_module.BaseMgrModule):
         """
         self._validate_module_option(key)
         return self._get_module_option(key, default)
+
+    def get_module_option_ex(self, module, key, default=None):
+        """
+        Retrieve the value of a persistent configuration setting
+        for the specified module.
+
+        :param str module: The name of the module, e.g. 'dashboard'
+            or 'telemetry'.
+        :param str key: The configuration key, e.g. 'server_addr'.
+        :param str,None default: The default value to use when the
+            returned value is ``None``. Defaults to ``None``.
+        :return: str,int,bool,float,None
+        """
+        if module == self.module_name:
+            self._validate_module_option(key)
+        r = self._ceph_get_module_option_ex(module, key)
+        return default if r is None else r
 
     def get_store_prefix(self, key_prefix):
         """
@@ -861,10 +945,23 @@ class MgrModule(ceph_module.BaseMgrModule):
         Set the value of a persistent configuration setting
 
         :param str key:
-        :param str val:
+        :type val: str | None
         """
         self._validate_module_option(key)
         return self._set_module_option(key, val)
+
+    def set_module_option_ex(self, module, key, val):
+        """
+        Set the value of a persistent configuration setting
+        for the specified module.
+
+        :param str module:
+        :param str key:
+        :param str val:
+        """
+        if module == self.module_name:
+            self._validate_module_option(key)
+        return self._ceph_set_module_option_ex(module, key, str(val))
 
     def set_localized_module_option(self, key, val):
         """
@@ -939,7 +1036,9 @@ class MgrModule(ceph_module.BaseMgrModule):
         else:
             return (0, 0)
 
-    def get_all_perf_counters(self, prio_limit=PRIO_USEFUL):
+    def get_all_perf_counters(self, prio_limit=PRIO_USEFUL,
+                              services=("mds", "mon", "osd",
+                                        "rbd-mirror", "rgw")):
         """
         Return the perf counters currently known to this ceph-mgr
         instance, filtered by priority equal to or greater than `prio_limit`.
@@ -957,7 +1056,7 @@ class MgrModule(ceph_module.BaseMgrModule):
 
         for server in self.list_servers():
             for service in server['services']:
-                if service['type'] not in ("rgw", "mds", "osd", "mon"):
+                if service['type'] not in services:
                     continue
 
                 schema = self.get_perf_schema(service['type'], service['id'])

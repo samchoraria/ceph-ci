@@ -429,16 +429,10 @@ bool MgrStandby::ms_dispatch(Message *m)
 }
 
 
-bool MgrStandby::ms_get_authorizer(int dest_type, AuthAuthorizer **authorizer,
-                         bool force_new)
+bool MgrStandby::ms_get_authorizer(int dest_type, AuthAuthorizer **authorizer)
 {
   if (dest_type == CEPH_ENTITY_TYPE_MON)
     return true;
-
-  if (force_new) {
-    if (monc.wait_auth_rotating(10) < 0)
-      return false;
-  }
 
   *authorizer = monc.build_authorizer(dest_type);
   return *authorizer != NULL;

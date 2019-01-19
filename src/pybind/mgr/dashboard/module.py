@@ -4,6 +4,7 @@ ceph dashboard mgr plugin (based on CherryPy)
 """
 from __future__ import absolute_import
 
+import collections
 import errno
 from distutils.version import StrictVersion
 from distutils.util import strtobool
@@ -11,6 +12,7 @@ import os
 import socket
 import tempfile
 import threading
+import time
 from uuid import uuid4
 
 from OpenSSL import crypto
@@ -58,8 +60,6 @@ from .controllers import generate_routes, json_error_page
 from .tools import NotificationQueue, RequestLoggingTool, TaskManager, \
                    prepare_url_prefix
 from .services.auth import AuthManager, AuthManagerTool, JwtManager
-from .services.access_control import ACCESS_CONTROL_COMMANDS, \
-                                     handle_access_control_command
 from .services.sso import SSO_COMMANDS, \
                           handle_sso_command
 from .services.exception import dashboard_exception_handler
@@ -236,7 +236,6 @@ class Module(MgrModule, CherryPyConfig):
         },
     ]
     COMMANDS.extend(options_command_list())
-    COMMANDS.extend(ACCESS_CONTROL_COMMANDS)
     COMMANDS.extend(SSO_COMMANDS)
 
     MODULE_OPTIONS = [
@@ -251,6 +250,9 @@ class Module(MgrModule, CherryPyConfig):
         {'name': 'ssl'}
     ]
     MODULE_OPTIONS.extend(options_schema_list())
+
+    __pool_stats = collections.defaultdict(lambda: collections.defaultdict(
+        lambda: collections.deque(maxlen=10)))
 
     def __init__(self, *args, **kwargs):
         super(Module, self).__init__(*args, **kwargs)
@@ -332,9 +334,6 @@ class Module(MgrModule, CherryPyConfig):
         res = handle_option_command(cmd)
         if res[0] != -errno.ENOSYS:
             return res
-        res = handle_access_control_command(cmd)
-        if res[0] != -errno.ENOSYS:
-            return res
         res = handle_sso_command(cmd)
         if res[0] != -errno.ENOSYS:
             return res
@@ -375,6 +374,16 @@ class Module(MgrModule, CherryPyConfig):
 
     def notify(self, notify_type, notify_id):
         NotificationQueue.new_notification(notify_type, notify_id)
+
+    def get_updated_pool_stats(self):
+        df = self.get('df')
+        pool_stats = dict([(p['id'], p['stats']) for p in df['pools']])
+        now = time.time()
+        for pool_id, stats in pool_stats.items():
+            for stat_name, stat_val in stats.items():
+                self.__pool_stats[pool_id][stat_name].append((now, stat_val))
+
+        return self.__pool_stats
 
 
 class StandbyModule(MgrStandbyModule, CherryPyConfig):

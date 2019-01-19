@@ -42,11 +42,11 @@
 
 #include "bluestore_types.h"
 #include "BlockDevice.h"
+#include "BlueFS.h"
 #include "common/EventTrace.h"
 
 class Allocator;
 class FreelistManager;
-class BlueFS;
 class BlueStoreRepairer;
 
 //#define DEBUG_CACHE
@@ -129,6 +129,7 @@ enum {
 #define META_POOL_ID ((uint64_t)-1ull)
 
 class BlueStore : public ObjectStore,
+		  public BlueFSDeviceExpander,
 		  public md_config_obs_t {
   // -----------------------------------------------------
   // types
@@ -1881,7 +1882,7 @@ private:
   unsigned bluefs_shared_bdev = 0;  ///< which bluefs bdev we are sharing
   bool bluefs_single_shared_device = true;
   mono_time bluefs_last_balance;
-  utime_t next_dump_on_bluefs_balance_failure;
+  utime_t next_dump_on_bluefs_alloc_failure;
 
   KeyValueDB *db = nullptr;
   BlockDevice *bdev = nullptr;
@@ -1990,7 +1991,6 @@ private:
   double cache_kv_ratio = 0;     ///< cache ratio dedicated to kv (e.g., rocksdb)
   double cache_data_ratio = 0;   ///< cache ratio dedicated to object data
   bool cache_autotune = false;   ///< cache autotune setting
-  uint64_t cache_autotune_chunk_size = 0; ///< cache autotune chunk size
   double cache_autotune_interval = 0; ///< time to wait between cache rebalancing
   uint64_t osd_memory_target = 0;   ///< OSD memory target when autotuning cache
   uint64_t osd_memory_base = 0;     ///< OSD base memory when autotuning cache
@@ -2014,10 +2014,12 @@ private:
     ceph::mutex lock = ceph::make_mutex("BlueStore::MempoolThread::lock");
     bool stop = false;
     uint64_t autotune_cache_size = 0;
+    std::shared_ptr<PriorityCache::PriCache> binned_kv_cache = nullptr;
 
     struct MempoolCache : public PriorityCache::PriCache {
       BlueStore *store;
-      int64_t cache_bytes[PriorityCache::Priority::LAST+1];
+      int64_t cache_bytes[PriorityCache::Priority::LAST+1] = {0};
+      int64_t committed_bytes = 0;
       double cache_ratio = 0;
 
       MempoolCache(BlueStore *s) : store(s) {};
@@ -2025,15 +2027,14 @@ private:
       virtual uint64_t _get_used_bytes() const = 0;
 
       virtual int64_t request_cache_bytes(
-          PriorityCache::Priority pri, uint64_t chunk_bytes) const {
+          PriorityCache::Priority pri, uint64_t total_cache) const {
         int64_t assigned = get_cache_bytes(pri);
 
         switch (pri) {
         // All cache items are currently shoved into the LAST priority 
         case PriorityCache::Priority::LAST:
           {
-            uint64_t usage = _get_used_bytes();
-            int64_t request = PriorityCache::get_chunk(usage, chunk_bytes);
+            int64_t request = _get_used_bytes();
             return(request > assigned) ? request - assigned : 0;
           }
         default:
@@ -2060,8 +2061,13 @@ private:
       virtual void add_cache_bytes(PriorityCache::Priority pri, int64_t bytes) {
         cache_bytes[pri] += bytes;
       }
-      virtual int64_t commit_cache_size() {
-        return get_cache_bytes(); 
+      virtual int64_t commit_cache_size(uint64_t total_cache) {
+        committed_bytes = PriorityCache::get_chunk(
+            get_cache_bytes(), total_cache);
+        return committed_bytes;
+      }
+      virtual int64_t get_committed_size() const {
+        return committed_bytes;
       }
       virtual double get_cache_ratio() const {
         return cache_ratio;
@@ -2093,7 +2099,8 @@ private:
       double get_bytes_per_onode() const {
         return (double)_get_used_bytes() / (double)_get_num_onodes();
       }
-    } meta_cache;
+    };
+    std::shared_ptr<MetaCache> meta_cache;
 
     struct DataCache : public MempoolCache {
       DataCache(BlueStore *s) : MempoolCache(s) {};
@@ -2108,13 +2115,14 @@ private:
       virtual string get_cache_name() const {
         return "BlueStore Data Cache";
       }
-    } data_cache;
+    };
+    std::shared_ptr<DataCache> data_cache;
 
   public:
     explicit MempoolThread(BlueStore *s)
       : store(s),
-        meta_cache(MetaCache(s)),
-        data_cache(DataCache(s)) {}
+        meta_cache(new MetaCache(s)),
+        data_cache(new DataCache(s)) {}
 
     void *entry() override;
     void init() {
@@ -2133,10 +2141,12 @@ private:
     void _adjust_cache_settings();
     void _trim_shards(bool interval_stats);
     void _tune_cache_size(bool interval_stats);
-    void _balance_cache(const std::list<PriorityCache::PriCache *>& caches);
-    void _balance_cache_pri(int64_t *mem_avail, 
-                            const std::list<PriorityCache::PriCache *>& caches, 
-                            PriorityCache::Priority pri);
+    void _balance_cache(
+        const std::list<std::shared_ptr<PriorityCache::PriCache>>& caches);
+    void _balance_cache_pri(
+        int64_t *mem_avail, 
+        const std::list<std::shared_ptr<PriorityCache::PriCache>>& caches, 
+        PriorityCache::Priority pri);
   } mempool_thread;
 
   // --------------------------------------------------------
@@ -2165,6 +2175,8 @@ private:
   void _validate_bdev();
   void _close_bdev();
 
+  int _minimal_open_bluefs(bool create);
+  void _minimal_close_bluefs();
   int _open_bluefs(bool create);
   void _close_bluefs();
 
@@ -2173,13 +2185,27 @@ private:
   void _umount_for_bluefs();
 
 
+  int _is_bluefs(bool create, bool* ret);
+  /*
+  * opens both DB and dependant super_meta, FreelistManager and allocator
+  * in the proper order
+  */
+  int _open_db_and_around(bool read_only);
+  void _close_db_and_around();
+
+  // updates legacy bluefs related recs in DB to a state valid for
+  // downgrades from nautilus.
+  void _sync_bluefs_and_fm();
+
   /*
    * @warning to_repair_db means that we open this db to repair it, will not
    * hold the rocksdb's file lock.
    */
-  int _open_db(bool create, bool to_repair_db=false);
+  int _open_db(bool create,
+	       bool to_repair_db=false,
+	       bool read_only = false);
   void _close_db();
-  int _open_fm(bool create);
+  int _open_fm(KeyValueDB::Transaction t);
   void _close_fm();
   int _open_alloc();
   void _close_alloc();
@@ -2203,10 +2229,10 @@ private:
   void _open_statfs();
   void _get_statfs_overall(struct store_statfs_t *buf);
 
-  void _dump_alloc_on_rebalance_failure();
-  int _reconcile_bluefs_freespace();
-  int _balance_bluefs_freespace(PExtentVector *extents);
-  void _commit_bluefs_freespace(const PExtentVector& extents);
+  void _dump_alloc_on_failure();
+
+  int64_t _get_bluefs_size_delta(uint64_t bluefs_free, uint64_t bluefs_total);
+  int _balance_bluefs_freespace();
 
   CollectionRef _get_collection(const coll_t& cid);
   void _queue_reap_collection(CollectionRef& c);
@@ -2357,6 +2383,11 @@ public:
     }
     return device_class;
   }
+
+  int get_numa_node(
+    int *numa_node,
+    set<int> *nodes,
+    set<string> *failed) override;
 
   static int get_block_device_fsid(CephContext* cct, const string& path,
 				   uuid_d *fsid);
@@ -2616,7 +2647,12 @@ public:
     return true;
   }
 
-  int allocate_bluefs_freespace(uint64_t size);
+  /*
+  Allocate space for BlueFS from slow device.
+  Either automatically applies allocated extents to underlying 
+  BlueFS (extents == nullptr) or just return them (non-null extents) provided
+  */
+  int allocate_bluefs_freespace(uint64_t size, PExtentVector* extents);
 
 private:
   bool _debug_data_eio(const ghobject_t& o) {
@@ -2902,6 +2938,19 @@ private:
 			CollectionRef *c,
 			CollectionRef& d,
 			unsigned bits);
+
+private:
+  std::atomic<uint64_t> out_of_sync_fm = {0};
+  // --------------------------------------------------------
+  // BlueFSDeviceExpander implementation
+  uint64_t get_recommended_expansion_delta(uint64_t bluefs_free,
+    uint64_t bluefs_total) override {
+    auto delta = _get_bluefs_size_delta(bluefs_free, bluefs_total);
+    return delta > 0 ? delta : 0;
+  }
+  int allocate_freespace(uint64_t size, PExtentVector& extents) override {
+    return allocate_bluefs_freespace(size, &extents);
+  };
 };
 
 inline ostream& operator<<(ostream& out, const BlueStore::volatile_statfs& s) {
@@ -3075,6 +3124,7 @@ public:
   bool fix_false_free(KeyValueDB *db,
 		      FreelistManager* fm,
 		      uint64_t offset, uint64_t len);
+  bool fix_bluefs_extents(std::atomic<uint64_t>& out_of_sync_flag);
 
   void init(uint64_t total_space, uint64_t lres_tracking_unit_size);
 
@@ -3115,5 +3165,4 @@ private:
   fsck_interval misreferenced_extents;
 
 };
-
 #endif

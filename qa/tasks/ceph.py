@@ -445,13 +445,13 @@ def get_mons(roles, ips,
                 else:
                     assert mon_bind_addrvec
                     v2_ports[ips[idx]] += 1
-                    addr = 'v2:{ip}:{port2},v1:{ip}:{port1}'.format(
+                    addr = '[v2:{ip}:{port2},v1:{ip}:{port1}]'.format(
                         ip=ips[idx],
                         port2=v2_ports[ips[idx]],
                         port1=v1_ports[ips[idx]],
                     )
             elif mon_bind_addrvec:
-                addr = 'v1:{ip}:{port}'.format(
+                addr = '[v1:{ip}:{port}]'.format(
                     ip=ips[idx],
                     port=v1_ports[ips[idx]],
                 )
@@ -1932,6 +1932,10 @@ def task(ctx, config):
 
             yield
         finally:
+            # set pg_num_targets back to actual pg_num, so we don't have to
+            # wait for pending merges (which can take a while!)
+            ctx.managers[config['cluster']].stop_pg_num_changes()
+
             if config.get('wait-for-scrub', True):
                 osd_scrub_pgs(ctx, config)
 

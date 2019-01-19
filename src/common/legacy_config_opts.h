@@ -955,8 +955,12 @@ OPTION(bluestore_bluefs_max_ratio, OPT_FLOAT)  // max fs free / total free
 OPTION(bluestore_bluefs_gift_ratio, OPT_FLOAT) // how much to add at a time
 OPTION(bluestore_bluefs_reclaim_ratio, OPT_FLOAT) // how much to reclaim at a time
 OPTION(bluestore_bluefs_balance_interval, OPT_FLOAT) // how often (sec) to balance free space between bluefs and bluestore
-// how often (sec) to dump allocation failure happened during bluefs rebalance
-OPTION(bluestore_bluefs_balance_failure_dump_interval, OPT_FLOAT)
+// how often (sec) to dump allocator on allocation failure
+OPTION(bluestore_bluefs_alloc_failure_dump_interval, OPT_FLOAT)
+
+// Enforces db sync with legacy bluefs extents information on close.
+// Enables downgrades to pre-nautilus releases
+OPTION(bluestore_bluefs_db_compatibility, OPT_BOOL)
 
 // If you want to use spdk driver, you need to specify NVMe serial number here
 // with "spdk:" prefix.
@@ -1543,3 +1547,4 @@ OPTION(rgw_sts_entry, OPT_STR)
 OPTION(rgw_sts_key, OPT_STR)
 OPTION(rgw_s3_auth_use_sts, OPT_BOOL)  // should we try to use sts for s3?
 OPTION(rgw_sts_max_session_duration, OPT_U64) // Max duration in seconds for which the session token is valid.
+OPTION(fake_statfs_for_testing, OPT_INT) // Set a value for kb and compute kb_used from total of num_bytes

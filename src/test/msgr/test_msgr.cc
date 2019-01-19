@@ -313,9 +313,9 @@ TEST_P(MessengerTest, SimpleMsgr2Test) {
 
   // 1. simple round trip
   MPing *m = new MPing();
-  ConnectionRef conn = client_msgr->get_connection(entity_inst_t(
-       entity_name_t(server_msgr->get_mytype(), -1),
-       server_msgr->get_myaddrs().msgr2_addr()));
+  ConnectionRef conn = client_msgr->connect_to(
+    server_msgr->get_mytype(),
+    server_msgr->get_myaddrs());
   {
     ASSERT_EQ(conn->send_message(m), 0);
     Mutex::Locker l(cli_dispatcher.lock);
@@ -324,7 +324,7 @@ TEST_P(MessengerTest, SimpleMsgr2Test) {
     cli_dispatcher.got_new = false;
   }
   ASSERT_TRUE(conn->is_connected());
-  ASSERT_EQ(1, static_cast<Session*>(conn->get_priv().get())->get_count());
+  ASSERT_EQ(1u, static_cast<Session*>(conn->get_priv().get())->get_count());
   ASSERT_TRUE(conn->peer_is_osd());
 
   // 2. test rebind port
@@ -339,9 +339,9 @@ TEST_P(MessengerTest, SimpleMsgr2Test) {
     ASSERT_TRUE(avoid_ports.count(a.get_port()) == 0);
   }
 
-  conn = client_msgr->get_connection(entity_inst_t(
-       entity_name_t(server_msgr->get_mytype(), -1),
-       server_msgr->get_myaddrs().msgr2_addr()));
+  conn = client_msgr->connect_to(
+       server_msgr->get_mytype(),
+       server_msgr->get_myaddrs());
   {
     m = new MPing();
     ASSERT_EQ(conn->send_message(m), 0);

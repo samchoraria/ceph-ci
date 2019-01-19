@@ -2,10 +2,10 @@ import threading
 import functools
 import os
 import uuid
-
-from mgr_module import MgrModule
-
-import orchestrator
+try:
+    from typing import List
+except ImportError:
+    pass  # just for type checking
 
 try:
     from kubernetes import client, config
@@ -16,6 +16,9 @@ except ImportError:
     kubernetes_imported = False
     client = None
     config = None
+
+from mgr_module import MgrModule
+import orchestrator
 
 from .rook_cluster import RookCluster
 
@@ -334,7 +337,7 @@ class RookOrchestrator(MgrModule, orchestrator.Orchestrator):
     @deferred_read
     def describe_service(self, service_type, service_id, nodename):
 
-        assert service_type in ("mds", "osd", "mgr", "mon", None), service_type + " unsupported"
+        assert service_type in ("mds", "osd", "mgr", "mon", "nfs", None), service_type + " unsupported"
 
         pods = self.rook_cluster.describe_pods(service_type, service_id, nodename)
 
@@ -346,13 +349,19 @@ class RookOrchestrator(MgrModule, orchestrator.Orchestrator):
             sd.service_type = p['labels']['app'].replace('rook-ceph-', '')
 
             if sd.service_type == "osd":
-                sd.daemon_name = "%s" % p['labels']["ceph-osd-id"]
+                sd.service_instance = "%s" % p['labels']["ceph-osd-id"]
             elif sd.service_type == "mds":
-                sd.daemon_name = p['labels']["rook_file_system"]
+                sd.service = p['labels']['rook_file_system']
+                pfx = "{0}-".format(sd.service)
+                sd.service_instance = p['labels']['ceph_daemon_id'].replace(pfx, '', 1)
             elif sd.service_type == "mon":
-                sd.daemon_name = p['labels']["mon"]
+                sd.service_instance = p['labels']["mon"]
             elif sd.service_type == "mgr":
-                sd.daemon_name = p['labels']["mgr"]
+                sd.service_instance = p['labels']["mgr"]
+            elif sd.service_type == "nfs":
+                sd.service = p['labels']['ceph_nfs']
+                sd.service_instance = p['labels']['instance']
+                sd.rados_config_location = self.rook_cluster.get_nfs_conf_url(sd.service, sd.service_instance)
             else:
                 # Unknown type -- skip it
                 continue
@@ -361,19 +370,22 @@ class RookOrchestrator(MgrModule, orchestrator.Orchestrator):
 
         return result
 
+    def _service_add_decorate(self, typename, spec, func):
+        return RookWriteCompletion(lambda: func(spec), None,
+                    "Creating {0} services for {1}".format(typename, spec.name))
+
     def add_stateless_service(self, service_type, spec):
         # assert isinstance(spec, orchestrator.StatelessServiceSpec)
-
         if service_type == "mds":
-            return RookWriteCompletion(
-                lambda: self.rook_cluster.add_filesystem(spec), None,
-                "Creating Filesystem services for {0}".format(spec.name))
+            return self._service_add_decorate("Filesystem", spec,
+                                         self.rook_cluster.add_filesystem)
         elif service_type == "rgw" :
-            return RookWriteCompletion(
-                lambda: self.rook_cluster.add_objectstore(spec), None,
-                "Creating RGW services for {0}".format(spec.name))
+            return self._service_add_decorate("RGW", spec,
+                                         self.rook_cluster.add_objectstore)
+        elif service_type == "nfs" :
+            return self._service_add_decorate("NFS", spec,
+                                         self.rook_cluster.add_nfsgw)
         else:
-            # TODO: RGW, NFS
             raise NotImplementedError(service_type)
 
     def remove_stateless_service(self, service_type, service_id):
@@ -381,11 +393,13 @@ class RookOrchestrator(MgrModule, orchestrator.Orchestrator):
             lambda: self.rook_cluster.rm_service(service_type, service_id), None,
             "Removing {0} services for {1}".format(service_type, service_id))
 
-    def create_osds(self, spec):
-        # Validate spec.node
-        if not self.rook_cluster.node_exists(spec.node):
+    def create_osds(self, drive_group, all_hosts):
+        # type: (orchestrator.DriveGroupSpec, List[str]) -> RookWriteCompletion
+
+        assert len(drive_group.hosts(all_hosts)) == 1
+        if not self.rook_cluster.node_exists(drive_group.hosts(all_hosts)[0]):
             raise RuntimeError("Node '{0}' is not in the Kubernetes "
-                               "cluster".format(spec.node))
+                               "cluster".format(drive_group.hosts(all_hosts)))
 
         # Validate whether cluster CRD can accept individual OSD
         # creations (i.e. not useAllDevices)
@@ -394,7 +408,7 @@ class RookOrchestrator(MgrModule, orchestrator.Orchestrator):
                                "support OSD creation.")
 
         def execute():
-            self.rook_cluster.add_osds(spec)
+            self.rook_cluster.add_osds(drive_group, all_hosts)
 
         def is_complete():
             # Find OSD pods on this host
@@ -402,7 +416,7 @@ class RookOrchestrator(MgrModule, orchestrator.Orchestrator):
             pods = self._k8s.list_namespaced_pod("rook-ceph",
                                                  label_selector="rook_cluster=rook-ceph,app=rook-ceph-osd",
                                                  field_selector="spec.nodeName={0}".format(
-                                                     spec.node
+                                                     drive_group.hosts(all_hosts)[0]
                                                  )).items
             for p in pods:
                 pod_osd_ids.add(int(p.metadata.labels['ceph-osd-id']))
@@ -417,7 +431,7 @@ class RookOrchestrator(MgrModule, orchestrator.Orchestrator):
                     continue
 
                 metadata = self.get_metadata('osd', "%s" % osd_id)
-                if metadata and metadata['devices'] in spec.drive_group.devices:
+                if metadata and metadata['devices'] in drive_group.data_devices.paths:
                     found.append(osd_id)
                 else:
                     self.log.info("ignoring osd {0} {1}".format(
@@ -428,6 +442,6 @@ class RookOrchestrator(MgrModule, orchestrator.Orchestrator):
 
         return RookWriteCompletion(execute, is_complete,
                                    "Creating OSD on {0}:{1}".format(
-                                       spec.node,
-                                       spec.drive_group.devices
+                                       drive_group.hosts(all_hosts)[0],
+                                       drive_group.data_devices.paths
                                    ))

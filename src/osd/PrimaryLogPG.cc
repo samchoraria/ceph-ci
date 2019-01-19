@@ -1614,6 +1614,48 @@ void PrimaryLogPG::calc_trim_to()
   size_t target = cct->_conf->osd_min_pg_log_entries;
   if (is_degraded() ||
       state_test(PG_STATE_RECOVERING |
+                 PG_STATE_RECOVERY_WAIT |
+                 PG_STATE_BACKFILLING |
+                 PG_STATE_BACKFILL_WAIT |
+                 PG_STATE_BACKFILL_TOOFULL)) {
+    target = cct->_conf->osd_max_pg_log_entries;
+  }
+
+  eversion_t limit = std::min(
+    min_last_complete_ondisk,
+    pg_log.get_can_rollback_to());
+  if (limit != eversion_t() &&
+      limit != pg_trim_to &&
+      pg_log.get_log().approx_size() > target) {
+    size_t num_to_trim = std::min(pg_log.get_log().approx_size() - target,
+                             cct->_conf->osd_pg_log_trim_max);
+    if (num_to_trim < cct->_conf->osd_pg_log_trim_min &&
+        cct->_conf->osd_pg_log_trim_max >= cct->_conf->osd_pg_log_trim_min) {
+      return;
+    }
+    list<pg_log_entry_t>::const_iterator it = pg_log.get_log().log.begin();
+    eversion_t new_trim_to;
+    for (size_t i = 0; i < num_to_trim; ++i) {
+      new_trim_to = it->version;
+      ++it;
+      if (new_trim_to > limit) {
+        new_trim_to = limit;
+        dout(10) << "calc_trim_to trimming to min_last_complete_ondisk" << dendl;
+        break;
+      }
+    }
+    dout(10) << "calc_trim_to " << pg_trim_to << " -> " << new_trim_to << dendl;
+    pg_trim_to = new_trim_to;
+    assert(pg_trim_to <= pg_log.get_head());
+    assert(pg_trim_to <= min_last_complete_ondisk);
+  }
+}
+
+void PrimaryLogPG::calc_trim_to_aggressive()
+{
+  size_t target = cct->_conf->osd_min_pg_log_entries;
+  if (is_degraded() ||
+      state_test(PG_STATE_RECOVERING |
 		 PG_STATE_RECOVERY_WAIT |
 		 PG_STATE_BACKFILLING |
 		 PG_STATE_BACKFILL_WAIT |
@@ -3979,7 +4021,10 @@ void PrimaryLogPG::execute_ctx(OpContext *ctx)
   ceph_assert(op->may_write() || op->may_cache());
 
   // trim log?
-  calc_trim_to();
+  if (hard_limit_pglog())
+    calc_trim_to_aggressive();
+  else
+    calc_trim_to();
 
   // verify that we are doing this in order?
   if (cct->_conf->osd_debug_op_order && m->get_source().is_client() &&
@@ -4265,7 +4310,19 @@ void PrimaryLogPG::do_backfill(OpRequestRef op)
       ceph_assert(cct->_conf->osd_kill_backfill_at != 2);
 
       info.set_last_backfill(m->last_backfill);
-      info.stats = m->stats;
+      // During backfill submit_push_data() tracks num_bytes which is needed in case
+      // backfill stops and starts again.  We want to know how many bytes this
+      // pg is consuming on the disk in order to compute amount of new data
+      // reserved to hold backfill if it won't fit.
+      if (m->op == MOSDPGBackfill::OP_BACKFILL_PROGRESS) {
+        dout(0) << __func__ << " primary " << m->stats.stats.sum.num_bytes << " local " << info.stats.stats.sum.num_bytes << dendl;
+        int64_t bytes = info.stats.stats.sum.num_bytes;
+        info.stats = m->stats;
+        info.stats.stats.sum.num_bytes = bytes;
+      } else {
+        dout(0) << __func__ << " final " << m->stats.stats.sum.num_bytes << " replaces local " << info.stats.stats.sum.num_bytes << dendl;
+        info.stats = m->stats;
+      }
 
       ObjectStore::Transaction t;
       dirty_info = true;
@@ -4296,6 +4353,38 @@ void PrimaryLogPG::do_backfill_remove(OpRequestRef op)
 
   ObjectStore::Transaction t;
   for (auto& p : m->ls) {
+    if (is_remote_backfilling()) {
+      struct stat st;
+      int r = osd->store->stat(ch, ghobject_t(p.first, ghobject_t::NO_GEN,
+                               pg_whoami.shard) , &st);
+      if (r == 0) {
+        sub_local_num_bytes(st.st_size);
+        int64_t usersize;
+        if (pool.info.is_erasure()) {
+          bufferlist bv;
+	  int r = osd->store->getattr(
+	      ch,
+              ghobject_t(p.first, ghobject_t::NO_GEN, pg_whoami.shard),
+	      OI_ATTR,
+	      bv);
+	  if (r >= 0) {
+	    object_info_t oi(bv);
+            usersize = oi.size * pgbackend->get_ec_data_chunk_count();
+          } else {
+            dout(0) << __func__ << " " << ghobject_t(p.first, ghobject_t::NO_GEN, pg_whoami.shard)
+                    << " can't get object info" << dendl;
+            usersize = 0;
+          }
+        } else {
+          usersize = st.st_size;
+        }
+        sub_num_bytes(usersize);
+        dout(10) << __func__ << " " << ghobject_t(p.first, ghobject_t::NO_GEN, pg_whoami.shard)
+                 << " sub actual data by " << st.st_size
+                 << " sub num_bytes by " << usersize
+                 << dendl;
+      }
+    }
     remove_snap_mapped_object(t, p.first);
   }
   int r = osd->store->queue_transaction(ch, std::move(t), NULL);
@@ -8521,6 +8610,7 @@ void PrimaryLogPG::apply_stats(
   const object_stat_sum_t &delta_stats) {
 
   info.stats.stats.add(delta_stats);
+  info.stats.stats.floor(0);
 
   for (set<pg_shard_t>::iterator i = backfill_targets.begin();
        i != backfill_targets.end();
@@ -10583,7 +10673,10 @@ void PrimaryLogPG::simple_opc_submit(OpContextUPtr ctx)
   dout(20) << __func__ << " " << repop << dendl;
   issue_repop(repop, ctx.get());
   eval_repop(repop);
-  calc_trim_to();
+  if (hard_limit_pglog())
+    calc_trim_to_aggressive();
+  else
+    calc_trim_to();
   repop->put();
 }
 
@@ -10697,7 +10790,10 @@ void PrimaryLogPG::submit_log_entries(
       op_applied(info.last_update);
     });
 
-  calc_trim_to();
+  if (hard_limit_pglog())
+    calc_trim_to_aggressive();
+  else
+    calc_trim_to();
 }
 
 void PrimaryLogPG::cancel_log_updates()

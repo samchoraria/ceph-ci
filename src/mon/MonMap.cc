@@ -346,7 +346,8 @@ void MonMap::dump(Formatter *f) const
 // reasonably infer from the port number which it is).
 void MonMap::_add_ambiguous_addr(const string& name,
 				 entity_addr_t addr,
-				 int priority)
+				 int priority,
+				 bool for_mkfs)
 {
   if (addr.get_type() != entity_addr_t::TYPE_ANY) {
     // a v1: or v2: prefix was specified
@@ -356,6 +357,8 @@ void MonMap::_add_ambiguous_addr(const string& name,
 	addr.set_port(CEPH_MON_PORT_IANA);
       } else if (addr.get_type() == entity_addr_t::TYPE_LEGACY) {
 	addr.set_port(CEPH_MON_PORT_LEGACY);
+      } else if (addr.get_type() == entity_addr_t::TYPE_MSGR2) {
+	addr.set_port(CEPH_MON_PORT_IANA);
       } else {
 	// wth
 	return;
@@ -374,7 +377,11 @@ void MonMap::_add_ambiguous_addr(const string& name,
       // legacy port implies legacy addr
       addr.set_type(entity_addr_t::TYPE_LEGACY);
       if (!contains(addr)) {
-	add(name + "-legacy", entity_addrvec_t(addr));
+	if (!for_mkfs) {
+	  add(name + "-legacy", entity_addrvec_t(addr));
+	} else {
+	  add(name, entity_addrvec_t(addr));
+	}
       }
     } else if (addr.get_port() == CEPH_MON_PORT_IANA) {
       // iana port implies msgr2 addr
@@ -383,26 +390,41 @@ void MonMap::_add_ambiguous_addr(const string& name,
 	add(name, entity_addrvec_t(addr));
       }
     } else if (addr.get_port() == 0) {
-      // no port; try both msgr2 and legacy ports
-      addr.set_type(entity_addr_t::TYPE_MSGR2);
-      addr.set_port(CEPH_MON_PORT_IANA);
-      if (!contains(addr)) {
-	add(name, entity_addrvec_t(addr));
-      }
-      addr.set_type(entity_addr_t::TYPE_LEGACY);
-      addr.set_port(CEPH_MON_PORT_LEGACY);
-      if (!contains(addr)) {
-	add(name + "-legacy", entity_addrvec_t(addr));
+      // no port; include both msgr2 and legacy ports
+      if (!for_mkfs) {
+	addr.set_type(entity_addr_t::TYPE_MSGR2);
+	addr.set_port(CEPH_MON_PORT_IANA);
+	if (!contains(addr)) {
+	  add(name, entity_addrvec_t(addr));
+	}
+	addr.set_type(entity_addr_t::TYPE_LEGACY);
+	addr.set_port(CEPH_MON_PORT_LEGACY);
+	if (!contains(addr)) {
+	  add(name + "-legacy", entity_addrvec_t(addr));
+	}
+      } else {
+	entity_addrvec_t av;
+	addr.set_type(entity_addr_t::TYPE_MSGR2);
+	addr.set_port(CEPH_MON_PORT_IANA);
+	av.v.push_back(addr);
+	addr.set_type(entity_addr_t::TYPE_LEGACY);
+	addr.set_port(CEPH_MON_PORT_LEGACY);
+	av.v.push_back(addr);
+	if (!contains(av)) {
+	  add(name, av);
+	}
       }
     } else {
-      // try both msgr2 and legacy on specified port
       addr.set_type(entity_addr_t::TYPE_MSGR2);
       if (!contains(addr)) {
 	add(name, entity_addrvec_t(addr), priority);
       }
-      addr.set_type(entity_addr_t::TYPE_LEGACY);
-      if (!contains(addr)) {
-	add(name + "-legacy", entity_addrvec_t(addr), priority);
+      if (!for_mkfs) {
+	// try legacy on same port too
+	addr.set_type(entity_addr_t::TYPE_LEGACY);
+	if (!contains(addr)) {
+	  add(name + "-legacy", entity_addrvec_t(addr), priority);
+	}
       }
     }
   }
@@ -412,10 +434,10 @@ int MonMap::init_with_ips(const std::string& ips,
 			  bool for_mkfs,
 			  const std::string &prefix)
 {
-  vector<entity_addr_t> addrs;
+  vector<entity_addrvec_t> addrs;
   if (!parse_ip_port_vec(
 	ips.c_str(), addrs,
-	for_mkfs ? entity_addr_t::TYPE_MSGR2 : entity_addr_t::TYPE_ANY)) {
+	entity_addr_t::TYPE_ANY)) {
     return -EINVAL;
   }
   if (addrs.empty())
@@ -425,11 +447,15 @@ int MonMap::init_with_ips(const std::string& ips,
     n[0] = 'a' + i;
     n[1] = 0;
     string name;
-    if (!for_mkfs) {
-      name = prefix;
-    }
+    name = prefix;
     name += n;
-    _add_ambiguous_addr(name, addrs[i], 0);
+    if (addrs[i].v.size() == 1) {
+      _add_ambiguous_addr(name, addrs[i].front(), 0, for_mkfs);
+    } else {
+      // they specified an addrvec, so let's assume they also specified
+      // the addr *type* and *port*.  (we could possibly improve this?)
+      add(name, addrs[i], 0);
+    }
   }
   return 0;
 }
@@ -443,7 +469,7 @@ int MonMap::init_with_hosts(const std::string& hostlist,
   if (!hosts)
     return -EINVAL;
 
-  vector<entity_addr_t> addrs;
+  vector<entity_addrvec_t> addrs;
   bool success = parse_ip_port_vec(
     hosts, addrs,
     for_mkfs ? entity_addr_t::TYPE_MSGR2 : entity_addr_t::TYPE_ANY);
@@ -458,7 +484,11 @@ int MonMap::init_with_hosts(const std::string& hostlist,
     n[1] = 0;
     string name = prefix;
     name += n;
-    _add_ambiguous_addr(name, addrs[i], 0);
+    if (addrs[i].v.size() == 1) {
+      _add_ambiguous_addr(name, addrs[i].front(), 0);
+    } else {
+      add(name, addrs[i], 0);
+    }
   }
   calc_legacy_ranks();
   return 0;
@@ -758,8 +788,6 @@ int MonMap::build_initial(CephContext *cct, bool for_mkfs, ostream& errout)
   // -m foo?
   if (const auto mon_host = conf.get_val<std::string>("mon_host");
       !mon_host.empty()) {
-    // NOTE: the for_mkfs path here is dodgey.. it assumes the mons will be
-    // named 'a', 'b', 'c'.
     auto ret = init_with_ips(mon_host, for_mkfs, "noname-");
     if (ret == -EINVAL) {
       ret = init_with_hosts(mon_host, for_mkfs, "noname-");
