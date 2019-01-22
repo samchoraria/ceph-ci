@@ -53,4 +53,13 @@ export class MgrModuleService {
   disable(module: string) {
     return this.http.post(`${this.url}/${module}/disable`, null);
   }
+
+  /**
+   * Get the Ceph Mgr module options.
+   * @param {string} module The name of the mgr module.
+   * @return {Observable<Object>}
+   */
+  getOptions(module: string) {
+    return this.http.get(`${this.url}/${module}/options`);
+  }
 }
