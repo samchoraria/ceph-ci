@@ -45,7 +45,8 @@ class MgrModuleTest(MgrModuleTestCase):
             JList(
                 JObj(sub_elems={
                     'name': JLeaf(str),
-                    'enabled': JLeaf(bool)
+                    'enabled': JLeaf(bool),
+                    'options': JList(JObj({}, allow_unknown=True))
                 })))
         module_info = self.find_object_in_list('name', 'telemetry', data)
         self.assertIsNotNone(module_info)
@@ -61,7 +62,8 @@ class MgrModuleTest(MgrModuleTestCase):
             JList(
                 JObj(sub_elems={
                     'name': JLeaf(str),
-                    'enabled': JLeaf(bool)
+                    'enabled': JLeaf(bool),
+                    'options': JList(JObj({}, allow_unknown=True))
                 })))
         module_info = self.find_object_in_list('name', 'telemetry', data)
         self.assertIsNotNone(module_info)

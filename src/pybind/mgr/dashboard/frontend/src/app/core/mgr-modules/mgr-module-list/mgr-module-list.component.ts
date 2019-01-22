@@ -16,11 +16,11 @@ import { AuthStorageService } from '../../../shared/services/auth-storage.servic
 import { NotificationService } from '../../../shared/services/notification.service';
 
 @Component({
-  selector: 'cd-mgr-modules-list',
-  templateUrl: './mgr-modules-list.component.html',
-  styleUrls: ['./mgr-modules-list.component.scss']
+  selector: 'cd-mgr-module-list',
+  templateUrl: './mgr-module-list.component.html',
+  styleUrls: ['./mgr-module-list.component.scss']
 })
-export class MgrModulesListComponent {
+export class MgrModuleListComponent {
   @ViewChild(TableComponent)
   table: TableComponent;
   @BlockUI()
@@ -53,13 +53,19 @@ export class MgrModulesListComponent {
       }
     ];
     const getModuleUri = () =>
-      this.selection.first() && `${encodeURIComponent(this.selection.first().name)}`;
+      this.selection.first() && encodeURIComponent(this.selection.first().name);
     this.tableActions = [
       {
+        name: this.i18n('Edit'),
         permission: 'update',
-        icon: 'fa-pencil',
+        disable: () => {
+          if (!this.selection.hasSelection) {
+            return true;
+          }
+          return Object.values(this.selection.first().options).length === 0;
+        },
         routerLink: () => `/mgr-modules/edit/${getModuleUri()}`,
-        name: this.i18n('Edit')
+        icon: 'fa-pencil'
       },
       {
         name: this.i18n('Enable'),
