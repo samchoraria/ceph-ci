@@ -47,6 +47,8 @@ export class TableComponent implements AfterContentChecked, OnInit, OnChanges, O
   perSecondTpl: TemplateRef<any>;
   @ViewChild('executingTpl')
   executingTpl: TemplateRef<any>;
+  @ViewChild('yesNoTextTpl')
+  yesNoTextTpl: TemplateRef<any>;
 
   // This is the array with the items to be shown.
   @Input()
@@ -311,6 +313,7 @@ export class TableComponent implements AfterContentChecked, OnInit, OnChanges, O
     this.cellTemplates.routerLink = this.routerLinkTpl;
     this.cellTemplates.perSecond = this.perSecondTpl;
     this.cellTemplates.executing = this.executingTpl;
+    this.cellTemplates.yesNoText = this.yesNoTextTpl;
   }
 
   ngOnChanges(changes) {

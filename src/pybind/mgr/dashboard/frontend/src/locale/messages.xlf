@@ -62,17 +62,23 @@
           <context context-type="sourcefile">app/core/navigation/navigation/navigation.component.html</context>
           <context context-type="linenumber">84</context>
         </context-group>
+      </trans-unit><trans-unit id="33da4dbeb076159510801ea764a218fd341269d2" datatype="html">
+        <source>Manager modules</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">app/core/navigation/navigation/navigation.component.html</context>
+          <context context-type="linenumber">91</context>
+        </context-group>
       </trans-unit><trans-unit id="eb3d5aefff38a814b76da74371cbf02c0789a1ef" datatype="html">
         <source>Logs</source>
         <context-group purpose="location">
           <context context-type="sourcefile">app/core/navigation/navigation/navigation.component.html</context>
-          <context context-type="linenumber">91</context>
+          <context context-type="linenumber">98</context>
         </context-group>
       </trans-unit><trans-unit id="92899fa68e8ca108912163ff58edc8540e453787" datatype="html">
         <source>Pools</source>
         <context-group purpose="location">
           <context context-type="sourcefile">app/core/navigation/navigation/navigation.component.html</context>
-          <context context-type="linenumber">101</context>
+          <context context-type="linenumber">108</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">app/ceph/block/mirroring/overview/overview.component.html</context>
@@ -90,13 +96,13 @@
         <source>Block</source>
         <context-group purpose="location">
           <context context-type="sourcefile">app/core/navigation/navigation/navigation.component.html</context>
-          <context context-type="linenumber">113</context>
+          <context context-type="linenumber">120</context>
         </context-group>
       </trans-unit><trans-unit id="b73f7f5060fb22a1e9ec462b1bb02493fa3ab866" datatype="html">
         <source>Images</source>
         <context-group purpose="location">
           <context context-type="sourcefile">app/core/navigation/navigation/navigation.component.html</context>
-          <context context-type="linenumber">122</context>
+          <context context-type="linenumber">129</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">app/ceph/block/iscsi/iscsi.component.html</context>
@@ -114,31 +120,31 @@
         <source>Mirroring</source>
         <context-group purpose="location">
           <context context-type="sourcefile">app/core/navigation/navigation/navigation.component.html</context>
-          <context context-type="linenumber">130</context>
+          <context context-type="linenumber">137</context>
         </context-group>
       </trans-unit><trans-unit id="811c241d56601b91ef26735b770e64428089b950" datatype="html">
         <source>iSCSI</source>
         <context-group purpose="location">
           <context context-type="sourcefile">app/core/navigation/navigation/navigation.component.html</context>
-          <context context-type="linenumber">142</context>
+          <context context-type="linenumber">149</context>
         </context-group>
       </trans-unit><trans-unit id="a4eff72d97b7ced051398d581f10968218057ddc" datatype="html">
         <source>Filesystems</source>
         <context-group purpose="location">
           <context context-type="sourcefile">app/core/navigation/navigation/navigation.component.html</context>
-          <context context-type="linenumber">153</context>
+          <context context-type="linenumber">160</context>
         </context-group>
       </trans-unit><trans-unit id="2190548d236ca5f7bc7ab2bca334b860c5ff2ad4" datatype="html">
         <source>Object Gateway</source>
         <context-group purpose="location">
           <context context-type="sourcefile">app/core/navigation/navigation/navigation.component.html</context>
-          <context context-type="linenumber">164</context>
+          <context context-type="linenumber">171</context>
         </context-group>
       </trans-unit><trans-unit id="9e24f9e2d42104ffc01599db4d566d1cc518f9e6" datatype="html">
         <source>Daemons</source>
         <context-group purpose="location">
           <context context-type="sourcefile">app/core/navigation/navigation/navigation.component.html</context>
-          <context context-type="linenumber">173</context>
+          <context context-type="linenumber">180</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">app/ceph/block/iscsi/iscsi.component.html</context>
@@ -152,7 +158,7 @@
         <source>Users</source>
         <context-group purpose="location">
           <context context-type="sourcefile">app/core/navigation/navigation/navigation.component.html</context>
-          <context context-type="linenumber">179</context>
+          <context context-type="linenumber">186</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">app/core/auth/user-tabs/user-tabs.component.html</context>
@@ -162,7 +168,7 @@
         <source>Buckets</source>
         <context-group purpose="location">
           <context context-type="sourcefile">app/core/navigation/navigation/navigation.component.html</context>
-          <context context-type="linenumber">185</context>
+          <context context-type="linenumber">192</context>
         </context-group>
       </trans-unit><trans-unit id="797f8214e8148f4bf0d244baaa7341706b419549" datatype="html">
         <source>Retrieving data<x id="START_TAG_SPAN_1" ctype="x-span" equiv-text="&lt;span&gt;"/> for
@@ -219,6 +225,10 @@
         <context-group purpose="location">
           <context context-type="sourcefile">app/core/auth/user-form/user-form.component.html</context>
           <context context-type="linenumber">151</context>
+        </context-group>
+        <context-group purpose="location">
+          <context context-type="sourcefile">app/core/mgr-modules/mgr-module-form/mgr-module-form.component.html</context>
+          <context context-type="linenumber">116</context>
         </context-group>
       </trans-unit><trans-unit id="3fb5709e10166cbc85970cbff103db227dbeb813" datatype="html">
         <source>Select a Language</source>
@@ -287,6 +297,12 @@
           <context context-type="linenumber">118</context>
         </context-group>
         <note priority="1" from="description">X total</note>
+      </trans-unit><trans-unit id="b4422ce6b5ae759fde48e0ba21a58c7418cde4a8" datatype="html">
+        <source>{VAR_SELECT, select, 1 {Yes} other {No} }</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">app/shared/datatable/table/table.component.html</context>
+          <context context-type="linenumber">183</context>
+        </context-group>
       </trans-unit><trans-unit id="beb1391a148bd032914f49a2665dcc414a5d56d0" datatype="html">
         <source>{VAR_SELECT, select, editing {Edit} cloning {Clone} copying {Copy} other {Add} }</source>
         <context-group purpose="location">
@@ -458,6 +474,14 @@
         <context-group purpose="location">
           <context context-type="sourcefile">app/core/auth/user-form/user-form.component.html</context>
           <context context-type="linenumber">87</context>
+        </context-group>
+        <context-group purpose="location">
+          <context context-type="sourcefile">app/core/mgr-modules/mgr-module-form/mgr-module-form.component.html</context>
+          <context context-type="linenumber">77</context>
+        </context-group>
+        <context-group purpose="location">
+          <context context-type="sourcefile">app/core/mgr-modules/mgr-module-form/mgr-module-form.component.html</context>
+          <context context-type="linenumber">98</context>
         </context-group>
         <context-group purpose="location">
           <context context-type="sourcefile">app/ceph/block/rbd-snapshot-form/rbd-snapshot-form.component.html</context>
@@ -2258,6 +2282,70 @@
           <context context-type="sourcefile">app/core/forbidden/forbidden.component.html</context>
           <context context-type="linenumber">7</context>
         </context-group>
+      </trans-unit><trans-unit id="2447796ddbda942f4e2c46619cb84d69f066e568" datatype="html">
+        <source>Loading configuration...</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">app/core/mgr-modules/mgr-module-form/mgr-module-form.component.html</context>
+          <context context-type="linenumber">2</context>
+        </context-group>
+      </trans-unit><trans-unit id="b42c0b347a841bed8859ee83de05080ee28c803b" datatype="html">
+        <source>The configuration could not be loaded.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">app/core/mgr-modules/mgr-module-form/mgr-module-form.component.html</context>
+          <context context-type="linenumber">4</context>
+        </context-group>
+      </trans-unit><trans-unit id="31a9c2870a934b594d1390146c489f76440859ea" datatype="html">
+        <source>Edit Manager module</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">app/core/mgr-modules/mgr-module-form/mgr-module-form.component.html</context>
+          <context context-type="linenumber">15</context>
+        </context-group>
+      </trans-unit><trans-unit id="46e09b8290d3d0afdb6baa2021395b0570606a31" datatype="html">
+        <source>The entered value is not a valid UUID, e.g.: 67dcac9f-2c03-4d6c-b7bd-1210b3a259a8</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">app/core/mgr-modules/mgr-module-form/mgr-module-form.component.html</context>
+          <context context-type="linenumber">62</context>
+        </context-group>
+      </trans-unit><trans-unit id="7aacd038b39cfd347107d01d1dc27f5cb3e0951c" datatype="html">
+        <source>The entered value needs to be a valid IP address.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">app/core/mgr-modules/mgr-module-form/mgr-module-form.component.html</context>
+          <context context-type="linenumber">65</context>
+        </context-group>
+      </trans-unit><trans-unit id="089857b76b898b8cb5d85dcba328c0de487771de" datatype="html">
+        <source>The entered value is too high! It must not be lower than <x id="INTERPOLATION" equiv-text="{{ moduleOption.value.max }}"/>.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">app/core/mgr-modules/mgr-module-form/mgr-module-form.component.html</context>
+          <context context-type="linenumber">80</context>
+        </context-group>
+      </trans-unit><trans-unit id="3a121666aa74d99702be9a174adc3f588ebff798" datatype="html">
+        <source>The entered value is too low! It must not be greater than <x id="INTERPOLATION" equiv-text="{{ moduleOption.value.min }}"/>.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">app/core/mgr-modules/mgr-module-form/mgr-module-form.component.html</context>
+          <context context-type="linenumber">83</context>
+        </context-group>
+      </trans-unit><trans-unit id="eae7086660cf1e38c7194a2c49ff52cc656f90f5" datatype="html">
+        <source>The entered value needs to be a number.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">app/core/mgr-modules/mgr-module-form/mgr-module-form.component.html</context>
+          <context context-type="linenumber">86</context>
+        </context-group>
+      </trans-unit><trans-unit id="a73376e04b4fb3a20734c8c39743fba32e6676ce" datatype="html">
+        <source>The entered value needs to be a number or decimal.</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">app/core/mgr-modules/mgr-module-form/mgr-module-form.component.html</context>
+          <context context-type="linenumber">101</context>
+        </context-group>
+      </trans-unit><trans-unit id="047f50bc5b5d17b5bec0196355953e1a5c590ddb" datatype="html">
+        <source>Update</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">app/core/mgr-modules/mgr-module-form/mgr-module-form.component.html</context>
+          <context context-type="linenumber">111</context>
+        </context-group>
+        <context-group purpose="location">
+          <context context-type="sourcefile">app/ceph/block/mirroring/pool-edit-mode-modal/pool-edit-mode-modal.component.html</context>
+          <context context-type="linenumber">41</context>
+        </context-group>
       </trans-unit><trans-unit id="e3c028c58f92453d46f09b5adf95b2f013ee0300" datatype="html">
         <source>Sorry, we could not find what you were looking for</source>
         <context-group purpose="location">
@@ -2351,6 +2439,10 @@
         <source>Details</source>
         <context-group purpose="location">
           <context context-type="sourcefile">app/core/auth/role-details/role-details.component.html</context>
+          <context context-type="linenumber">2</context>
+        </context-group>
+        <context-group purpose="location">
+          <context context-type="sourcefile">app/core/mgr-modules/mgr-module-details/mgr-module-details.component.html</context>
           <context context-type="linenumber">2</context>
         </context-group>
         <context-group purpose="location">
@@ -3047,12 +3139,6 @@
         <context-group purpose="location">
           <context context-type="sourcefile">app/ceph/block/mirroring/pool-edit-mode-modal/pool-edit-mode-modal.component.html</context>
           <context context-type="linenumber">33</context>
-        </context-group>
-      </trans-unit><trans-unit id="047f50bc5b5d17b5bec0196355953e1a5c590ddb" datatype="html">
-        <source>Update</source>
-        <context-group purpose="location">
-          <context context-type="sourcefile">app/ceph/block/mirroring/pool-edit-mode-modal/pool-edit-mode-modal.component.html</context>
-          <context context-type="linenumber">41</context>
         </context-group>
       </trans-unit><trans-unit id="fa61522d482349707fd7dd03b90dc5781611b17f" datatype="html">
         <source><x id="ICU" equiv-text="{mode, select, edit {...} other {...}}"/>
@@ -4543,6 +4629,27 @@
         <source>You are currently logged in as &quot;<x id="INTERPOLATION" equiv-text="{{username}}"/>&quot;.</source>
         <context-group purpose="location">
           <context context-type="sourcefile">src/app/core/auth/user-list/user-list.component.ts</context>
+          <context context-type="linenumber">1</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="ac6c9212896d39b23811ed2dadab7d07336ec559" datatype="html">
+        <source>Enable</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/core/mgr-modules/mgr-module-list/mgr-module-list.component.ts</context>
+          <context context-type="linenumber">1</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="6766a926d80bb7763785621098dae459d6226429" datatype="html">
+        <source>Disable</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/core/mgr-modules/mgr-module-list/mgr-module-list.component.ts</context>
+          <context context-type="linenumber">1</context>
+        </context-group>
+      </trans-unit>
+      <trans-unit id="6a0b3657745dd7a2f2162f1cc790bf9004d0845d" datatype="html">
+        <source>Reconnecting, please wait ...</source>
+        <context-group purpose="location">
+          <context context-type="sourcefile">src/app/core/mgr-modules/mgr-module-list/mgr-module-list.component.ts</context>
           <context context-type="linenumber">1</context>
         </context-group>
       </trans-unit>
