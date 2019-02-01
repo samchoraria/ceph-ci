@@ -77,7 +77,7 @@ class SecretCache {
   struct secret_entry {
     token_envelope_t token;
     std::string secret;
-    uint64_t expires;
+    utime_t expires;
     list<std::string>::iterator lru_iter;
   };
 
@@ -86,17 +86,17 @@ class SecretCache {
   std::map<std::string, secret_entry> secrets;
   std::list<std::string> secrets_lru;
 
-  Mutex lock;
+  std::mutex lock;
 
   const size_t max;
 
-  const uint64_t s3_token_expiry_length;
+  const utime_t s3_token_expiry_length;
 
   SecretCache()
     : cct(g_ceph_context),
-      lock("rgw::auth::keystone::SecretCache"),
+      lock(),
       max(cct->_conf->rgw_keystone_token_cache_size),
-      s3_token_expiry_length(300) {
+      s3_token_expiry_length(300, 0) {
   }
 
   ~SecretCache() {}
@@ -146,13 +146,14 @@ class EC2Engine : public rgw::auth::s3::AWSEngine {
                     const boost::string_view& signature) const;
   std::pair<boost::optional<token_envelope_t>, int>
   get_access_token(const boost::string_view& access_key_id,
-                   const std::string& string_to_sign,
-                   const boost::string_view& signature) const;			
+		   const std::string& string_to_sign,
+		   const boost::string_view& signature,
+		   const signature_factory_t& signature_factory) const;
   result_t authenticate(const boost::string_view& access_key_id,
-                        const boost::string_view& signature,
-                        const boost::string_view& session_token,
-                        const string_to_sign_t& string_to_sign,
-                        const signature_factory_t&,
+			const boost::string_view& signature,
+			const boost::string_view& session_token,
+			const string_to_sign_t& string_to_sign,
+                        const signature_factory_t& signature_factory,
                         const completer_factory_t& completer_factory,
                         const req_state* s) const override;
   std::string sign(const std::string& secret,
