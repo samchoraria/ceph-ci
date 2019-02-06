@@ -926,6 +926,10 @@ protected:
     const bool object_not_in_store =
       !missing.is_missing(hoid) &&
       entries.rbegin()->is_delete();
+    ldpp_dout(dpp, 10) << __func__ << ": hoid " << hoid << " !missing.is_missing(hoid): "
+                       << !missing.is_missing(hoid) << ", is_delete: " << entries.rbegin()->is_delete()
+                       << ", object_not_in_store: " << object_not_in_store
+                       << dendl;
     ldpp_dout(dpp, 10) << __func__ << ": hoid " << hoid
 		       << " prior_version: " << prior_version
 		       << " first_divergent_update: " << first_divergent_update
@@ -1023,11 +1027,20 @@ protected:
     for (list<pg_log_entry_t>::const_reverse_iterator i = entries.rbegin();
 	 i != entries.rend();
 	 ++i) {
+      ldpp_dout(dpp, 10) << __func__ << ": hoid " << hoid << " can_rollback: " << i->can_rollback()
+                         << " i->version: " << i->version
+                         << " olog_can_rollback_to " << olog_can_rollback_to << dendl;
       if (!i->can_rollback() || i->version <= olog_can_rollback_to) {
 	ldpp_dout(dpp, 10) << __func__ << ": hoid " << hoid << " cannot rollback "
 			   << *i << dendl;
 	can_rollback = false;
 	break;
+      }
+      if (!object_not_in_store) {
+        ldpp_dout(dpp, 10) << __func__ << ": hoid " << hoid << " cannot rollback, "
+                           << " object not in store " << dendl;
+        can_rollback = false;
+        break;
       }
     }
 
