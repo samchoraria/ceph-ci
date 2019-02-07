@@ -319,9 +319,12 @@ void PGLog::rewind_divergent_log(eversion_t newhead,
     newhead << dendl;
 
 
+  dout(10) << __func__ << " log.get_can_rollback_to() " << log.get_can_rollback_to() << dendl;
+  dout(10) << __func__ << " info.last_complete " << info.last_complete << dendl;
   if (info.last_complete > newhead)
     info.last_complete = newhead;
 
+  dout(10) << __func__ << " info.last_complete now " << info.last_complete << dendl;
   auto divergent = log.rewind_from_head(newhead);
   if (!divergent.empty()) {
     mark_dirty_from(divergent.front().version);
@@ -330,6 +333,7 @@ void PGLog::rewind_divergent_log(eversion_t newhead,
     dout(10) << "rewind_divergent_log future divergent " << entry << dendl;
   }
   info.last_update = newhead;
+  dout(10) << __func__ << " log.get_can_rollback_to() " << log.get_can_rollback_to() << dendl;
 
   _merge_divergent_entries(
     log,
