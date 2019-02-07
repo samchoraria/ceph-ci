@@ -1036,12 +1036,13 @@ protected:
 	can_rollback = false;
 	break;
       }
-      if (!object_not_in_store) {
+      /*
+      if (object_not_in_store) {
         ldpp_dout(dpp, 10) << __func__ << ": hoid " << hoid << " cannot rollback, "
                            << " object not in store " << dendl;
         can_rollback = false;
         break;
-      }
+      }*/
     }
 
     if (can_rollback) {
