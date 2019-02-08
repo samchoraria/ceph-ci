@@ -276,6 +276,7 @@ void PGLog::proc_replica_log(
     divergent,
     oinfo,
     olog.get_can_rollback_to(),
+    olog.get_can_rollback_to(),
     omissing,
     0,
     this);
@@ -321,6 +322,7 @@ void PGLog::rewind_divergent_log(eversion_t newhead,
 
   dout(10) << __func__ << " log.get_can_rollback_to() " << log.get_can_rollback_to() << dendl;
   dout(10) << __func__ << " info.last_complete " << info.last_complete << dendl;
+  eversion_t original_crt = log.get_can_rollback_to();
   if (info.last_complete > newhead)
     info.last_complete = newhead;
 
@@ -340,6 +342,7 @@ void PGLog::rewind_divergent_log(eversion_t newhead,
     divergent,
     info,
     log.get_can_rollback_to(),
+    original_crt,
     missing,
     rollbacker,
     this);
@@ -460,6 +463,7 @@ void PGLog::merge_log(pg_info_t &oinfo, pg_log_t &olog, pg_shard_t fromosd,
       log,
       divergent,
       info,
+      log.get_can_rollback_to(),
       log.get_can_rollback_to(),
       missing,
       rollbacker,
