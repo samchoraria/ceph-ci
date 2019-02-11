@@ -425,15 +425,16 @@ namespace buffer CEPH_BUFFER_API {
     const ptr& as_regular_ptr() const { return *this; }
     unsigned* lenptr() { return &_len; }
 
-    struct cloner {
-      ptr_node* operator()(const ptr_node& clone_this);
-    };
     struct disposer {
       void operator()(ptr_node* const delete_this) {
 	if (!dispose_if_hypercombined(delete_this)) {
 	  delete delete_this;
 	}
       }
+    };
+    struct cloner {
+      std::unique_ptr<ptr_node, disposer>
+      operator()(const ptr_node& clone_this);
     };
 
     ptr_node() = default;
@@ -454,7 +455,8 @@ namespace buffer CEPH_BUFFER_API {
 	new ptr_node(std::forward<Args>(args)...));
     }
 
-    static ptr_node* copy_hypercombined(const ptr_node& copy_this);
+    static std::unique_ptr<ptr_node, disposer>
+    copy_hypercombined(const ptr_node& copy_this);
 
   private:
     ptr_node(const ptr_node&) = default;
@@ -680,8 +682,7 @@ namespace buffer CEPH_BUFFER_API {
       void clone_from(const buffers_t& other) {
 	clear_and_dispose();
 	for (auto& node : other) {
-	  ptr_node* clone = ptr_node::cloner()(node);
-	  push_back(*clone);
+	  push_back(*ptr_node::cloner()(node).release());
 	}
       }
       void clear_and_dispose() {
