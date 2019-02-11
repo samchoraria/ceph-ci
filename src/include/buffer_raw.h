@@ -30,6 +30,7 @@ namespace ceph::buffer {
     // embedded slots. This would allow to avoid the "if" in dtor of ptr_node.
     std::aligned_storage<sizeof(ptr_node),
 			 alignof(ptr_node)>::type bptr_storage;
+    static_assert(sizeof(ptr_node) == 3 * sizeof(void*));
     char *data;
     unsigned len;
     std::atomic<unsigned> nref { 0 };
@@ -39,6 +40,7 @@ namespace ceph::buffer {
     std::pair<uint32_t, uint32_t> last_crc_val;
 
     mutable ceph::spinlock crc_spinlock;
+    void* hc_bptr {nullptr};
 
     explicit raw(unsigned l, int mempool=mempool::mempool_buffer_anon)
       : data(nullptr), len(l), nref(0), mempool(mempool) {

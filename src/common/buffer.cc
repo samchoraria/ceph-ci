@@ -2170,9 +2170,22 @@ buffer::list buffer::list::static_from_string(string& s) {
 bool buffer::ptr_node::dispose_if_hypercombined(
   buffer::ptr_node* const delete_this)
 {
+  const bool would_be_hypercombined = static_cast<void*>(delete_this) == \
+    delete_this->get_raw()->hc_bptr;
+  if (would_be_hypercombined) {
+    auto* canary = \
+      reinterpret_cast<std::uintptr_t*>(&delete_this->get_raw()->bptr_storage);
+    static_assert(sizeof(delete_this->get_raw()->bptr_storage) == \
+      3 * sizeof(std::uintptr_t));
+    ceph_assert_always(canary[0] == (std::uintptr_t)delete_this);
+    ceph_assert_always(canary[1] == (std::uintptr_t)delete_this);
+    ceph_assert_always(canary[2] == (std::uintptr_t)delete_this);
+  }
+
   const bool is_hypercombined = static_cast<void*>(delete_this) == \
     static_cast<void*>(&delete_this->get_raw()->bptr_storage);
   if (is_hypercombined) {
+    ceph_assert_always("hypercombining is actually disabled" == nullptr);
     delete_this->~ptr_node();
   }
   return is_hypercombined;
@@ -2181,9 +2194,17 @@ bool buffer::ptr_node::dispose_if_hypercombined(
 std::unique_ptr<buffer::ptr_node, buffer::ptr_node::disposer>
 buffer::ptr_node::create_hypercombined(ceph::unique_leakable_ptr<buffer::raw> r)
 {
-  void* const hc_storage = &r->bptr_storage;
-  return std::unique_ptr<buffer::ptr_node, buffer::ptr_node::disposer>(
-    new (hc_storage) ptr_node(std::move(r)));
+  auto* canary = reinterpret_cast<std::uintptr_t*>(&r->bptr_storage);
+  auto ret = std::unique_ptr<buffer::ptr_node, buffer::ptr_node::disposer>(
+    new ptr_node(std::move(r)));
+  ret->get_raw()->hc_bptr = ret.get();
+
+  static_assert(sizeof(r->bptr_storage) == 3 * sizeof(std::uintptr_t));
+  canary[0] = (std::uintptr_t)ret.get();
+  canary[1] = (std::uintptr_t)ret.get();
+  canary[2] = (std::uintptr_t)ret.get();
+
+  return ret;
 }
 
 std::unique_ptr<buffer::ptr_node, buffer::ptr_node::disposer>
@@ -2191,9 +2212,17 @@ buffer::ptr_node::copy_hypercombined(
   const buffer::ptr_node& copy_this)
 {
   auto raw_new = copy_this.get_raw()->clone();
-  void* const hc_storage = &raw_new->bptr_storage;
-  return std::unique_ptr<buffer::ptr_node, buffer::ptr_node::disposer>(
-    new (hc_storage) ptr_node(copy_this, std::move(raw_new)));
+  auto* canary = reinterpret_cast<std::uintptr_t*>(&raw_new->bptr_storage);
+  auto ret = std::unique_ptr<buffer::ptr_node, buffer::ptr_node::disposer>(
+    new ptr_node(copy_this, std::move(raw_new)));
+  ret->get_raw()->hc_bptr = ret.get();
+
+  static_assert(sizeof(raw_new->bptr_storage) == 3 * sizeof(std::uintptr_t*));
+  canary[0] = (std::uintptr_t)ret.get();
+  canary[1] = (std::uintptr_t)ret.get();
+  canary[2] = (std::uintptr_t)ret.get();
+
+  return ret;
 }
 
 std::unique_ptr<buffer::ptr_node, buffer::ptr_node::disposer>
