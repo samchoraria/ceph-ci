@@ -2171,7 +2171,6 @@ bool buffer::ptr_node::dispose_if_hypercombined(
   const bool is_hypercombined = static_cast<void*>(delete_this) == \
     static_cast<void*>(&delete_this->get_raw()->bptr_storage);
   if (is_hypercombined) {
-    ceph_assert_always("hypercombining is actually disabled" == nullptr);
     delete_this->~ptr_node();
   }
   return is_hypercombined;
@@ -2180,15 +2179,17 @@ bool buffer::ptr_node::dispose_if_hypercombined(
 std::unique_ptr<buffer::ptr_node, buffer::ptr_node::disposer>
 buffer::ptr_node::create_hypercombined(ceph::unique_leakable_ptr<buffer::raw> r)
 {
+  void* const hc_storage = &r->bptr_storage;
   return std::unique_ptr<buffer::ptr_node, buffer::ptr_node::disposer>(
-    new ptr_node(std::move(r)));
+    new (hc_storage) ptr_node(std::move(r)));
 }
 
 buffer::ptr_node* buffer::ptr_node::copy_hypercombined(
   const buffer::ptr_node& copy_this)
 {
   auto raw_new = copy_this.get_raw()->clone();
-  return new ptr_node(copy_this, std::move(raw_new));
+  void* const hc_storage = &raw_new->bptr_storage;
+  return new (hc_storage) ptr_node(copy_this, std::move(raw_new));
 }
 
 buffer::ptr_node* buffer::ptr_node::cloner::operator()(
