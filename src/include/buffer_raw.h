@@ -85,11 +85,11 @@ public:
     char *get_data() {
       return data;
     }
-    virtual raw* clone_empty() = 0;
+    virtual ceph::unique_leakable_ptr<raw> clone_empty() = 0;
     ceph::unique_leakable_ptr<raw> clone() {
-      raw* const c = clone_empty();
+      auto c = clone_empty();
       memcpy(c->data, data, len);
-      return ceph::unique_leakable_ptr<raw>(c);
+      return c;
     }
     virtual bool is_shareable() const {
       // true if safe to reference/share the existing buffer copy
