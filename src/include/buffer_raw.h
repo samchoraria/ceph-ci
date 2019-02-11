@@ -40,15 +40,24 @@ namespace ceph::buffer {
     std::pair<uint32_t, uint32_t> last_crc_val;
 
     mutable ceph::spinlock crc_spinlock;
-    void* hc_bptr {nullptr};
 
     explicit raw(unsigned l, int mempool=mempool::mempool_buffer_anon)
       : data(nullptr), len(l), nref(0), mempool(mempool) {
       mempool::get_pool(mempool::pool_index_t(mempool)).adjust_count(1, len);
+      auto* canary = reinterpret_cast<std::uintptr_t*>(&bptr_storage);
+      static_assert(sizeof(bptr_storage) == 3 * sizeof(std::uintptr_t));
+      canary[0] = 0xdeadbeef;
+      canary[1] = 0xbaadf00d;
+      canary[2] = 0xbaaaaaad;
     }
     raw(char *c, unsigned l, int mempool=mempool::mempool_buffer_anon)
       : data(c), len(l), nref(0), mempool(mempool) {
       mempool::get_pool(mempool::pool_index_t(mempool)).adjust_count(1, len);
+      auto* canary = reinterpret_cast<std::uintptr_t*>(&bptr_storage);
+      static_assert(sizeof(bptr_storage) == 3 * sizeof(std::uintptr_t));
+      canary[0] = 0xdeadbeef;
+      canary[1] = 0xbaadf00d;
+      canary[2] = 0xbaaaaaad;
     }
     virtual ~raw() {
       mempool::get_pool(mempool::pool_index_t(mempool)).adjust_count(
