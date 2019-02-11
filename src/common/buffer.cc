@@ -101,8 +101,8 @@ static ceph::spinlock debug_lock;
       : raw(dataptr, l, mempool),
 	alignment(align) {
     }
-    raw* clone_empty() override {
-      return create(len, alignment).release();
+    ceph::unique_leakable_ptr<buffer::raw> clone_empty() override {
+      return create(len, alignment);
     }
 
     static ceph::unique_leakable_ptr<buffer::raw>
@@ -160,8 +160,8 @@ static ceph::spinlock debug_lock;
       free(data);
       bdout << "raw_malloc " << this << " free " << (void *)data << " " << bendl;
     }
-    raw* clone_empty() override {
-      return new raw_malloc(len);
+    ceph::unique_leakable_ptr<buffer::raw> clone_empty() override {
+      return ceph::unique_leakable_ptr<buffer::raw>(new raw_malloc(len));
     }
   };
 
@@ -190,8 +190,9 @@ static ceph::spinlock debug_lock;
       ::free(data);
       bdout << "raw_posix_aligned " << this << " free " << (void *)data << bendl;
     }
-    raw* clone_empty() override {
-      return new raw_posix_aligned(len, align);
+    ceph::unique_leakable_ptr<buffer::raw> clone_empty() override {
+      return ceph::unique_leakable_ptr<buffer::raw>(
+	new raw_posix_aligned(len, align));
     }
   };
 #endif
@@ -217,8 +218,9 @@ static ceph::spinlock debug_lock;
     ~raw_hack_aligned() {
       delete[] realdata;
     }
-    raw* clone_empty() {
-      return new raw_hack_aligned(len, align);
+    ceph::unique_leakable_ptr<buffer::raw> clone_empty() {
+      return ceph::unique_leakable_ptr<buffer::raw>(
+	new raw_hack_aligned(len, align));
     }
   };
 #endif
@@ -244,8 +246,8 @@ static ceph::spinlock debug_lock;
       delete[] data;
       bdout << "raw_char " << this << " free " << (void *)data << bendl;
     }
-    raw* clone_empty() override {
-      return new raw_char(len);
+    ceph::unique_leakable_ptr<buffer::raw> clone_empty() override {
+      return ceph::unique_leakable_ptr<buffer::raw>(new raw_char(len));
     }
   };
 
@@ -261,8 +263,8 @@ static ceph::spinlock debug_lock;
       bdout << "raw_claimed_char " << this << " free " << (void *)data
 	    << bendl;
     }
-    raw* clone_empty() override {
-      return new raw_char(len);
+    ceph::unique_leakable_ptr<buffer::raw> clone_empty() override {
+      return ceph::unique_leakable_ptr<buffer::raw>(new raw_char(len));
     }
   };
 
@@ -278,8 +280,8 @@ static ceph::spinlock debug_lock;
     }
     raw_unshareable(unsigned l, char *b) : raw(b, l) {
     }
-    raw* clone_empty() override {
-      return new raw_char(len);
+    ceph::unique_leakable_ptr<buffer::raw> clone_empty() override {
+      return ceph::unique_leakable_ptr<buffer::raw>(new raw_char(len));
     }
     bool is_shareable() const override {
       return false; // !shareable, will force make_shareable()
@@ -295,8 +297,8 @@ static ceph::spinlock debug_lock;
 
     raw_static(const char *d, unsigned l) : raw((char*)d, l) { }
     ~raw_static() override {}
-    raw* clone_empty() override {
-      return new buffer::raw_char(len);
+    ceph::unique_leakable_ptr<buffer::raw> clone_empty() override {
+      return ceph::unique_leakable_ptr<buffer::raw>(new buffer::raw_char(len));
     }
   };
 
@@ -306,8 +308,8 @@ static ceph::spinlock debug_lock;
     raw_claim_buffer(const char *b, unsigned l, deleter d)
         : raw((char*)b, l), del(std::move(d)) { }
     ~raw_claim_buffer() override {}
-    raw* clone_empty() override {
-      return new buffer::raw_char(len);
+    ceph::unique_leakable_ptr<buffer::raw> clone_empty() override {
+      return ceph::unique_leakable_ptr<buffer::raw>(new buffer::raw_char(len));
     }
   };
 
@@ -328,8 +330,8 @@ static ceph::spinlock debug_lock;
       // to do this in our dtor, because this fires after that
       buf->m_hook->put();
     }
-    raw* clone_empty() {
-      return new buffer::raw_char(len);
+    ceph::unique_leakable_ptr<buffer::raw> clone_empty() override {
+      return ceph::unique_leakable_ptr<buffer::raw>(new buffer::raw_char(len));
     }
   };
 
@@ -340,8 +342,8 @@ static ceph::spinlock debug_lock;
       raw((char*)_mp->addr, l), mp(_mp)
     { }
     ~xio_mempool() {}
-    raw* clone_empty() {
-      return new buffer::raw_char(len);
+    ceph::unique_leakable_ptr<buffer::raw> clone_empty() override {
+      return ceph::unique_leakable_ptr<buffer::raw>(new buffer::raw_char(len));
     }
   };
 
