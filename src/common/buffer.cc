@@ -1346,9 +1346,9 @@ static ceph::spinlock debug_lock;
       while (curbuf != bl._buffers.end()) {
 	const auto* const raw = curbuf->get_raw();
 	if (unlikely(raw && !raw->is_shareable())) {
-	  auto* clone = ptr_node::copy_hypercombined(*curbuf);
+	  auto clone = ptr_node::copy_hypercombined(*curbuf);
 	  curbuf = bl._buffers.erase_after_and_dispose(curbuf_prev);
-	  bl._buffers.insert_after(curbuf_prev++, *clone);
+	  bl._buffers.insert_after(curbuf_prev++, *clone.release());
 	} else {
 	  curbuf_prev = curbuf++;
 	}
@@ -2184,20 +2184,24 @@ buffer::ptr_node::create_hypercombined(ceph::unique_leakable_ptr<buffer::raw> r)
     new (hc_storage) ptr_node(std::move(r)));
 }
 
-buffer::ptr_node* buffer::ptr_node::copy_hypercombined(
+std::unique_ptr<buffer::ptr_node, buffer::ptr_node::disposer>
+buffer::ptr_node::copy_hypercombined(
   const buffer::ptr_node& copy_this)
 {
   auto raw_new = copy_this.get_raw()->clone();
   void* const hc_storage = &raw_new->bptr_storage;
-  return new (hc_storage) ptr_node(copy_this, std::move(raw_new));
+  return std::unique_ptr<buffer::ptr_node, buffer::ptr_node::disposer>(
+    new (hc_storage) ptr_node(copy_this, std::move(raw_new)));
 }
 
-buffer::ptr_node* buffer::ptr_node::cloner::operator()(
+std::unique_ptr<buffer::ptr_node, buffer::ptr_node::disposer>
+buffer::ptr_node::cloner::operator()(
   const buffer::ptr_node& clone_this)
 {
   const raw* const raw_this = clone_this.get_raw();
   if (likely(!raw_this || raw_this->is_shareable())) {
-    return new ptr_node(clone_this);
+    return std::unique_ptr<buffer::ptr_node, buffer::ptr_node::disposer>(
+      new ptr_node(clone_this));
   } else {
     // clone non-shareable buffers (make shareable)
    return copy_hypercombined(clone_this);
