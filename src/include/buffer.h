@@ -196,7 +196,16 @@ namespace buffer CEPH_BUFFER_API {
    * a buffer pointer.  references (a subsequence of) a raw buffer.
    */
   class CEPH_BUFFER_API ptr {
-    raw *_raw;
+    struct raw_canary_t {
+      raw *_real_raw;
+
+      raw_canary_t() : _real_raw(nullptr) {}
+      raw_canary_t(raw* r) : _real_raw(r) {}
+      raw_canary_t& operator=(raw* r);
+      operator bool () const { return _real_raw != nullptr; }
+      operator raw*() const { return _real_raw; }
+      raw* operator->() const { return _real_raw; }
+    } _raw;
   public: // dirty hack for testing; if it works, this will be abstracted
     unsigned _off, _len;
   private:

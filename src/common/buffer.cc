@@ -450,25 +450,25 @@ static ceph::spinlock debug_lock;
       _len(_raw->len)
   {
     _raw->nref.store(1, std::memory_order_release);
-    bdout << "ptr " << this << " get " << _raw << bendl;
+    bdout << "ptr " << this << " get " << static_cast<raw*>(_raw) << bendl;
   }
   buffer::ptr::ptr(unsigned l) : _off(0), _len(l)
   {
     _raw = buffer::create(l).release();
     _raw->nref.store(1, std::memory_order_release);
-    bdout << "ptr " << this << " get " << _raw << bendl;
+    bdout << "ptr " << this << " get " << static_cast<raw*>(_raw) << bendl;
   }
   buffer::ptr::ptr(const char *d, unsigned l) : _off(0), _len(l)    // ditto.
   {
     _raw = buffer::copy(d, l).release();
     _raw->nref.store(1, std::memory_order_release);
-    bdout << "ptr " << this << " get " << _raw << bendl;
+    bdout << "ptr " << this << " get " << static_cast<raw*>(_raw) << bendl;
   }
   buffer::ptr::ptr(const ptr& p) : _raw(p._raw), _off(p._off), _len(p._len)
   {
     if (_raw) {
       _raw->nref++;
-      bdout << "ptr " << this << " get " << _raw << bendl;
+      bdout << "ptr " << this << " get " << static_cast<raw*>(_raw) << bendl;
     }
   }
   buffer::ptr::ptr(ptr&& p) noexcept : _raw(p._raw), _off(p._off), _len(p._len)
@@ -482,7 +482,7 @@ static ceph::spinlock debug_lock;
     ceph_assert(o+l <= p._len);
     ceph_assert(_raw);
     _raw->nref++;
-    bdout << "ptr " << this << " get " << _raw << bendl;
+    bdout << "ptr " << this << " get " << static_cast<raw*>(_raw) << bendl;
   }
   buffer::ptr::ptr(const ptr& p, ceph::unique_leakable_ptr<raw> r)
     : _raw(r.release()),
@@ -490,13 +490,13 @@ static ceph::spinlock debug_lock;
       _len(p._len)
   {
     _raw->nref.store(1, std::memory_order_release);
-    bdout << "ptr " << this << " get " << _raw << bendl;
+    bdout << "ptr " << this << " get " << static_cast<raw*>(_raw) << bendl;
   }
   buffer::ptr& buffer::ptr::operator= (const ptr& p)
   {
     if (p._raw) {
       p._raw->nref++;
-      bdout << "ptr " << this << " get " << _raw << bendl;
+      bdout << "ptr " << this << " get " << static_cast<raw*>(_raw) << bendl;
     }
     buffer::raw *raw = p._raw; 
     release_raw();
@@ -543,10 +543,30 @@ static ceph::spinlock debug_lock;
     other._len = l;
   }
 
+  buffer::ptr::raw_canary_t& buffer::ptr::raw_canary_t::operator=(buffer::raw* r)
+  {
+    if (_real_raw) {
+      const auto maybe_owning_ptr_node = (std::uintptr_t)this - sizeof(void*);
+      const bool would_be_hypercombined = \
+        maybe_owning_ptr_node == (std::uintptr_t)_real_raw->hc_bptr;
+      if (would_be_hypercombined) {
+        auto* canary = \
+          reinterpret_cast<std::uintptr_t*>(&_real_raw->bptr_storage);
+        static_assert(sizeof(_raw->bptr_storage) == 3 * sizeof(std::uintptr_t));
+        canary[0] = 0xbadb00ff;
+        canary[1] = 0xbadb00ff;
+        canary[2] = 0xbadb00ff;
+      }
+    }
+
+    _real_raw = r;
+    return *this;
+  }
+
   void buffer::ptr::release_raw()
   {
     if (_raw) {
-      bdout << "ptr " << this << " release " << _raw << bendl;
+      bdout << "ptr " << this << " release " << static_cast<raw*>(_raw) << bendl;
       const bool last_one = (1 == _raw->nref.load(std::memory_order_acquire));
       if (likely(last_one) || --_raw->nref == 0) {
 	const bool would_be_hypercombined = \
@@ -563,7 +583,7 @@ static ceph::spinlock debug_lock;
 	}
         // BE CAREFUL: this is called also for hypercombined ptr_node. After
         // freeing underlying raw, `*this` can become inaccessible as well!
-        const auto* delete_raw = _raw;
+        const raw* delete_raw = _raw;
         _raw = nullptr;
 	//cout << "hosing raw " << (void*)_raw << " len " << _raw->len << std::endl;
         ANNOTATE_HAPPENS_AFTER(&_raw->nref);
