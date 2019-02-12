@@ -248,6 +248,16 @@ TEST(BufferPtr, constructors) {
   }
 }
 
+TEST(BufferPtrNode, no_move_from) {
+  auto node = ceph::buffer::ptr_node::create(42);
+
+  {
+    ceph::buffer::ptr thief(std::move(node->as_regular_ptr()));
+    ASSERT_TRUE(node->as_regular_ptr().have_raw());
+    ASSERT_EQ(2, node->as_regular_ptr().raw_nref());
+  }
+}
+
 TEST(BufferPtr, operator_assign) {
   //
   // ptr& operator= (const ptr& p)
