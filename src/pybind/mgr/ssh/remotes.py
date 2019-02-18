@@ -42,9 +42,6 @@ def create_mon_path(path, uid=-1, gid=-1):
         os.makedirs(path)
         os.chown(path, uid, gid);
 
-def path_exists(path):
-    return os.path.exists(path)
-
 def write_file(path, content, mode=0o644, directory=None, uid=-1, gid=-1):
     if directory:
         if path.startswith("/"):
@@ -56,9 +53,6 @@ def write_file(path, content, mode=0o644, directory=None, uid=-1, gid=-1):
     with os.fdopen(os.open(path, os.O_WRONLY | os.O_CREAT, mode), 'wb') as f:
         f.write(content.encode('utf-8'))
     os.chown(path, uid, gid)
-
-def unlink(_file):
-    os.unlink(_file)
 
 def path_getuid(path):
     return os.stat(path).st_uid
