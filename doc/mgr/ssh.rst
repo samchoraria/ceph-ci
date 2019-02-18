@@ -23,7 +23,7 @@ useful for specifying private keys and other SSH connection options.
 
 ::
 
-    # ceph config set mgr mgr/ssh/ssh_config /path/to/config
+    # ceph config set mgr mgr/ssh/ssh_config_file /path/to/config
 
 Development
 -----------

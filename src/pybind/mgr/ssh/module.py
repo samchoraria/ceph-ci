@@ -106,7 +106,7 @@ class SSHOrchestrator(MgrModule, orchestrator.Orchestrator):
     _DEFAULT_INVENTORY_CACHE_TIMEOUT_MIN = 10
 
     MODULE_OPTIONS = [
-        {'name': 'ssh_config'},
+        {'name': 'ssh_config_file'},
         {'name': 'inventory_cache_timeout_min'},
     ]
 
@@ -182,7 +182,7 @@ class SSHOrchestrator(MgrModule, orchestrator.Orchestrator):
         """
         ssh_options = None
 
-        ssh_config_fname = self.get_localized_module_option("ssh_config")
+        ssh_config_fname = self.get_localized_module_option("ssh_config_file")
         if ssh_config_fname:
             if not os.path.isfile(ssh_config_fname):
                 raise Exception("ssh_config \"{}\" does not exist".format(ssh_config_fname))

@@ -64,7 +64,7 @@ Configure the ssh orchestrator by setting the `ssh_config` option to point at
 the ssh configuration file generated above:
 
 ```
-ceph config set mgr mgr/ssh/ssh_config /path/to/config
+ceph config set mgr mgr/ssh/ssh_config_file /path/to/config
 ```
 
 The setting can be confirmed by retrieving the configuration settings:
@@ -73,7 +73,7 @@ The setting can be confirmed by retrieving the configuration settings:
 [nwatkins@smash build]$ ceph config get mgr.
 WHO    MASK LEVEL    OPTION                            VALUE                                             RO
 mgr         advanced mgr/orchestrator_cli/orchestrator ssh                                               *
-mgr         advanced mgr/ssh/ssh_config                /home/nwatkins/src/ceph/src/pybind/mgr/ssh/config *
+mgr         advanced mgr/ssh/ssh_config_file           /home/nwatkins/src/ceph/src/pybind/mgr/ssh/config *
 ```
 
 The next set of instructions we should move to the docs folder
