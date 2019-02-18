@@ -25,12 +25,12 @@ def write_conf(path, conf):
             os.chmod(path, 0o644)
         else:
             raise RuntimeError(
-                "{0} does not exist".format(dirname))
+                "{0} does not exist".format(dirpath))
 
 def write_keyring(path, key, overwrite=False, uid=-1, gid=-1):
     dirname = os.path.dirname(path)
     if not os.path.exists(dirname):
-        makedir(dirname, uid, gid)
+        safe_makedirs(dirname, uid, gid)
     if not overwrite and os.path.exists(path):
         return
     with open(path, "wb") as f:
