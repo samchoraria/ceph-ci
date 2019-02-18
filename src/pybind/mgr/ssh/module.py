@@ -392,17 +392,6 @@ class SSHOrchestrator(MgrModule, orchestrator.Orchestrator):
         finally:
             conn.exit()
 
-    def _cv_output_to_inventory_device(self, cv_output):
-        devices = []
-        for dev_info in cv_output:
-            dev = orchestrator.InventoryDevice()
-            dev.blank = dev_info["available"]
-            dev.id = dev_info["path"]
-            dev.size = dev_info["sys_api"]["size"]
-            dev.extended = dev_info
-            devices.append(dev)
-        return devices
-
     def get_inventory(self, node_filter=None, refresh=False):
         """
         Return the storage inventory of nodes matching the given filter.
@@ -452,8 +441,9 @@ class SSHOrchestrator(MgrModule, orchestrator.Orchestrator):
                 host_info["last_inventory_refresh"] = now
                 self.set_store(key, json.dumps(host_info))
 
-            devices = self._cv_output_to_inventory_device(
-                    host_info["inventory"])
+            devices = list(map(lambda di:
+                orchestrator.InventoryDevice.from_ceph_volume_inventory(di),
+                host_info["inventory"]))
 
             return orchestrator.InventoryNode(host, devices)
 
