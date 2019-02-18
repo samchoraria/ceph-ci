@@ -386,7 +386,8 @@ class SSHOrchestrator(MgrModule, orchestrator.Orchestrator):
             host_devices = json.loads(out[0])
             return host_devices
 
-        except:
+        except Exception as ex:
+            self.log.exception(ex)
             raise
 
         finally:
