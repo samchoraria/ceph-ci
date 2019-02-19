@@ -510,7 +510,6 @@ class RGWLC : public DoutPrefixProvider {
 				  const multimap<string, lc_op>& prefix_map);
 };
 
-
 std::string rgwlc_s3_expiration_header(
   DoutPrefixProvider* dpp,
   const rgw_obj_key& obj_key,
