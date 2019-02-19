@@ -76,6 +76,14 @@ mgr         advanced mgr/orchestrator_cli/orchestrator ssh                      
 mgr         advanced mgr/ssh/ssh_config_file           /home/nwatkins/src/ceph/src/pybind/mgr/ssh/config *
 ```
 
+An SSH config file can also be provided through standard input that avoids the
+need to have an accessible file path. Use the following command:
+
+
+```
+ceph ssh set-ssh-config -i <path to ssh_config>
+```
+
 The next set of instructions we should move to the docs folder
 
 ceph orchestrator host add osd0

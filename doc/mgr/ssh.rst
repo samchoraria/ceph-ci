@@ -25,6 +25,19 @@ useful for specifying private keys and other SSH connection options.
 
     # ceph config set mgr mgr/ssh/ssh_config_file /path/to/config
 
+An SSH configuration file can be provided without requiring an accessible file
+system path as the method above does.
+
+::
+
+    # ceph ssh set-ssh-config -i /path/to/config
+
+To clear this value use the command:
+
+::
+
+    # ceph ssh clear-ssh-config
+
 Development
 -----------
 

@@ -3,6 +3,7 @@ import errno
 import six
 import os
 import datetime
+import tempfile
 import multiprocessing.pool
 
 from mgr_module import MgrModule
@@ -100,6 +101,18 @@ class SSHWriteCompletionReady(SSHWriteCompletion):
     def is_errored(self):
         return False
 
+class SSHConnection(object):
+    """
+    Tie tempfile lifetime (e.g. ssh_config) to a remoto connection.
+    """
+    def __init__(self):
+        self.conn = None
+        self.temp_file = None
+
+    # proxy to the remoto connection
+    def __getattr__(self, name):
+        return getattr(self.conn, name)
+
 class SSHOrchestrator(MgrModule, orchestrator.Orchestrator):
 
     _STORE_HOST_PREFIX = "host"
@@ -110,10 +123,31 @@ class SSHOrchestrator(MgrModule, orchestrator.Orchestrator):
         {'name': 'inventory_cache_timeout_min'},
     ]
 
+    COMMANDS = [
+        {
+            'cmd': 'ssh set-ssh-config',
+            'desc': 'Set the ssh_config file (use -i <ssh_config>)',
+            'perm': 'rw'
+        },
+        {
+            'cmd': 'ssh clear-ssh-config',
+            'desc': 'Clear the ssh_config file',
+            'perm': 'rw'
+        },
+    ]
+
     def __init__(self, *args, **kwargs):
         super(SSHOrchestrator, self).__init__(*args, **kwargs)
         self._cluster_fsid = None
         self._worker_pool = multiprocessing.pool.ThreadPool(1)
+
+    def handle_command(self, inbuf, command):
+        if command["prefix"] == "ssh set-ssh-config":
+            return self._set_ssh_config(inbuf, command)
+        elif command["prefix"] == "ssh clear-ssh-config":
+            return self._clear_ssh_config(inbuf, command)
+        else:
+            raise NotImplementedError(cmd["prefix"])
 
     @staticmethod
     def can_run():
@@ -176,13 +210,43 @@ class SSHOrchestrator(MgrModule, orchestrator.Orchestrator):
                 ", ".join(map(lambda h: "'{}'".format(h),
                     unregistered_hosts))))
 
+    def _set_ssh_config(self, inbuf, command):
+        """
+        Set an ssh_config file provided from stdin
+
+        TODO:
+          - validation
+        """
+        if len(inbuf) == 0:
+            return errno.EINVAL, "", "empty ssh config provided"
+        self.set_store("ssh_config", inbuf)
+        return 0, "", ""
+
+    def _clear_ssh_config(self, inbuf, command):
+        """
+        Clear the ssh_config file provided from stdin
+        """
+        self.set_store("ssh_config", None)
+        self.ssh_config_tmp = None
+        return 0, "", ""
+
     def _get_connection(self, host):
         """
         Setup a connection for running commands on remote host.
         """
         ssh_options = None
 
-        ssh_config_fname = self.get_localized_module_option("ssh_config_file")
+        conn = SSHConnection()
+
+        ssh_config = self.get_store("ssh_config")
+        if ssh_config is not None:
+            conn.temp_file = tempfile.NamedTemporaryFile()
+            conn.temp_file.write(ssh_config.encode('utf-8'))
+            conn.temp_file.flush() # make visible to other processes
+            ssh_config_fname = conn.temp_file.name
+        else:
+            ssh_config_fname = self.get_localized_module_option("ssh_config_file")
+
         if ssh_config_fname:
             if not os.path.isfile(ssh_config_fname):
                 raise Exception("ssh_config \"{}\" does not exist".format(ssh_config_fname))
@@ -191,12 +255,12 @@ class SSHOrchestrator(MgrModule, orchestrator.Orchestrator):
         self.log.info("opening connection to host '{}' with ssh "
                 "options '{}'".format(host, ssh_options))
 
-        conn = remoto.Connection(host,
+        conn.conn = remoto.Connection(host,
                 logger=self.log,
                 detect_sudo=True,
                 ssh_options=ssh_options)
 
-        conn.import_module(remotes)
+        conn.conn.import_module(remotes)
 
         return conn
 
