@@ -1044,6 +1044,8 @@ def test_bucket_sync_disable():
     for zone in zonegroup.zones:
         check_buckets_sync_status_obj_not_exist(zone, buckets)
 
+    zonegroup_data_checkpoint(zonegroup_conns)
+
 def test_bucket_sync_enable_right_after_disable():
     zonegroup = realm.master_zonegroup()
     zonegroup_conns = ZonegroupConns(zonegroup)
@@ -1073,6 +1075,8 @@ def test_bucket_sync_enable_right_after_disable():
 
     for bucket_name in buckets:
         zonegroup_bucket_checkpoint(zonegroup_conns, bucket_name)
+
+    zonegroup_data_checkpoint(zonegroup_conns)
 
 def test_bucket_sync_disable_enable():
     zonegroup = realm.master_zonegroup()
@@ -1109,6 +1113,8 @@ def test_bucket_sync_disable_enable():
 
     for bucket_name in buckets:
         zonegroup_bucket_checkpoint(zonegroup_conns, bucket_name)
+
+    zonegroup_data_checkpoint(zonegroup_conns)
 
 def test_multipart_object_sync():
     zonegroup = realm.master_zonegroup()
