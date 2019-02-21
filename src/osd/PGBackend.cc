@@ -275,8 +275,10 @@ void PGBackend::rollforward(
 {
   auto dpp = get_parent()->get_dpp();
   ldpp_dout(dpp, 20) << __func__ << ": entry=" << entry << dendl;
-  if (!entry.can_rollback())
+  if (!entry.can_rollback() || entry.is_delete()) {
+    ldpp_dout(dpp, 20) << __func__ << " is_delete" << entry.is_delete() << dendl;
     return;
+  }
   Trimmer trimmer(entry.soid, this, t);
   entry.mod_desc.visit(&trimmer);
 }
