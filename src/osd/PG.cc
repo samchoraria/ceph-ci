@@ -3823,13 +3823,6 @@ void PG::append_log(
   dout(10) << "append_log " << pg_log.get_log() << " " << logv << dendl;
 
   PGLogEntryHandler handler{this, &t};
-  if (!transaction_applied) {
-     /* We must be a backfill peer, so it's ok if we apply
-      * out-of-turn since we won't be considered when
-      * determining a min possible last_update.
-      */
-    pg_log.roll_forward(&handler);
-  }
 
   for (vector<pg_log_entry_t>::const_iterator p = logv.begin();
        p != logv.end();
