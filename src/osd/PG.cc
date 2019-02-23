@@ -3827,14 +3827,13 @@ void PG::append_log(
   for (vector<pg_log_entry_t>::const_iterator p = logv.begin();
        p != logv.end();
        ++p) {
-    add_log_entry(*p, transaction_applied);
-
-    /* We don't want to leave the rollforward artifacts around
-     * here past last_backfill.  It's ok for the same reason as
-     * above */
-    if (transaction_applied &&
-	p->soid > info.last_backfill) {
-      pg_log.roll_forward(&handler);
+    if (!transaction_applied ||
+        p->soid > info.last_backfill) {
+      pg_log_entry_t urp = *p;
+      urp.mark_unrollbackable();
+      add_log_entry(urp, transaction_applied);
+    } else {
+      add_log_entry(*p, transaction_applied);
     }
   }
   auto last = logv.rbegin();
