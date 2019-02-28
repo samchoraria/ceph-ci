@@ -2,6 +2,7 @@
 #include "rgw_rados.h"
 #include "rgw_coroutine.h"
 #include "rgw_cr_rados.h"
+#include "rgw_sync_counters.h"
 
 #include "cls/lock/cls_lock_client.h"
 #include "cls/rgw/cls_rgw_client.h"
@@ -558,6 +559,7 @@ int RGWAsyncFetchRemoteObj::_send_request()
 
   rgw_obj dest_obj(src_obj);
 
+  boost::optional<uint64_t> bytes_transferred;
   int r = store->fetch_remote_obj(obj_ctx,
                        user_id,
                        client_id,
@@ -587,10 +589,20 @@ int RGWAsyncFetchRemoteObj::_send_request()
                        NULL, /* string *petag, */
                        NULL, /* void (*progress_cb)(off_t, void *), */
                        NULL, /* void *progress_data*); */
-                       &zones_trace);
+                       &zones_trace,
+                       &bytes_transferred);
 
   if (r < 0) {
     ldout(store->ctx(), 0) << "store->fetch_remote_obj() returned r=" << r << dendl;
+    if (counters) {
+      counters->inc(sync_counters::l_fetch_err, 1);
+    }
+  } else if (counters) {
+    if (bytes_transferred) {
+      counters->inc(sync_counters::l_fetch, *bytes_transferred);
+    } else {
+      counters->inc(sync_counters::l_fetch_not_modified);
+    }
   }
   return r;
 }

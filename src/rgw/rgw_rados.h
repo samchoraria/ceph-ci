@@ -3178,7 +3178,8 @@ public:
                        ceph::buffer::list *petag,
                        void (*progress_cb)(off_t, void *),
                        void *progress_data,
-                       rgw_zone_set *zones_trace= nullptr);
+                       rgw_zone_set *zones_trace= nullptr,
+                       boost::optional<uint64_t>* bytes_transferred = 0);
   /**
    * Copy an object.
    * dest_obj: the object to copy into
