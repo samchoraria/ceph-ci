@@ -8044,7 +8044,8 @@ int RGWRados::fetch_remote_obj(RGWObjectCtx& obj_ctx,
                ceph::buffer::list *petag,
                void (*progress_cb)(off_t, void *),
                void *progress_data,
-               rgw_zone_set *zones_trace)
+               rgw_zone_set *zones_trace,
+               boost::optional<uint64_t>* bytes_transferred)
 {
   /* source is in a different zonegroup, copy from there */
 
@@ -8260,6 +8261,9 @@ int RGWRados::fetch_remote_obj(RGWObjectCtx& obj_ctx,
     delete opstate;
   }
 
+  if (bytes_transferred) {
+    *bytes_transferred = cb.get_data_len();
+  }
   return 0;
 set_err_state:
   if (copy_if_newer && ret == -ERR_NOT_MODIFIED) {
