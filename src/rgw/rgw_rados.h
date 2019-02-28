@@ -2426,7 +2426,7 @@ public:
 
   RGWRESTConn *rest_master_conn;
   map<string, RGWRESTConn *> zone_conn_map;
-  map<string, RGWRESTConn *> zone_data_sync_from_map;
+  std::vector<const RGWZone*> data_sync_source_zones;
   map<string, RGWRESTConn *> zone_data_notify_to_map;
   map<string, RGWRESTConn *> zonegroup_conn_map;
 
@@ -2490,7 +2490,7 @@ public:
     return zone_short_id;
   }
 
-  bool zone_syncs_from(RGWZone& target_zone, RGWZone& source_zone);
+  bool zone_syncs_from(const RGWZone& target_zone, const RGWZone& source_zone) const;
 
   const RGWQuotaInfo& get_bucket_quota() {
     return current_period.get_config().bucket_quota;

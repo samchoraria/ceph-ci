@@ -3279,9 +3279,9 @@ class RGWDataSyncProcessorThread : public RGWSyncProcessorThread
   }
 public:
   RGWDataSyncProcessorThread(RGWRados *_store, RGWAsyncRadosProcessor *async_rados,
-                             const string& _source_zone)
+                             const RGWZone* source_zone)
     : RGWSyncProcessorThread(_store, "data-sync"),
-      sync(_store, async_rados, _source_zone),
+      sync(_store, async_rados, source_zone->id),
       initialized(false) {}
 
   void wakeup_sync_shards(map<int, set<string> >& shard_ids) {
@@ -4399,7 +4399,7 @@ int RGWRados::init_zg_from_local(bool *creating_defaults)
 }
 
 
-bool RGWRados::zone_syncs_from(RGWZone& target_zone, RGWZone& source_zone)
+bool RGWRados::zone_syncs_from(const RGWZone& target_zone, const RGWZone& source_zone) const
 {
   return target_zone.syncs_from(source_zone.name) &&
          sync_modules_manager->supports_data_export(source_zone.tier_type);
@@ -4537,9 +4537,9 @@ int RGWRados::init_complete()
     ldout(cct, 0) << "WARNING: could not find zone config in zonegroup for local zone (" << zone_id() << "), will use defaults" << dendl;
   }
   zone_public_config = zone_by_id[zone_id()];
-  for (auto ziter : get_zonegroup().zones) {
+  for (const auto& ziter : get_zonegroup().zones) {
     const string& id = ziter.first;
-    RGWZone& z = ziter.second;
+    const RGWZone& z = ziter.second;
     if (id == zone_id()) {
       continue;
     }
@@ -4553,7 +4553,7 @@ int RGWRados::init_complete()
     if (zone_syncs_from(zone_public_config, z) ||
         zone_syncs_from(z, zone_public_config)) {
       if (zone_syncs_from(zone_public_config, z)) {
-        zone_data_sync_from_map[id] = conn;
+        data_sync_source_zones.push_back(&z);
       }
       if (zone_syncs_from(z, zone_public_config)) {
         zone_data_notify_to_map[id] = conn;
@@ -4646,16 +4646,16 @@ int RGWRados::init_complete()
     data_log->set_observer(&*bucket_trim);
 
     Mutex::Locker dl(data_sync_thread_lock);
-    for (auto iter : zone_data_sync_from_map) {
-      ldout(cct, 5) << "starting data sync thread for zone " << iter.first << dendl;
-      auto *thread = new RGWDataSyncProcessorThread(this, async_rados, iter.first);
+    for (auto source_zone : data_sync_source_zones) {
+      ldout(cct, 5) << "starting data sync thread for zone " << source_zone->name << dendl;
+      auto *thread = new RGWDataSyncProcessorThread(this, async_rados, source_zone);
       ret = thread->init();
       if (ret < 0) {
         ldout(cct, 0) << "ERROR: failed to initialize data sync thread" << dendl;
         return ret;
       }
       thread->start();
-      data_sync_processor_threads[iter.first] = thread;
+      data_sync_processor_threads[source_zone->id] = thread;
     }
     auto interval = cct->_conf->rgw_sync_log_trim_interval;
     if (interval > 0) {
