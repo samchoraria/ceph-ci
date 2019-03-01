@@ -20,6 +20,7 @@
 #include "rgw_http_client.h"
 #include "rgw_bucket.h"
 #include "rgw_metadata.h"
+#include "rgw_sync_counters.h"
 #include "rgw_sync_module.h"
 #include "rgw_sync_log_trim.h"
 
@@ -317,6 +318,7 @@ class RGWReadRemoteDataLogShardCR : public RGWCoroutine {
   bool *truncated;
 
   read_remote_data_log_response response;
+  ceph::real_time timer_started;
 
 public:
   RGWReadRemoteDataLogShardCR(RGWDataSyncEnv *_sync_env, int _shard_id,
@@ -350,18 +352,31 @@ public:
 
         http_op->set_user_info((void *)stack);
 
+        if (sync_env->counters) {
+          timer_started = ceph::real_clock::now();
+        }
         int ret = http_op->aio_read();
         if (ret < 0) {
           ldout(sync_env->cct, 0) << "ERROR: failed to read from " << p << dendl;
           log_error() << "failed to send http operation: " << http_op->to_str() << " ret=" << ret << std::endl;
+          if (sync_env->counters) {
+            sync_env->counters->inc(sync_counters::l_poll_err);
+          }
           return set_cr_error(ret);
         }
 
         return io_block(0);
       }
       yield {
+        if (sync_env->counters) {
+          auto latency = ceph::real_clock::now() - timer_started;
+          sync_env->counters->tinc(sync_counters::l_poll, latency);
+        }
         int ret = http_op->wait(&response);
         if (ret < 0) {
+          if (sync_env->counters && ret != -ENOENT) {
+            sync_env->counters->inc(sync_counters::l_poll_err);
+          }
           return set_cr_error(ret);
         }
         entries->clear();
