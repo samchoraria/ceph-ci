@@ -2331,6 +2331,7 @@ class RGWListBucketIndexLogCR: public RGWCoroutine {
   string marker;
 
   list<rgw_bi_log_entry> *result;
+  ceph::real_time timer_started;
 
 public:
   RGWListBucketIndexLogCR(RGWDataSyncEnv *_sync_env, const rgw_bucket_shard& bs,
@@ -2340,6 +2341,9 @@ public:
 
   int operate() override {
     reenter(this) {
+      if (sync_env->counters) {
+        timer_started = ceph::real_clock::now();
+      }
       yield {
         rgw_http_param_pair pairs[] = { { "bucket-instance", instance_key.c_str() },
 					{ "format" , "json" },
@@ -2349,7 +2353,14 @@ public:
 
         call(new RGWReadRESTResourceCR<list<rgw_bi_log_entry> >(sync_env->cct, sync_env->conn, sync_env->http_manager, "/admin/log", pairs, result));
       }
+      if (sync_env->counters) {
+        auto latency = ceph::real_clock::now() - timer_started;
+        sync_env->counters->tinc(sync_counters::l_poll, latency);
+      }
       if (retcode < 0) {
+        if (sync_env->counters) {
+          sync_env->counters->inc(sync_counters::l_poll_err);
+        }
         return set_cr_error(retcode);
       }
       return set_cr_done();
