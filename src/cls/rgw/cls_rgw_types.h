@@ -265,7 +265,7 @@ struct cls_rgw_obj_key {
   bool operator<=(const cls_rgw_obj_key& k) const {
     return !(k < *this);
   }
-  bool empty() {
+  bool empty() const {
     return name.empty();
   }
   void encode(bufferlist &bl) const {

@@ -301,7 +301,7 @@ static int get_obj_attrs(RGWRados *store, struct req_state *s, rgw_obj& obj, map
   return read_op.prepare();
 }
 
-static int modify_obj_attr(RGWRados *store, struct req_state *s, rgw_obj& obj, const char* attr_name, bufferlist& attr_val)
+static int modify_obj_attr(RGWRados *store, struct req_state *s, const rgw_obj& obj, const char* attr_name, bufferlist& attr_val)
 {
   map<string, bufferlist> attrs;
   RGWRados::Object op_target(store, s->bucket_info, *static_cast<RGWObjectCtx *>(s->obj_ctx), obj);
