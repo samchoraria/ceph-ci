@@ -120,6 +120,8 @@ static string RGW_DEFAULT_PERIOD_ROOT_POOL = "rgw.root";
 
 #define dout_subsys ceph_subsys_rgw
 
+const std::string MP_META_SUFFIX = ".meta";
+
 
 static bool rgw_get_obj_data_pool(const RGWZoneGroup& zonegroup, const RGWZoneParams& zone_params,
                                   const string& placement_id, const rgw_obj& obj, rgw_pool *pool)
@@ -12949,7 +12951,7 @@ struct RGWAccessListFilterPrefix : public RGWAccessListFilter {
   string prefix;
 
   explicit RGWAccessListFilterPrefix(const string& _prefix) : prefix(_prefix) {}
-  bool filter(string& name, string& key) override {
+  bool filter(const string& name, string& key) override {
     return (prefix.compare(key.substr(0, prefix.size())) == 0);
   }
 };
@@ -13456,7 +13458,7 @@ int RGWRados::cls_obj_set_bucket_tag_timeout(RGWBucketInfo& bucket_info, uint64_
 
 int RGWRados::cls_bucket_list_ordered(RGWBucketInfo& bucket_info,
 				      int shard_id,
-				      rgw_obj_index_key& start,
+				      const rgw_obj_index_key& start,
 				      const string& prefix,
 				      uint32_t num_entries,
 				      bool list_versions,
@@ -13577,7 +13579,7 @@ int RGWRados::cls_bucket_list_ordered(RGWBucketInfo& bucket_info,
 
 int RGWRados::cls_bucket_list_unordered(RGWBucketInfo& bucket_info,
 					int shard_id,
-					rgw_obj_index_key& start,
+					const rgw_obj_index_key& start,
 					const string& prefix,
 					uint32_t num_entries,
 					bool list_versions,
