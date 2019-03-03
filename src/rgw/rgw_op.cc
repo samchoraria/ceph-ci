@@ -298,7 +298,7 @@ static int read_policy(RGWRados *store, struct req_state *s,
       return ret;
     rgw_user& owner = bucket_policy.get_owner().get_id();
     if (!s->system_request && owner.compare(s->user->user_id) != 0 &&
-        !bucket_policy.verify_permission(s->user->user_id, s->perm_mask,
+        !bucket_policy.verify_permission(s, s->perm_mask,
 					RGW_PERM_READ))
       ret = -EACCES;
     else
@@ -1444,13 +1444,23 @@ void RGWListBuckets::execute()
 
   uint64_t max_buckets = s->cct->_conf->rgw_list_buckets_max_chunk;
 
+  rgw_user *accounts_user;
+  rgw_user buckets_user;
+
+  if (doing_swift_cross_tenant) {
+	buckets_user.tenant = buckets_user.id = s->bucket_tenant;
+	accounts_user = &buckets_user;
+  } else {
+	accounts_user = &s->user->user_id;
+  }
+
   op_ret = get_params();
   if (op_ret < 0) {
     goto send_end;
   }
 
   if (supports_account_metadata()) {
-    op_ret = rgw_get_user_attrs_by_uid(store, s->user->user_id, attrs);
+    op_ret = rgw_get_user_attrs_by_uid(store, *accounts_user, attrs);
     if (op_ret < 0) {
       goto send_end;
     }
@@ -1465,15 +1475,16 @@ void RGWListBuckets::execute()
       read_count = max_buckets;
     }
 
-    op_ret = rgw_read_user_buckets(store, s->user->user_id, buckets,
+    op_ret = rgw_read_user_buckets(store, *accounts_user, buckets,
                                    marker, end_marker, read_count,
                                    should_get_stats(), &is_truncated,
                                    get_default_max());
     if (op_ret < 0) {
       /* hmm.. something wrong here.. the user was authenticated, so it
          should exist */
+// NB: except with 3rdparty aka cross-tenant, that might NOT be true.
       ldout(s->cct, 10) << "WARNING: failed on rgw_get_user_buckets uid="
-			<< s->user->user_id << dendl;
+			<< *accounts_user << dendl;
       break;
     }
     map<string, RGWBucketEnt>& m = buckets.get_buckets();
@@ -2338,7 +2349,7 @@ int RGWPutObj::verify_permission()
 
     /* system request overrides permission checks */
     if (!s->system_request &&
-        !cs_policy.verify_permission(s->user->user_id, s->perm_mask,
+        !cs_policy.verify_permission(s, s->perm_mask,
 				     RGW_PERM_READ)) {
       return -EACCES;
     }
@@ -3163,6 +3174,12 @@ void RGWPutMetadataBucket::execute()
        * the hood. This method will add the new items only if the map doesn't
        * contain such keys yet. */
       if (has_policy) {
+	if (s->dialect.compare("swift") == 0) {
+	    auto old_policy = static_cast<RGWAccessControlPolicy_SWIFT*>(s->bucket_acl);
+	    auto new_policy = static_cast<RGWAccessControlPolicy_SWIFT*>(&policy);
+	    new_policy->filter_merge(policy_rw_mask, old_policy);
+	    policy = *new_policy;
+	}
 	buffer::list bl;
 	policy.encode(bl);
 	emplace_attr(RGW_ATTR_ACL, std::move(bl));
@@ -3495,7 +3512,7 @@ int RGWCopyObj::verify_permission()
       return op_ret;
 
     if (!s->system_request && /* system request overrides permission checks */
-        !src_policy.verify_permission(s->user->user_id, s->perm_mask,
+        !src_policy.verify_permission(s, s->perm_mask,
 				      RGW_PERM_READ))
       return -EACCES;
   }
@@ -3532,7 +3549,7 @@ int RGWCopyObj::verify_permission()
     return op_ret;
 
   if (!s->system_request && /* system request overrides permission checks */
-      !dest_bucket_policy.verify_permission(s->user->user_id, s->perm_mask,
+      !dest_bucket_policy.verify_permission(s, s->perm_mask,
 					    RGW_PERM_WRITE))
     return -EACCES;
 

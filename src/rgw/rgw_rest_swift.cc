@@ -55,6 +55,7 @@ int RGWListBuckets_ObjStore_SWIFT::get_params()
       need_stats = stats;
     }
   }
+  doing_swift_cross_tenant = s->bucket_tenant != s->user->user_id.tenant;
 
   return 0;
 }
@@ -435,25 +436,17 @@ void RGWStatBucket_ObjStore_SWIFT::send_response()
   dump_start(s);
 }
 
-static int get_swift_container_settings(req_state *s, RGWRados *store, RGWAccessControlPolicy *policy, bool *has_policy,
+static int get_swift_container_settings(req_state *s, RGWRados *store, RGWAccessControlPolicy *policy, bool *has_policy, uint32_t * rw_mask,
                                         RGWCORSConfiguration *cors_config, bool *has_cors)
 {
-  string read_list, write_list;
-
-  const char *read_attr = s->info.env->get("HTTP_X_CONTAINER_READ");
-  if (read_attr) {
-    read_list = read_attr;
-  }
-  const char *write_attr = s->info.env->get("HTTP_X_CONTAINER_WRITE");
-  if (write_attr) {
-    write_list = write_attr;
-  }
+  const char *read_list = s->info.env->get("HTTP_X_CONTAINER_READ");
+  const char *write_list = s->info.env->get("HTTP_X_CONTAINER_WRITE");
 
   *has_policy = false;
 
-  if (read_attr || write_attr) {
+  if (read_list || write_list) {
     RGWAccessControlPolicy_SWIFT swift_policy(s->cct);
-    int r = swift_policy.create(store, s->user->user_id, s->user->display_name, read_list, write_list);
+    int r = swift_policy.create(store, s->user->user_id, s->user->display_name, read_list, write_list, *rw_mask);
     if (r < 0)
       return r;
 
@@ -550,8 +543,10 @@ static int get_swift_versioning_settings(
 int RGWCreateBucket_ObjStore_SWIFT::get_params()
 {
   bool has_policy;
+  uint32_t policy_rw_mask = 0;
 
-  int r = get_swift_container_settings(s, store, &policy, &has_policy, &cors_config, &has_cors);
+  int r = get_swift_container_settings(s, store, &policy, &has_policy,
+				&policy_rw_mask, &cors_config, &has_cors);
   if (r < 0) {
     return r;
   }
@@ -781,7 +776,7 @@ int RGWPutMetadataBucket_ObjStore_SWIFT::get_params()
   }
 
   int r = get_swift_container_settings(s, store, &policy, &has_policy,
-				       &cors_config, &has_cors);
+				       &policy_rw_mask, &cors_config, &has_cors);
   if (r < 0) {
     return r;
   }
@@ -1598,6 +1593,10 @@ int RGWHandler_REST_SWIFT::authorize()
       }
 
       *(s->user) = einfo;
+    }
+  } else {
+    if (! s->account_name.empty()) {
+      s->bucket_tenant = s->account_name;
     }
   }
 
