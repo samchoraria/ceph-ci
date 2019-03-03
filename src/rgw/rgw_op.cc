@@ -1446,6 +1446,11 @@ void RGWListBuckets::execute()
 
   rgw_user *accounts_user;
   rgw_user buckets_user;
+  
+  op_ret = get_params();
+  if (op_ret < 0) {
+    goto send_end;
+  }
 
   if (doing_swift_cross_tenant) {
 	buckets_user.tenant = buckets_user.id = s->bucket_tenant;
@@ -1453,12 +1458,7 @@ void RGWListBuckets::execute()
   } else {
 	accounts_user = &s->user->user_id;
   }
-
-  op_ret = get_params();
-  if (op_ret < 0) {
-    goto send_end;
-  }
-
+  
   if (supports_account_metadata()) {
     op_ret = rgw_get_user_attrs_by_uid(store, *accounts_user, attrs);
     if (op_ret < 0) {
