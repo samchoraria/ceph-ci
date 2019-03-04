@@ -1438,6 +1438,7 @@ int RGWGetUsage::verify_permission()
 
 void RGWListBuckets::execute()
 {
+  ldout(s->cct, 20) << __PRETTY_FUNCTION__ << dendl;
   bool done;
   bool started = false;
   uint64_t total_count = 0;
