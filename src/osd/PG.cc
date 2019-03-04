@@ -3828,7 +3828,8 @@ void PG::append_log(
       * out-of-turn since we won't be considered when
       * determining a min possible last_update.
       */
-    pg_log.roll_forward(&handler);
+    //pg_log.roll_forward(&handler);
+    pg_log.skip_rollforward();
   }
 
   for (vector<pg_log_entry_t>::const_iterator p = logv.begin();
