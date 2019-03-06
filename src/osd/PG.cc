@@ -3861,6 +3861,9 @@ void PG::append_log(
            << pg_log.get_log().approx_size() << dendl;
   dout(10) << __func__ << " transaction_applied = "
            << transaction_applied << dendl;
+  if (!transaction_applied && async)
+    dout(10) << __func__ << " " << pg_whoami
+             << " is async_recovery target" << dendl;
   if (!transaction_applied || async)
     dout(10) << __func__ << " " << pg_whoami
              << " is async_recovery or backfill target" << dendl;
