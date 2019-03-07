@@ -146,6 +146,7 @@ class MDSRank {
 
     MDSRank(
         mds_rank_t whoami_,
+	fs_cluster_id_t fsid_,
         ceph::mutex &mds_lock_,
         LogChannelRef &clog_,
         SafeTimer &timer_,
@@ -159,6 +160,7 @@ class MDSRank {
 	boost::asio::io_context& ioc);
 
     mds_rank_t get_nodeid() const { return whoami; }
+    fs_cluster_id_t get_fsid() const { return fsid; }
     int64_t get_metadata_pool();
 
     mono_time get_starttime() const {
@@ -421,6 +423,7 @@ class MDSRank {
     friend class C_MDS_MonCommand;
 
     const mds_rank_t whoami;
+    fs_cluster_id_t fsid;
 
     ~MDSRank();
 
@@ -633,6 +636,7 @@ class MDSRankDispatcher : public MDSRank, public md_config_obs_t
 public:
   MDSRankDispatcher(
       mds_rank_t whoami_,
+      fs_cluster_id_t fsid_,
       ceph::mutex &mds_lock_,
       LogChannelRef &clog_,
       SafeTimer &timer_,
