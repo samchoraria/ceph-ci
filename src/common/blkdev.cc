@@ -433,6 +433,23 @@ bool get_vdo_utilization(int fd, uint64_t *total, uint64_t *avail)
   return true;
 }
 
+std::string _decode_model_enc(const std::string& in)
+{
+  std::string v = in;
+  while (true) {
+    auto p = v.find("\\x20");
+    if (p == std::string::npos) {
+      break;
+    }
+    v = v.substr(0, p) + ' ' + v.substr(p + 4);
+  }
+  while (v.size() && v[v.size()-1] == ' ') {
+    v.resize(v.size() - 1);
+  }
+  std::replace(v.begin(), v.end(), ' ', '_');
+  return v;
+}
+
 // trying to use udev first, and if it doesn't work, we fall back to 
 // reading /sys/block/$devname/device/(vendor/model/serial).
 std::string get_device_id(const std::string& devname,
@@ -472,6 +489,15 @@ std::string get_device_id(const std::string& devname,
   data = udev_device_get_property_value(dev, "ID_MODEL");
   if (data) {
     id_model = data;
+    // sometimes, ID_MODEL is "LVM ..." but ID_MODEL_ENC is correct (but
+    // encoded with \x20 for space).
+    if (id_model.substr(0, 7) == "LVM PV ") {
+      std::string enc = udev_device_get_property_value(dev, "ID_MODEL_ENC");
+      enc = _decode_model_enc(enc);
+      if (enc.size()) {
+	id_model = enc;
+      }
+    }
   }
   data = udev_device_get_property_value(dev, "ID_SERIAL_SHORT");
   if (data) {
