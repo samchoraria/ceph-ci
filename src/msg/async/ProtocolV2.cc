@@ -26,6 +26,9 @@ ostream &ProtocolV2::_conn_prefix(std::ostream *_dout) {
                 << " cs=" << connect_seq << " l=" << connection->policy.lossy
                 << " rx=" << session_stream_handlers.rx.get()
                 << " tx=" << session_stream_handlers.tx.get()
+		<< " txl=" << pre_auth.txbuf.length()
+		<< " rxl=" << pre_auth.rxbuf.length()
+		<< " e=" << (int)pre_auth.enabled
                 << ").";
 }
 
@@ -710,6 +713,8 @@ CtPtr ProtocolV2::read(CONTINUATION_RXBPTR_TYPE<ProtocolV2> &next,
     [&next, this](char *buffer, int r) {
       if (unlikely(pre_auth.enabled) && r >= 0) {
         pre_auth.rxbuf.append(*next.node);
+#warning temporary
+	ceph_assert(pre_auth.rxbuf.length() < 1000000);
       }
       next.r = r;
       run_continuation(next);
@@ -718,6 +723,8 @@ CtPtr ProtocolV2::read(CONTINUATION_RXBPTR_TYPE<ProtocolV2> &next,
     // error or done synchronously
     if (unlikely(pre_auth.enabled) && r >= 0) {
       pre_auth.rxbuf.append(*next.node);
+#warning temporary
+      ceph_assert(pre_auth.rxbuf.length() < 1000000);
     }
     next.r = r;
     return &next;
@@ -739,6 +746,8 @@ CtPtr ProtocolV2::write(const std::string &desc,
                         bufferlist &buffer) {
   if (unlikely(pre_auth.enabled)) {
     pre_auth.txbuf.append(buffer);
+#warning temporary
+    ceph_assert(pre_auth.txbuf.length() < 1000000);
   }
 
   ssize_t r =
