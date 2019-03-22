@@ -795,6 +795,7 @@ def test_version_suspended_incremental_sync():
     key3.set_contents_from_string('')
     log.debug('created null version id=%s', key3.version_id)
     zonegroup_bucket_checkpoint(zonegroup_conns, bucket.name)
+    zonegroup_data_checkpoint(zonegroup_conns)
 
 
 def test_bucket_versioning():
@@ -941,6 +942,7 @@ def test_datalog_autotrim():
     for zone, bucket in zone_bucket:
         k = new_key(zone, bucket.name, 'key')
         k.set_contents_from_string('body')
+        zonegroup_bucket_checkpoint(zonegroup_conns, bucket.name)
 
     # wait for data sync to catch up
     zonegroup_data_checkpoint(zonegroup_conns)
