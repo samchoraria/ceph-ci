@@ -510,6 +510,7 @@ def test_bucket_create():
 
     for zone in zonegroup_conns.zones:
         assert check_all_buckets_exist(zone, buckets)
+    zonegroup_data_checkpoint(zonegroup_conns)
 
 def test_bucket_recreate():
     zonegroup = realm.master_zonegroup()
@@ -533,6 +534,7 @@ def test_bucket_recreate():
 
     for zone in zonegroup_conns.zones:
         assert check_all_buckets_exist(zone, buckets)
+    zonegroup_data_checkpoint(zonegroup_conns)
 
 def test_bucket_remove():
     zonegroup = realm.master_zonegroup()
@@ -550,6 +552,7 @@ def test_bucket_remove():
 
     for zone in zonegroup_conns.zones:
         assert check_all_buckets_dont_exist(zone, buckets)
+    zonegroup_data_checkpoint(zonegroup_conns)
 
 def get_bucket(zone, bucket_name):
     return zone.conn.get_bucket(bucket_name)
@@ -588,6 +591,7 @@ def test_object_sync():
 
             zone_bucket_checkpoint(target_conn.zone, source_conn.zone, bucket.name)
             check_bucket_eq(source_conn, target_conn, bucket)
+    zonegroup_data_checkpoint(zonegroup_conns)
 
 def test_object_delete():
     zonegroup = realm.master_zonegroup()
@@ -623,6 +627,7 @@ def test_object_delete():
 
             zone_bucket_checkpoint(target_conn.zone, source_conn.zone, bucket.name)
             check_bucket_eq(source_conn, target_conn, bucket)
+    zonegroup_data_checkpoint(zonegroup_conns)
 
 def get_latest_object_version(key):
     for k in key.bucket.list_versions(key.name):
@@ -687,6 +692,7 @@ def test_versioned_object_incremental_sync():
 
     for _, bucket in zone_bucket:
         zonegroup_bucket_checkpoint(zonegroup_conns, bucket.name)
+    zonegroup_data_checkpoint(zonegroup_conns)
 
 def test_delete_marker_full_sync():
     zonegroup = realm.master_zonegroup()
@@ -710,6 +716,7 @@ def test_delete_marker_full_sync():
     # wait for full sync
     for _, bucket in zone_bucket:
         zonegroup_bucket_checkpoint(zonegroup_conns, bucket.name)
+    zonegroup_data_checkpoint(zonegroup_conns)
 
 def test_suspended_delete_marker_full_sync():
     zonegroup = realm.master_zonegroup()
@@ -734,6 +741,7 @@ def test_suspended_delete_marker_full_sync():
     # wait for full sync
     for _, bucket in zone_bucket:
         zonegroup_bucket_checkpoint(zonegroup_conns, bucket.name)
+    zonegroup_data_checkpoint(zonegroup_conns)
 
 def test_bucket_versioning():
     buckets, zone_bucket = create_bucket_per_zone_in_realm()
@@ -782,6 +790,7 @@ def test_bucket_delete_notempty():
     c1 = zonegroup_conns.master_zone.conn
     for _, bucket_name in zone_bucket:
         assert c1.get_bucket(bucket_name)
+    zonegroup_data_checkpoint(zonegroup_conns)
 
 def test_multi_period_incremental_sync():
     zonegroup = realm.master_zonegroup()
@@ -867,6 +876,7 @@ def test_multi_period_incremental_sync():
         for zone in zonegroup.zones:
             mdlog = mdlog_list(zone, period)
             assert len(mdlog) == 0
+    zonegroup_data_checkpoint(zonegroup_conns)
 
 def test_zonegroup_remove():
     zonegroup = realm.master_zonegroup()
@@ -895,9 +905,11 @@ def test_zonegroup_remove():
 
     # validate the resulting period
     zonegroup.period.update(z1, commit=True)
+    zonegroup_data_checkpoint(zonegroup_conns)
 
 
 def test_zg_master_zone_delete():
+    raise SkipTest("test_zg_master_zone_delete skipped")
 
     master_zg = realm.master_zonegroup()
     master_zone = master_zg.master_zone
@@ -1045,6 +1057,7 @@ def test_multipart_object_sync():
     mp.complete_upload()
 
     zonegroup_bucket_checkpoint(zonegroup_conns, bucket.name)
+    zonegroup_data_checkpoint(zonegroup_conns)
 
 def test_encrypted_object_sync():
     zonegroup = realm.master_zonegroup()
@@ -1087,6 +1100,7 @@ def test_encrypted_object_sync():
 
     key = bucket2.get_key('testobj-sse-kms')
     eq(data, key.get_contents_as_string())
+    zonegroup_data_checkpoint(zonegroup_conns)
 
 def test_bucket_index_log_trim():
     zonegroup = realm.master_zonegroup()
@@ -1141,3 +1155,4 @@ def test_bucket_index_log_trim():
     # verify cold bucket has empty bilog
     cold_bilog = bilog_list(zone.zone, cold_bucket.name)
     assert(len(cold_bilog) == 0)
+    zonegroup_data_checkpoint(zonegroup_conns)
