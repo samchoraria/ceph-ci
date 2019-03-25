@@ -444,6 +444,8 @@ void PGLog::merge_log(pg_info_t &oinfo, pg_log_t &olog, pg_shard_t fromosd,
 	     << lower_bound << dendl;
     mark_dirty_from(lower_bound);
 
+    eversion_t original_crt = log.get_can_rollback_to();
+    dout(20) << __func__ << " original_crt = " << original_crt << dendl;
     auto divergent = log.rewind_from_head(lower_bound);
     // move aside divergent items
     for (auto &&oe: divergent) {
@@ -468,7 +470,7 @@ void PGLog::merge_log(pg_info_t &oinfo, pg_log_t &olog, pg_shard_t fromosd,
       divergent,
       info,
       log.get_can_rollback_to(),
-      log.get_can_rollback_to(),
+      original_crt,
       missing,
       rollbacker,
       this);
