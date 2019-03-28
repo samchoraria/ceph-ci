@@ -366,7 +366,9 @@ public:
         }
         entries->clear();
         entries->swap(response.entries);
-        *pmarker = response.marker;
+        if (!response.marker.empty()) {
+          *pmarker = response.marker;
+        }
         *truncated = response.truncated;
         return set_cr_done();
       }
