@@ -941,13 +941,14 @@ protected:
 
     ceph::unordered_map<hobject_t, pg_log_entry_t*>::const_iterator objiter =
       log.objects.find(hoid);
+    // We should only enter here, if we are beyond the divergent boundary.
+    // The aim is to look for a more recent entry in the log, beyond
+    // last_divergent_update.
     if (objiter != log.objects.end() &&
-	objiter->second->version >= first_divergent_update) {
+	objiter->second->version > last_divergent_update) {
       /// Case 1)
       ldpp_dout(dpp, 10) << __func__ << ": more recent entry found: "
 			 << *objiter->second << ", already merged" << dendl;
-
-      ceph_assert(objiter->second->version > last_divergent_update);
 
       // ensure missing has been updated appropriately
       if (objiter->second->is_update() ||
