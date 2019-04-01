@@ -127,6 +127,8 @@ class MonitorThrasher:
             assert self.maintain_quorum, \
                 'store_thrash = true must imply maintain_quorum = true'
 
+        self.mds_cluster = MDSCluster(ctx)
+
         self.thread = gevent.spawn(self.do_thrash)
 
     def log(self, x):
@@ -214,6 +216,10 @@ class MonitorThrasher:
         """
         Continuously loop and thrash the monitors.
         """
+        #status before mon thrashing
+        bstatus = self.mds_cluster.status()
+        fs = bstatus.get_filesystems()
+
         self.log('start thrashing')
         self.log('seed: {s}, revive delay: {r}, thrash delay: {t} '\
                    'thrash many: {tm}, maintain quorum: {mq} '\
@@ -306,6 +312,12 @@ class MonitorThrasher:
                 self.log('waiting for {delay} secs before continuing thrashing'.format(
                     delay=self.thrash_delay))
                 time.sleep(self.thrash_delay)
+
+        #status after thrashing
+        athrash = self.mds_cluster.status()
+        assert fs.cmpstatus(athrash), \
+            'MDS Failover'
+
 
 @contextlib.contextmanager
 def task(ctx, config):
