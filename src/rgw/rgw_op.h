@@ -2219,6 +2219,7 @@ public:
 };
 
 
+int get_obj_attrs(RGWRados *store, RGWObjectCtx& obj_ctx, RGWBucketInfo& bucket_info, const rgw_obj& obj, map<string, bufferlist>& attrs);
 int modify_obj_attr(RGWRados *store, RGWObjectCtx& obj_ctx, RGWBucketInfo& bucket_info, const rgw_obj& obj, const char* attr_name, bufferlist& attr_val);
 
 #endif /* CEPH_RGW_OP_H */
