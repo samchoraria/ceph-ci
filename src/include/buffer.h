@@ -901,7 +901,7 @@ namespace buffer CEPH_BUFFER_API {
         uint64_t len = p.length();
         if (len > RW_IO_MAX) {
           //Rarely come in this condition
-          piov->resize(piov->size() + len / RW_IO_MAX + 1);
+          piov->resize(piov->size() + len / RW_IO_MAX);
         }
         while (len > RW_IO_MAX) {
           (*piov)[n].iov_base = (void *)(p.c_str() + p.length() - len);
