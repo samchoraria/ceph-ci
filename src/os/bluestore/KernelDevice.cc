@@ -660,7 +660,7 @@ int KernelDevice::aio_write(
       for (unsigned i = 0; i < iov.size(); ++i) {
         if (aio_len + iov[i].iov_len > RW_IO_MAX) {
           //if aio len will be longer than max io len 0x7FFFF000, add a new aio
-          paio->bl.claim_append(bl);
+          paio->bl.substr_of(bl, prev_len, aio_len);
           paio->pwritev(off + prev_len, aio_len);
           dout(30) << *paio << dendl;
           dout(1) << __func__ << " 0x" << std::hex << off << "~" << len
@@ -674,7 +674,7 @@ int KernelDevice::aio_write(
         aio_len += iov[i].iov_len;
         paio->iov.push_back(iov[i]);
       }
-      paio->bl.claim_append(bl);
+      paio->bl.substr_of(bl, prev_len, aio_len);
       paio->pwritev(off + prev_len, aio_len);
     }
     dout(30) << *paio << dendl;
