@@ -225,7 +225,11 @@ class MonitorThrasher:
         """
         #status before mon thrashing
         if self.mds_failover:
-            oldstatus = self.mds_cluster.status()
+            if self.mds_cluster:
+                self.log('before start thrashing: self.mds_cluster is true')
+                oldstatus = self.mds_cluster.status()
+            else:
+                self.log('before start thrashing: self.mds_cluster is false')
 
         self.log('start thrashing')
         self.log('seed: {s}, revive delay: {r}, thrash delay: {t} '\
@@ -322,9 +326,13 @@ class MonitorThrasher:
 
         #status after thrashing
         if self.mds_failover:
-            status = self.mds_cluster.status()
-            assert not oldstatus.hadfailover(status), \
-                'MDS Failover'
+            if self.mds_cluster:
+                self.log('after thrashing: self.mds_cluster is true')
+                status = self.mds_cluster.status()
+                assert not oldstatus.hadfailover(status), \
+                    'MDS Failover'
+            else:
+                self.log('after thrashing: self.mds_cluster is false')
 
 
 @contextlib.contextmanager
