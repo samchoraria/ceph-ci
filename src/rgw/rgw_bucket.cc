@@ -516,7 +516,7 @@ static bool bucket_object_check_filter(const string& oid)
   return rgw_obj_key::oid_to_key_in_ns(oid, &key, ns);
 }
 
-int rgw_remove_object(RGWRados *store, RGWBucketInfo& bucket_info, rgw_bucket& bucket, rgw_obj_key& key)
+int rgw_remove_object(RGWRados *store, const RGWBucketInfo& bucket_info, const rgw_bucket& bucket, rgw_obj_key& key)
 {
   RGWObjectCtx rctx(store);
 
@@ -526,7 +526,8 @@ int rgw_remove_object(RGWRados *store, RGWBucketInfo& bucket_info, rgw_bucket& b
 
   rgw_obj obj(bucket, key);
 
-  return store->delete_obj(rctx, bucket_info, obj, bucket_info.versioning_status());
+  RGWBucketInfo& ncbi = const_cast<RGWBucketInfo&>(bucket_info); 
+  return store->delete_obj(rctx, ncbi, obj, ncbi.versioning_status());
 }
 
 int rgw_remove_bucket(RGWRados *store, rgw_bucket& bucket, bool delete_children)
