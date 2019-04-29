@@ -155,11 +155,16 @@ class FSStatus(object):
         Returns True if there is a failover.
         """
         for fs in status.map['filesystems']:
+            log.info("fs=%s", fs)
             for info in fs['mdsmap']['info'].values():
                 oldinfo = self.get_mds_gid(info['gid'])
+                log.info("info=%s", info)
+                log.info("oldinfo=%s", oldinfo)
                 if oldinfo is None or oldinfo['incarnation'] != info['incarnation']:
+                    log.info("returning True")
                     return True
         #all matching
+        log.info("returning False")
         return False
 
 class CephCluster(object):
