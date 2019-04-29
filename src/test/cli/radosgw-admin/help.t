@@ -36,6 +36,8 @@
     object unlink              unlink object from bucket index
     objects expire             run expired objects cleanup
     period delete              delete a period
+    objects expire-stale list  list stale expired objects (caused by reshard)
+    objects expire-stale rm    remove stale expired objects
     period get                 get period info
     period get-current         get current period info
     period pull                pull a period
