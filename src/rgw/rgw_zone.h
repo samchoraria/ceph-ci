@@ -975,9 +975,25 @@ struct RGWPeriodLatestEpochInfo {
 };
 WRITE_CLASS_ENCODER(RGWPeriodLatestEpochInfo)
 
+
+/*
+ * RGWPeriod represents a period of time during which a single
+ * configuration of multisite was used.
+ *
+ * Although not represented in the RGWPeriod class, this configuration
+ * 0 or 1 realms, 1 or more zone groups, and for each zone group, 1 or
+ * more zones. And the configuration has addtional information as
+ * well.
+ *
+ * When the configuration is changed, a new RGWPeriod is created with
+ * a new id (uuid). And a new RGWPeriod is linked back to its
+ * predecessor RGWPeriod through the predecessor_uuid field, thus
+ * creating a "linked list"-like structure of RGWPeriods back to the
+ * cluster's creation.
+ */
 class RGWPeriod
 {
-  std::string id;
+  std::string id; //< a uuid
   epoch_t epoch{0};
   std::string predecessor_uuid;
   std::vector<std::string> sync_status;
