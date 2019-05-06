@@ -26,3 +26,7 @@
   data block object. The librbd IO scheduler policy can be
   controlled via a new "rbd_io_scheduler" configuration
   option.
+
+* RGW: admin introduces a objects expire-stale list and rm command to remove
+  stale expired objects from a reshard. Read the troubleshooting section of
+  dynamic resharding docs on more details
