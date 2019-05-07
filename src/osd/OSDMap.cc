@@ -1408,10 +1408,10 @@ void OSDMap::get_up_osds(set<int32_t>& ls) const
   }
 }
 
-void OSDMap::get_out_osds(set<int32_t>& ls) const
+void OSDMap::get_out_existing_osds(set<int32_t>& ls) const
 {
   for (int i = 0; i < max_osd; i++) {
-    if (is_out(i))
+    if (exists(i) && get_weight(i) == CEPH_OSD_OUT)
       ls.insert(i);
   }
 }
@@ -2048,6 +2048,7 @@ int OSDMap::apply_incremental(const Incremental &inc)
 
   for (const auto &client : inc.new_up_client) {
     osd_state[client.first] |= CEPH_OSD_EXISTS | CEPH_OSD_UP;
+    osd_state[client.first] &= ~CEPH_OSD_STOP; // if any
     osd_addrs->client_addrs[client.first].reset(
       new entity_addrvec_t(client.second));
     osd_addrs->hb_back_addrs[client.first].reset(

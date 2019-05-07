@@ -2624,10 +2624,9 @@ void PG::split_into(pg_t child_pgid, PG *child, unsigned split_bits)
   info.log_tail = pg_log.get_tail();
   child->info.log_tail = child->pg_log.get_tail();
 
-  if (info.last_complete < pg_log.get_tail())
-    info.last_complete = pg_log.get_tail();
-  if (child->info.last_complete < child->pg_log.get_tail())
-    child->info.last_complete = child->pg_log.get_tail();
+  // reset last_complete, we might have modified pg_log & missing above
+  pg_log.reset_complete_to(&info);
+  child->pg_log.reset_complete_to(&child->info);
 
   // Info
   child->info.history = info.history;
@@ -6123,8 +6122,8 @@ bool PG::should_restart_peering(
 	newupprimary,
 	up,
 	newup,
-	osdmap,
-	lastmap,
+	osdmap.get(),
+	lastmap.get(),
 	info.pgid.pgid)) {
     dout(20) << "new interval newup " << newup
 	     << " newacting " << newacting << dendl;
@@ -6278,8 +6277,8 @@ void PG::start_peering_interval(
       oldup, newup,
       info.history.same_interval_since,
       info.history.last_epoch_clean,
-      osdmap,
-      lastmap,
+      osdmap.get(),
+      lastmap.get(),
       info.pgid.pgid,
       recoverable.get(),
       &past_intervals,
@@ -8558,7 +8557,7 @@ boost::statechart::result PG::RecoveryState::Active::react(const MNotifyRec& not
 		       << dendl;
     pg->proc_replica_info(
       notevt.from, notevt.notify.info, notevt.notify.epoch_sent);
-    if (pg->have_unfound()) {
+    if (pg->have_unfound() || (pg->is_degraded() && pg->might_have_unfound.count(notevt.from))) {
       pg->discover_all_missing(*context< RecoveryMachine >().get_query_map());
     }
   }

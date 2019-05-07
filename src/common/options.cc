@@ -2430,7 +2430,7 @@ std::vector<Option> get_global_options() {
     .add_service("mon"),
 
     Option("osd_pool_default_erasure_code_profile", Option::TYPE_STR, Option::LEVEL_ADVANCED)
-    .set_default("plugin=jerasure technique=reed_sol_van k=2 m=1")
+    .set_default("plugin=jerasure technique=reed_sol_van k=2 m=2")
     .set_flag(Option::FLAG_RUNTIME)
     .set_description("default erasure code profile for new erasure-coded pools")
     .add_service("mon"),
@@ -5958,6 +5958,16 @@ std::vector<Option> get_rgw_options() {
     .set_default(10)
     .set_description(""),
 
+    Option("rgw_rados_pool_autoscale_bias", Option::TYPE_FLOAT, Option::LEVEL_ADVANCED)
+    .set_default(4.0)
+    .set_min_max(0.01, 100000.0)
+    .set_description("pg_autoscale_bias value for RGW metadata (omap-heavy) pools"),
+
+    Option("rgw_rados_pool_pg_num_min", Option::TYPE_UINT, Option::LEVEL_ADVANCED)
+    .set_default(8)
+    .set_min_max(1, 1024)
+    .set_description("pg_num_min value for RGW metadata (omap-heavy) pools"),
+
     Option("rgw_zone", Option::TYPE_STR, Option::LEVEL_ADVANCED)
     .set_default("")
     .set_description("Zone name")
@@ -7142,6 +7152,10 @@ static std::vector<Option> get_rbd_options() {
     Option("rbd_move_to_trash_on_remove_expire_seconds", Option::TYPE_UINT, Option::LEVEL_BASIC)
     .set_default(0)
     .set_description("default number of seconds to protect deleted images in the trash"),
+
+    Option("rbd_move_parent_to_trash_on_remove", Option::TYPE_BOOL, Option::LEVEL_BASIC)
+    .set_default(false)
+    .set_description("move parent with clone format v2 children to the trash when deleted"),
 
     Option("rbd_mirroring_resync_after_disconnect", Option::TYPE_BOOL, Option::LEVEL_ADVANCED)
     .set_default(false)

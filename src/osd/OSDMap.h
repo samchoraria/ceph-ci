@@ -713,7 +713,7 @@ public:
 
   void get_all_osds(std::set<int32_t>& ls) const;
   void get_up_osds(std::set<int32_t>& ls) const;
-  void get_out_osds(std::set<int32_t>& ls) const;
+  void get_out_existing_osds(std::set<int32_t>& ls) const;
   unsigned get_num_pg_temp() const {
     return pg_temp->size();
   }
@@ -817,6 +817,11 @@ public:
 
   bool is_down(int osd) const {
     return !is_up(osd);
+  }
+
+  bool is_stop(int osd) const {
+    return exists(osd) && is_down(osd) &&
+           (osd_state[osd] & CEPH_OSD_STOP);
   }
 
   bool is_out(int osd) const {

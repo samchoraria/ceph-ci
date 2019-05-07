@@ -105,6 +105,7 @@ set(unittest_librbd_srcs
   operation/test_mock_SnapshotUnprotectRequest.cc
   operation/test_mock_TrimRequest.cc
   trash/test_mock_MoveRequest.cc
+  trash/test_mock_RemoveRequest.cc
   watcher/test_mock_RewatchRequest.cc
   )
 add_executable(unittest_librbd
@@ -148,19 +149,6 @@ target_link_libraries(ceph_test_librbd
   radostest)
 target_compile_definitions(ceph_test_librbd PRIVATE "TEST_LIBRBD_INTERNALS")
 
-add_executable(ceph_test_librbd_api
-  test_support.cc
-  test_librbd.cc
-  test_main.cc
-  $<TARGET_OBJECTS:common_texttable_obj>)
-target_link_libraries(ceph_test_librbd_api
-  ceph-common
-  radostest
-  radostest-cxx
-  librbd
-  librados
-  ${UNITTEST_LIBS})
-
 add_executable(ceph_test_librbd_fsx
   fsx.cc
   $<TARGET_OBJECTS:common_texttable_obj>
@@ -185,5 +173,4 @@ install(TARGETS
 
 install(TARGETS
   ceph_test_librbd
-  ceph_test_librbd_api
   DESTINATION ${CMAKE_INSTALL_BINDIR})

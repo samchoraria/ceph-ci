@@ -20,12 +20,6 @@ namespace {
   seastar::logger& logger() {
     return ceph::get_logger(ceph_subsys_osd);
   }
-
-  template<typename Message, typename... Args>
-  Ref<Message> make_message(Args&&... args)
-  {
-    return {new Message{std::forward<Args>(args)...}, false};
-  }
 }
 
 Heartbeat::Heartbeat(const OSDMapService& service,
@@ -201,7 +195,7 @@ seastar::future<> Heartbeat::remove_peer(osd_id_t peer)
     });
 }
 
-seastar::future<> Heartbeat::ms_dispatch(ceph::net::ConnectionRef conn,
+seastar::future<> Heartbeat::ms_dispatch(ceph::net::Connection* conn,
                                          MessageRef m)
 {
   switch (m->get_type()) {
@@ -229,7 +223,7 @@ seastar::future<> Heartbeat::ms_handle_reset(ceph::net::ConnectionRef conn)
   });
 }
 
-seastar::future<> Heartbeat::handle_osd_ping(ceph::net::ConnectionRef conn,
+seastar::future<> Heartbeat::handle_osd_ping(ceph::net::Connection* conn,
                                              Ref<MOSDPing> m)
 {
   switch (m->op) {
@@ -244,7 +238,7 @@ seastar::future<> Heartbeat::handle_osd_ping(ceph::net::ConnectionRef conn,
   }
 }
 
-seastar::future<> Heartbeat::handle_ping(ceph::net::ConnectionRef conn,
+seastar::future<> Heartbeat::handle_ping(ceph::net::Connection* conn,
                                          Ref<MOSDPing> m)
 {
   auto min_message = static_cast<uint32_t>(
@@ -258,7 +252,7 @@ seastar::future<> Heartbeat::handle_ping(ceph::net::ConnectionRef conn,
   return conn->send(reply);
 }
 
-seastar::future<> Heartbeat::handle_reply(ceph::net::ConnectionRef conn,
+seastar::future<> Heartbeat::handle_reply(ceph::net::Connection* conn,
                                           Ref<MOSDPing> m)
 {
   const osd_id_t from = m->get_source().num();

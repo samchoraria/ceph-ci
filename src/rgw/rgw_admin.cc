@@ -44,7 +44,9 @@ extern "C" {
 #include "rgw_usage.h"
 #include "rgw_orphan.h"
 #include "rgw_sync.h"
-#include "rgw_sync_log_trim.h"
+#include "rgw_trim_bilog.h"
+#include "rgw_trim_datalog.h"
+#include "rgw_trim_mdlog.h"
 #include "rgw_data_sync.h"
 #include "rgw_rest_conn.h"
 #include "rgw_realm_watcher.h"
@@ -334,6 +336,7 @@ void usage()
   cout << "   --infile=<file>           specify a file to read in when setting data\n";
   cout << "   --categories=<list>       comma separated list of categories, used in usage show\n";
   cout << "   --caps=<caps>             list of caps (e.g., \"usage=read, write; user=read\")\n";
+  cout << "   --op-mask=<op-mask>       permission of user's operations (e.g., \"read, write, delete, *\")\n";
   cout << "   --yes-i-really-mean-it    required for certain operations\n";
   cout << "   --warnings-only           when specified with bucket limit check, list\n";
   cout << "                             only buckets nearing or over the current max\n";
@@ -6026,7 +6029,7 @@ next:
     }
 
     map<string, bufferlist> attrs;
-    ret = obj->put(bl, attrs);
+    ret = obj->put(bl, attrs, dpp());
     if (ret < 0) {
       cerr << "ERROR: put object returned error: " << cpp_strerror(-ret) << std::endl;
     }
@@ -6075,7 +6078,7 @@ next:
       }
     }
     if (need_rewrite) {
-      ret = store->rewrite_obj(bucket_info, obj);
+      ret = store->rewrite_obj(bucket_info, obj, dpp());
       if (ret < 0) {
         cerr << "ERROR: object rewrite returned: " << cpp_strerror(-ret) << std::endl;
         return -ret;
@@ -6192,7 +6195,7 @@ next:
           if (!need_rewrite) {
             formatter->dump_string("status", "Skipped");
           } else {
-            r = store->rewrite_obj(bucket_info, obj);
+            r = store->rewrite_obj(bucket_info, obj, dpp());
             if (r == 0) {
               formatter->dump_string("status", "Success");
             } else {
@@ -6459,6 +6462,8 @@ next:
         handled = dump_string("etag", bl, formatter);
       } else if (iter->first == RGW_ATTR_COMPRESSION) {
         handled = decode_dump<RGWCompressionInfo>("compression", bl, formatter);
+      } else if (iter->first == RGW_ATTR_DELETE_AT) {
+        handled = decode_dump<utime_t>("delete_at", bl, formatter);
       }
 
       if (!handled)
