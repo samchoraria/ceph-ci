@@ -56,8 +56,12 @@ class DaemonWatchdog(Greenlet):
             except:
                 self.logger.exception("ignoring exception:")
         daemons = []
+        daemons.extend(filter(lambda daemon: daemon.running() and not daemon.proc.finished, self.ctx.daemons.iter_daemons_of_role('osd', cluster=self.manager.cluster)))
         daemons.extend(filter(lambda daemon: daemon.running() and not daemon.proc.finished, self.ctx.daemons.iter_daemons_of_role('mds', cluster=self.manager.cluster)))
         daemons.extend(filter(lambda daemon: daemon.running() and not daemon.proc.finished, self.ctx.daemons.iter_daemons_of_role('mon', cluster=self.manager.cluster)))
+        daemons.extend(filter(lambda daemon: daemon.running() and not daemon.proc.finished, self.ctx.daemons.iter_daemons_of_role('rgw', cluster=self.manager.cluster)))
+        daemons.extend(filter(lambda daemon: daemon.running() and not daemon.proc.finished, self.ctx.daemons.iter_daemons_of_role('mgr', cluster=self.manager.cluster)))
+
         for daemon in daemons:
             try:
                 daemon.signal(signal.SIGTERM)
@@ -72,17 +76,19 @@ class DaemonWatchdog(Greenlet):
             bark = False
             now = time.time()
 
+            osds = self.ctx.daemons.iter_daemons_of_role('osd', cluster=self.manager.cluster)
             mons = self.ctx.daemons.iter_daemons_of_role('mon', cluster=self.manager.cluster)
             mdss = self.ctx.daemons.iter_daemons_of_role('mds', cluster=self.manager.cluster)
-
-            #for daemon in mons:
-            #    self.log("mon daemon {role}.{id}: running={r}".format(role=daemon.role, id=daemon.id_, r=daemon.running() and not daemon.proc.finished))
-            #for daemon in mdss:
-            #    self.log("mds daemon {role}.{id}: running={r}".format(role=daemon.role, id=daemon.id_, r=daemon.running() and not daemon.proc.finished))
+            rgws = self.ctx.daemons.iter_daemons_of_role('rgw', cluster=self.manager.cluster)
+            mgrs = self.ctx.daemons.iter_daemons_of_role('mgr', cluster=self.manager.cluster)
 
             daemon_failures = []
+            daemon_failures.extend(filter(lambda daemon: daemon.running() and daemon.proc.finished, osds))
             daemon_failures.extend(filter(lambda daemon: daemon.running() and daemon.proc.finished, mons))
             daemon_failures.extend(filter(lambda daemon: daemon.running() and daemon.proc.finished, mdss))
+            daemon_failures.extend(filter(lambda daemon: daemon.running() and daemon.proc.finished, rgws))
+            daemon_failures.extend(filter(lambda daemon: daemon.running() and daemon.proc.finished, mgrs))
+
             for daemon in daemon_failures:
                 name = daemon.role + '.' + daemon.id_
                 dt = daemon_failure_time.setdefault(name, (daemon, now))
