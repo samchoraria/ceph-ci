@@ -37,15 +37,16 @@ class PoolTest(DashboardTestCase):
         'wr': pool_list_stat_schema,
     }, allow_unknown=True)
 
-    def _pool_create(self, data):
+    def _pool_create(self, data, delete=True):
         try:
             self._task_post('/api/pool/', data)
             self.assertStatus(201)
 
             self._check_pool_properties(data)
 
-            self._task_delete("/api/pool/" + data['pool'])
-            self.assertStatus(204)
+            if delete:
+                self._task_delete("/api/pool/" + data['pool'])
+                self.assertStatus(204)
         except Exception:
             log.exception("test_pool_create: data=%s", data)
             raise
@@ -217,6 +218,45 @@ class PoolTest(DashboardTestCase):
         for data in pools:
             self._pool_create(data)
 
+    def test_pool_create_with_quotas(self):
+
+        def __create_pool_and_check(data, quotas):
+            self._pool_create(data, False)
+            pool = self._get_pool(data['pool'])
+            for prop, value in quotas.items():
+                self._check_pool_property(prop, value, pool)
+
+        pools = [
+            {
+                'pool_data': {
+                    'pool': 'dashboard_pool_quota1',
+                    'pg_num': '10',
+                    'pool_type': 'replicated',
+                },
+                'pool_quotas_to_check': {
+                    'quota_max_objects': 0,
+                    'quota_max_bytes': 0,
+                }
+            },
+            {
+                'pool_data': {
+                    'pool': 'dashboard_pool_quota2',
+                    'pg_num': '10',
+                    'pool_type': 'replicated',
+                    'quota_max_objects': 1024,
+                    'quota_max_bytes': 1000,
+                },
+                'pool_quotas_to_check': {
+                    'quota_max_objects': 1024,
+                    'quota_max_bytes': 1000,
+                }
+            }
+        ]
+
+        for pool in pools:
+            __create_pool_and_check(pool['pool_data'],
+                                    pool['pool_quotas_to_check'])
+
     def test_update(self):
         pool = {
             'pool': 'dashboard_pool_update1',
@@ -252,6 +292,10 @@ class PoolTest(DashboardTestCase):
             },
             {
                 'compression_mode': 'unset'
+            },
+            {
+                'quota_max_objects': 1024,
+                'quota_max_bytes': 1000,
             }
         ]
         self._task_post('/api/pool/', pool)
