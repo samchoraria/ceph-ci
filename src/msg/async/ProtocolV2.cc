@@ -219,15 +219,20 @@ uint64_t ProtocolV2::discard_requeued_up_to(uint64_t out_seq, uint64_t seq) {
   return count;
 }
 
-void ProtocolV2::reset_recv_state() {
+void ProtocolV2::reset_recv_state()
+{
+  // our auth_meta credentials can be preserved across a reconnect
+  // (e.g., our authorizer)
   if ((state >= AUTH_CONNECTING && state <= SESSION_RECONNECTING) ||
       state == READY) {
     auth_meta.reset(new AuthConnectionMeta);
-    session_stream_handlers.tx.reset(nullptr);
-    session_stream_handlers.rx.reset(nullptr);
-    pre_auth.txbuf.clear();
-    pre_auth.rxbuf.clear();
   }
+
+  // ...but the per-transport-connection state should be reset every time
+  session_stream_handlers.tx.reset(nullptr);
+  session_stream_handlers.rx.reset(nullptr);
+  pre_auth.txbuf.clear();
+  pre_auth.rxbuf.clear();
 
   // clean read and write callbacks
   connection->pendingReadLen.reset();
