@@ -4771,7 +4771,8 @@ struct object_info_t {
     return test_flag(FLAG_CACHE_PIN);
   }
   bool has_manifest() const {
-    return test_flag(FLAG_MANIFEST);
+#warning HACKY WORKAROUND
+    return false; // test_flag(FLAG_MANIFEST);
   }
 
   void set_data_digest(__u32 d) {
