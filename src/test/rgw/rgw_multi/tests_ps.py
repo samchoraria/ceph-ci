@@ -88,7 +88,7 @@ class AMQPReceiver(object):
     """class for receiving and storing messages on a topic from the AMQP broker"""
     def __init__(self, exchange, topic):
         import pika
-        hostname = socket.getfqdn()
+        hostname = get_ip()
         connection = pika.BlockingConnection(pika.ConnectionParameters(host=hostname))
         self.channel = connection.channel()
         self.channel.exchange_declare(exchange=exchange, exchange_type='topic')
@@ -210,7 +210,7 @@ def verify_s3_records_by_elements(records, keys, exact_match=False, deletions=Fa
 
 def init_rabbitmq():
     """ start a rabbitmq broker """
-    #hostname = socket.getfqdn()
+    #hostname = get_ip()
     #port = str(random.randint(20000, 30000))
     #data_dir = './' + port + '_data'
     #log_dir = './' + port + '_log'
@@ -272,6 +272,20 @@ def init_env():
     assert_not_equal(len(zones), 0)
     assert_not_equal(len(ps_zones), 0)
     return zones, ps_zones
+
+
+def get_ip():
+    """ This method returns the "primary" IP on the local box (the one with a default route)
+    source: https://stackoverflow.com/a/28950776/711085
+    this is needed because on the teuthology machines: socket.getfqdn()/socket.gethostname() return 127.0.0.1 """
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        # address should not be reachable
+        s.connect(('10.255.255.255', 1))
+        ip = s.getsockname()[0]
+    finally:
+        s.close()
+    return ip
 
 
 TOPIC_SUFFIX = "_topic"
@@ -1090,7 +1104,7 @@ def test_ps_push_http():
     topic_name = bucket_name+TOPIC_SUFFIX
 
     # create random port for the http server
-    host = socket.getfqdn()
+    host = get_ip()
     port = random.randint(10000, 20000)
     # start an http server in a separate thread
     task, httpd, = create_http_thread(host, port)
@@ -1150,7 +1164,7 @@ def test_ps_s3_push_http():
     topic_name = bucket_name+TOPIC_SUFFIX
 
     # create random port for the http server
-    host = socket.getfqdn()
+    host = get_ip()
     port = random.randint(10000, 20000)
     # start an http server in a separate thread
     task, httpd, = create_http_thread(host, port)
@@ -1206,7 +1220,7 @@ def test_ps_s3_push_http():
 
 def test_ps_push_amqp():
     """ test pushing to amqp endpoint """
-    hostname = socket.getfqdn()
+    hostname = get_ip()
     proc = init_rabbitmq()
     if proc is  None:
         return SkipTest('end2end amqp tests require rabbitmq-server installed')
@@ -1268,7 +1282,7 @@ def test_ps_push_amqp():
 
 def test_ps_s3_push_amqp():
     """ test pushing to amqp endpoint s3 record format"""
-    hostname = socket.getfqdn()
+    hostname = get_ip()
     proc = init_rabbitmq()
     if proc is  None:
         return SkipTest('end2end amqp tests require rabbitmq-server installed')
@@ -1439,7 +1453,7 @@ def test_ps_s3_topic_update():
     topic_name = bucket_name+TOPIC_SUFFIX
 
     # create amqp topic
-    hostname = socket.getfqdn()
+    hostname = get_ip()
     exchange = 'ex1'
     amqp_task, receiver = create_amqp_receiver_thread(exchange, topic_name)
     amqp_task.start()
@@ -1553,7 +1567,7 @@ def test_ps_s3_topic_update():
 
 def test_ps_s3_notification_update():
     """ test updating the topic of a notification"""
-    hostname = socket.getfqdn()
+    hostname = get_ip()
     rabbit_proc = init_rabbitmq()
     if rabbit_proc is  None:
         return SkipTest('end2end amqp tests require rabbitmq-server installed')
@@ -1658,7 +1672,7 @@ def test_ps_s3_notification_update():
 
 def test_ps_s3_multiple_topics_notification():
     """ test notification creation with multiple topics"""
-    hostname = socket.getfqdn()
+    hostname = get_ip()
     rabbit_proc = init_rabbitmq()
     if rabbit_proc is  None:
         return SkipTest('end2end amqp tests require rabbitmq-server installed')
