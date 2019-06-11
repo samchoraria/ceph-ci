@@ -18,6 +18,9 @@
 #include <boost/algorithm/string.hpp>
 #include <functional>
 #include "rgw_perf_counters.h"
+#include "common/dout.h"
+
+#define dout_subsys ceph_subsys_rgw
 
 using namespace rgw;
 
@@ -76,14 +79,15 @@ private:
     // wait for reply
     int request_complete() override {
       if (perfcounter) perfcounter->dec(l_rgw_pubsub_push_pending);
-      if (ack_level == ACK_LEVEL_ANY) {
-        return 0;
-      } else if (ack_level == ACK_LEVEL_NON_ERROR) {
-        // TODO check result code to be non-error
-      } else {
-        // TODO: check that result code == ack_level
+      const int ret = RGWPostHTTPData::wait(null_yield);
+      if (ret < 0) {
+          /*ldout(sync_env->cct, 1)*/ std::cout << "push to http endpoint failed: " << RGWPostHTTPData::to_str() << 
+              " status=" << get_http_status() << " ret=" << ret << std::endl;
+        return ret;
       }
-      return -1;
+      /*ldout(sync_env->cct, 20)*/ std::cout << "push to http endpoint ok: " << RGWPostHTTPData::to_str() << 
+          " status=" << get_http_status() << std::endl;
+      return 0;
     }
   };
 
@@ -303,14 +307,14 @@ public:
   }
 };
 
-static const std::string AMQP_0_9_1("0-9-1");
-static const std::string AMQP_1_0("1-0");
-static const std::string AMQP_SCHEMA("amqp");
+static const std::string AMQP_0_9_1{"0-9-1"};
+static const std::string AMQP_1_0{"1-0"};
+static const std::string AMQP_SCHEMA{"amqp"};
 #endif	// ifdef WITH_RADOSGW_AMQP_ENDPOINT
 
-static const std::string WEBHOOK_SCHEMA("webhook");
-static const std::string UNKNOWN_SCHEMA("unknown");
-static const std::string NO_SCHEMA("");
+static const std::string WEBHOOK_SCHEMA{"webhook"};
+static const std::string UNKNOWN_SCHEMA{"unknown"};
+static const std::string NO_SCHEMA{""};
 
 const std::string& get_schema(const std::string& endpoint) {
   if (endpoint.empty()) {

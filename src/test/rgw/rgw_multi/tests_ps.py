@@ -60,8 +60,11 @@ class HTTPPostHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             self.server.events.append(json.loads(body))
         except:
             log.error('HTTP Server received empty event: %s', str(body))
-        self.send_response(100)
-        self.end_headers()
+            self.send_response(400)
+        else:
+            self.send_response(100)
+        finally:
+            self.end_headers()
 
 
 def http_thread_runner(httpd):
@@ -70,8 +73,8 @@ def http_thread_runner(httpd):
         log.info('HTTP Server started on: %s', httpd.server_address)
         httpd.serve_forever()
         log.info('HTTP Server ended')
-    except:
-        log.info('HTTP Server ended unexpectedly')
+    except Exception as error:
+        log.info('HTTP Server ended unexpectedly: %s', str(error))
 
 
 def create_http_thread(host, port):
@@ -123,8 +126,8 @@ def amqp_receiver_thread_runner(receiver):
         log.info('AMQP receiver started')
         receiver.channel.start_consuming()
         log.info('AMQP receiver ended')
-    except:
-        log.info('AMQP receiver ended unexpectedly')
+    except Exception as error:
+        log.info('AMQP receiver ended unexpectedly: %s', str(error))
 
 
 def create_amqp_receiver_thread(exchange, topic):
@@ -229,8 +232,8 @@ def init_rabbitmq():
     env = None
     try:
         proc = subprocess.Popen('rabbitmq-server', env=env)
-    except:
-        log.info('failed to execute rabbitmq-server')
+    except Exception as error:
+        log.info('failed to execute rabbitmq-server: %s', str(error))
         return None
     return proc #, port, data_dir, log_dir
 
@@ -238,7 +241,7 @@ def init_rabbitmq():
 def clean_rabbitmq(proc): #, data_dir, log_dir)
     """ stop the rabbitmq broker """
     try:
-        subprocess.call(['/usr/sbin/rabbitmqctl', 'stop'])
+        subprocess.call(['rabbitmqctl', 'stop'])
         proc.terminate()
     except:
         log.info('rabbitmq server already terminated')
@@ -1129,7 +1132,7 @@ def test_ps_push_http():
     _, status = sub_conf.set_config()
     assert_equal(status/100, 2)
     # create objects in the bucket
-    number_of_objects = 10
+    number_of_objects = 100
     for i in range(number_of_objects):
         key = bucket.new_key(str(i))
         key.set_contents_from_string('bar')
@@ -1153,6 +1156,7 @@ def test_ps_push_http():
     notification_conf.del_config()
     topic_conf.del_config()
     zones[0].delete_bucket(bucket_name)
+    time.sleep(5)
     httpd.server_close()
     task.join()
 
@@ -1214,6 +1218,7 @@ def test_ps_s3_push_http():
     s3_notification_conf.del_config()
     topic_conf.del_config()
     zones[0].delete_bucket(bucket_name)
+    time.sleep(5)
     httpd.server_close()
     task.join()
 
@@ -1560,6 +1565,7 @@ def test_ps_s3_topic_update():
     s3_notification_conf.del_config()
     topic_conf.del_config()
     zones[0].delete_bucket(bucket_name)
+    time.sleep(5)
     httpd.server_close()
     http_task.join()
     clean_rabbitmq(rabbit_proc)
@@ -1660,6 +1666,7 @@ def test_ps_s3_notification_update():
     topic_conf1.del_config()
     topic_conf2.del_config()
     zones[0].delete_bucket(bucket_name)
+    time.sleep(5)
     httpd.server_close()
     http_task.join()
     clean_rabbitmq(rabbit_proc)
@@ -1778,6 +1785,7 @@ def test_ps_s3_multiple_topics_notification():
     for key in bucket.list():
         key.delete()
     zones[0].delete_bucket(bucket_name)
+    time.sleep(5)
     httpd.server_close()
     http_task.join()
     clean_rabbitmq(rabbit_proc)
