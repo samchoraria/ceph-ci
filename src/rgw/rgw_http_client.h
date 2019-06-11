@@ -100,6 +100,8 @@ protected:
 
   param_vec_t headers;
 
+  bool debuginfo{false};
+
   RGWHTTPManager *get_manager();
 
   int init_request(rgw_http_req_data *req_data);
@@ -205,6 +207,10 @@ public:
 
   void *get_io_user_info() override {
     return user_info;
+  }
+
+  void set_debuginfo(bool _debuginfo) {
+      debuginfo = _debuginfo;
   }
 };
 

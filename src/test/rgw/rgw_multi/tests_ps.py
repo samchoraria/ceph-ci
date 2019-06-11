@@ -60,8 +60,11 @@ class HTTPPostHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             self.server.events.append(json.loads(body))
         except:
             log.error('HTTP Server received empty event: %s', str(body))
-        self.send_response(100)
-        self.end_headers()
+            self.send_response(400)
+        else:
+            self.send_response(100)
+        finally:
+            self.end_headers()
 
 
 def http_thread_runner(httpd):
@@ -70,8 +73,8 @@ def http_thread_runner(httpd):
         log.info('HTTP Server started on: %s', httpd.server_address)
         httpd.serve_forever()
         log.info('HTTP Server ended')
-    except:
-        log.info('HTTP Server ended unexpectedly')
+    except Exception as error:
+        log.info('HTTP Server ended unexpectedly: %s', str(error))
 
 
 def create_http_thread(host, port):
@@ -80,6 +83,14 @@ def create_http_thread(host, port):
     task = threading.Thread(target=http_thread_runner, args=(httpd,))
     task.daemon = True
     return task, httpd
+
+
+def close_http_server(task, httpd):
+    """ close the http server and wait for it to finish """
+    time.sleep(5)
+    log.info('terminating HTTP Server: %s', httpd.server_address)
+    httpd.server_close()
+    task.join()
 
 
 # AMQP endpoint functions
@@ -123,8 +134,8 @@ def amqp_receiver_thread_runner(receiver):
         log.info('AMQP receiver started')
         receiver.channel.start_consuming()
         log.info('AMQP receiver ended')
-    except:
-        log.info('AMQP receiver ended unexpectedly')
+    except Exception as error:
+        log.info('AMQP receiver ended unexpectedly: %s', str(error))
 
 
 def create_amqp_receiver_thread(exchange, topic):
@@ -229,16 +240,18 @@ def init_rabbitmq():
     env = None
     try:
         proc = subprocess.Popen('rabbitmq-server', env=env)
-    except:
-        log.info('failed to execute rabbitmq-server')
+    except Exception as error:
+        log.info('failed to execute rabbitmq-server: %s', str(error))
         return None
+    # TODO add rabbitmq checkpoint instead of sleep
+    time.sleep(5)
     return proc #, port, data_dir, log_dir
 
 
 def clean_rabbitmq(proc): #, data_dir, log_dir)
     """ stop the rabbitmq broker """
     try:
-        subprocess.call(['/usr/sbin/rabbitmqctl', 'stop'])
+        subprocess.call(['rabbitmqctl', 'stop'])
         proc.terminate()
     except:
         log.info('rabbitmq server already terminated')
@@ -1153,8 +1166,7 @@ def test_ps_push_http():
     notification_conf.del_config()
     topic_conf.del_config()
     zones[0].delete_bucket(bucket_name)
-    httpd.server_close()
-    task.join()
+    close_http_server(task, httpd)
 
 
 def test_ps_s3_push_http():
@@ -1214,8 +1226,7 @@ def test_ps_s3_push_http():
     s3_notification_conf.del_config()
     topic_conf.del_config()
     zones[0].delete_bucket(bucket_name)
-    httpd.server_close()
-    task.join()
+    close_http_server(task, httpd)
 
 
 def test_ps_push_amqp():
@@ -1224,8 +1235,6 @@ def test_ps_push_amqp():
     proc = init_rabbitmq()
     if proc is  None:
         return SkipTest('end2end amqp tests require rabbitmq-server installed')
-    # TODO add rabbitmq checkpoint instead of sleep
-    time.sleep(5)
     zones, ps_zones = init_env()
     bucket_name = gen_bucket_name()
     topic_name = bucket_name+TOPIC_SUFFIX
@@ -1286,8 +1295,6 @@ def test_ps_s3_push_amqp():
     proc = init_rabbitmq()
     if proc is  None:
         return SkipTest('end2end amqp tests require rabbitmq-server installed')
-    # TODO add rabbitmq checkpoint instead of sleep
-    time.sleep(5)
     zones, ps_zones = init_env()
     bucket_name = gen_bucket_name()
     topic_name = bucket_name+TOPIC_SUFFIX
@@ -1446,8 +1453,6 @@ def test_ps_s3_topic_update():
     rabbit_proc = init_rabbitmq()
     if rabbit_proc is  None:
         return SkipTest('end2end amqp tests require rabbitmq-server installed')
-    # TODO add rabbitmq checkpoint instead of sleep
-    time.sleep(5)
     zones, ps_zones = init_env()
     bucket_name = gen_bucket_name()
     topic_name = bucket_name+TOPIC_SUFFIX
@@ -1560,8 +1565,7 @@ def test_ps_s3_topic_update():
     s3_notification_conf.del_config()
     topic_conf.del_config()
     zones[0].delete_bucket(bucket_name)
-    httpd.server_close()
-    http_task.join()
+    close_http_server(http_task, httpd)
     clean_rabbitmq(rabbit_proc)
 
 
@@ -1571,8 +1575,6 @@ def test_ps_s3_notification_update():
     rabbit_proc = init_rabbitmq()
     if rabbit_proc is  None:
         return SkipTest('end2end amqp tests require rabbitmq-server installed')
-    # TODO add rabbitmq checkpoint instead of sleep
-    time.sleep(5)
 
     zones, ps_zones = init_env()
     bucket_name = gen_bucket_name()
@@ -1660,14 +1662,8 @@ def test_ps_s3_notification_update():
     topic_conf1.del_config()
     topic_conf2.del_config()
     zones[0].delete_bucket(bucket_name)
-    httpd.server_close()
-    http_task.join()
+    close_http_server(http_task, httpd)
     clean_rabbitmq(rabbit_proc)
-    if rabbit_proc is  None:
-        return SkipTest('end2end amqp tests require rabbitmq-server installed')
-    zones, ps_zones = init_env()
-    bucket_name = gen_bucket_name()
-    topic_name1 = bucket_name+'amqp'+TOPIC_SUFFIX
 
 
 def test_ps_s3_multiple_topics_notification():
@@ -1676,8 +1672,6 @@ def test_ps_s3_multiple_topics_notification():
     rabbit_proc = init_rabbitmq()
     if rabbit_proc is  None:
         return SkipTest('end2end amqp tests require rabbitmq-server installed')
-    # TODO add rabbitmq checkpoint instead of sleep
-    time.sleep(5)
 
     zones, ps_zones = init_env()
     bucket_name = gen_bucket_name()
@@ -1778,6 +1772,5 @@ def test_ps_s3_multiple_topics_notification():
     for key in bucket.list():
         key.delete()
     zones[0].delete_bucket(bucket_name)
-    httpd.server_close()
-    http_task.join()
+    close_http_server(http_task, httpd)
     clean_rabbitmq(rabbit_proc)

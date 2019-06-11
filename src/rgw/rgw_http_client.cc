@@ -501,6 +501,45 @@ int RGWHTTPClient::get_req_retcode()
   return req_data->get_retcode();
 }
 
+static int dump_curl_debuginfo(CURL *handle, curl_infotype type,
+             char *data, size_t size,
+             void *userp)
+{
+  // userp hold a pointer to RGWHTTPClient if needed
+  std::string text;
+ 
+  switch (type) {
+  case CURLINFO_TEXT:
+    text = "== Info";
+	break; 
+  case CURLINFO_HEADER_OUT:
+    text = "=> Send header";
+    break;
+  case CURLINFO_DATA_OUT:
+    text = "=> Send data";
+    break;
+  case CURLINFO_SSL_DATA_OUT:
+    text = "=> Send SSL data";
+    break;
+  case CURLINFO_HEADER_IN:
+    text = "<= Recv header";
+    break;
+  case CURLINFO_DATA_IN:
+    text = "<= Recv data";
+    break;
+  case CURLINFO_SSL_DATA_IN:
+    text = "<= Recv SSL data";
+    break;
+  default:
+  	dout(20) << "CURL debuginfo: UNKNOWN\n" <<  std::string(data, size) << dendl;
+    return 0;
+  }
+ 
+  dout(20) << "CURL debuginfo: " <<  text << "\n" << std::string(data,size) << dendl;
+  return 0;
+}
+
+
 /*
  * init request, will be used later with RGWHTTPManager
  */
@@ -514,7 +553,7 @@ int RGWHTTPClient::init_request(rgw_http_req_data *_req_data)
 
   CURL *easy_handle = req_data->get_easy_handle();
 
-  dout(20) << "sending request to " << url << dendl;
+  dout(20) << "CURL sending request to " << url << dendl;
 
   curl_slist *h = headers_to_slist(headers);
 
@@ -545,9 +584,15 @@ int RGWHTTPClient::init_request(rgw_http_req_data *_req_data)
   if (!verify_ssl) {
     curl_easy_setopt(easy_handle, CURLOPT_SSL_VERIFYPEER, 0L);
     curl_easy_setopt(easy_handle, CURLOPT_SSL_VERIFYHOST, 0L);
-    dout(20) << "ssl verification is set to off" << dendl;
+    dout(20) << "CURL ssl verification is set to off" << dendl;
   }
   curl_easy_setopt(easy_handle, CURLOPT_PRIVATE, (void *)req_data);
+
+  if (debuginfo) {
+    curl_easy_setopt(easy_handle, CURLOPT_VERBOSE, 1L);
+    curl_easy_setopt(easy_handle, CURLOPT_DEBUGDATA, this);
+    curl_easy_setopt(easy_handle, CURLOPT_DEBUGFUNCTION, dump_curl_debuginfo);
+  }
 
   return 0;
 }

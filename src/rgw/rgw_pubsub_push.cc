@@ -18,6 +18,9 @@
 #include <boost/algorithm/string.hpp>
 #include <functional>
 #include "rgw_perf_counters.h"
+#include "common/dout.h"
+
+#define dout_subsys ceph_subsys_rgw
 
 using namespace rgw;
 
@@ -56,7 +59,7 @@ private:
       RGWPostHTTPData(_sync_env->cct, "POST", endpoint, &read_bl, verify_ssl),
       RGWSimpleCoroutine(_sync_env->cct), 
       sync_env(_sync_env),
-      ack_level (_ack_level) {
+      ack_level(_ack_level) {
       // ctor also set the data to send
       set_post_data(_post_data);
       set_send_length(_post_data.length());
@@ -65,9 +68,11 @@ private:
     // send message to endpoint
     int send_request() override {
       init_new_io(this);
-      const auto rc = sync_env->http_manager->add_request(this);
-      if (rc < 0) {
-        return rc;
+      const auto ret = sync_env->http_manager->add_request(this);
+      if (ret < 0) {
+          ldout(sync_env->cct, 1) << "push to http endpoint failed: " << RGWPostHTTPData::to_str() << 
+              " status=" << get_http_status() << " ret=" << ret << dendl;
+        return ret;
       }
       if (perfcounter) perfcounter->inc(l_rgw_pubsub_push_pending);
       return 0;
@@ -76,14 +81,16 @@ private:
     // wait for reply
     int request_complete() override {
       if (perfcounter) perfcounter->dec(l_rgw_pubsub_push_pending);
-      if (ack_level == ACK_LEVEL_ANY) {
-        return 0;
-      } else if (ack_level == ACK_LEVEL_NON_ERROR) {
-        // TODO check result code to be non-error
-      } else {
-        // TODO: check that result code == ack_level
+      const auto ret = RGWPostHTTPData::wait(null_yield);
+      // TODO: return value according to combination of ack-level and http status
+      if (ret < 0) {
+          ldout(sync_env->cct, 1) << "push to http endpoint failed: " << RGWPostHTTPData::to_str() << 
+              " status=" << get_http_status() << " ret=" << ret << dendl;
+        return ret;
       }
-      return -1;
+      ldout(sync_env->cct, 20) << "push to http endpoint ok: " << RGWPostHTTPData::to_str() << 
+          " status=" << get_http_status() << dendl;
+      return 0;
     }
   };
 
@@ -303,14 +310,14 @@ public:
   }
 };
 
-static const std::string AMQP_0_9_1("0-9-1");
-static const std::string AMQP_1_0("1-0");
-static const std::string AMQP_SCHEMA("amqp");
+static const std::string AMQP_0_9_1{"0-9-1"};
+static const std::string AMQP_1_0{"1-0"};
+static const std::string AMQP_SCHEMA{"amqp"};
 #endif	// ifdef WITH_RADOSGW_AMQP_ENDPOINT
 
-static const std::string WEBHOOK_SCHEMA("webhook");
-static const std::string UNKNOWN_SCHEMA("unknown");
-static const std::string NO_SCHEMA("");
+static const std::string WEBHOOK_SCHEMA{"webhook"};
+static const std::string UNKNOWN_SCHEMA{"unknown"};
+static const std::string NO_SCHEMA{""};
 
 const std::string& get_schema(const std::string& endpoint) {
   if (endpoint.empty()) {
