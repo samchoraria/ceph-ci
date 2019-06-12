@@ -59,18 +59,21 @@ private:
       RGWPostHTTPData(_sync_env->cct, "POST", endpoint, &read_bl, verify_ssl),
       RGWSimpleCoroutine(_sync_env->cct), 
       sync_env(_sync_env),
-      ack_level (_ack_level) {
+      ack_level(_ack_level) {
       // ctor also set the data to send
       set_post_data(_post_data);
       set_send_length(_post_data.length());
+	  set_debuginfo(true);
     }
 
     // send message to endpoint
     int send_request() override {
       init_new_io(this);
-      const auto rc = sync_env->http_manager->add_request(this);
-      if (rc < 0) {
-        return rc;
+      const auto ret = sync_env->http_manager->add_request(this);
+      if (ret < 0) {
+          ldout(sync_env->cct, 1) << "push to http endpoint failed: " << RGWPostHTTPData::to_str() << 
+              " status=" << get_http_status() << " ret=" << ret << dendl;
+        return ret;
       }
       if (perfcounter) perfcounter->inc(l_rgw_pubsub_push_pending);
       return 0;
@@ -79,14 +82,15 @@ private:
     // wait for reply
     int request_complete() override {
       if (perfcounter) perfcounter->dec(l_rgw_pubsub_push_pending);
-      const int ret = RGWPostHTTPData::wait(null_yield);
+      const auto ret = RGWPostHTTPData::wait(null_yield);
+      // TODO: return value according to combination of ack-level and http status
       if (ret < 0) {
-          /*ldout(sync_env->cct, 1)*/ std::cout << "push to http endpoint failed: " << RGWPostHTTPData::to_str() << 
-              " status=" << get_http_status() << " ret=" << ret << std::endl;
+          ldout(sync_env->cct, 1) << "push to http endpoint failed: " << RGWPostHTTPData::to_str() << 
+              " status=" << get_http_status() << " ret=" << ret << dendl;
         return ret;
       }
-      /*ldout(sync_env->cct, 20)*/ std::cout << "push to http endpoint ok: " << RGWPostHTTPData::to_str() << 
-          " status=" << get_http_status() << std::endl;
+      ldout(sync_env->cct, 20) << "push to http endpoint ok: " << RGWPostHTTPData::to_str() << 
+          " status=" << get_http_status() << dendl;
       return 0;
     }
   };

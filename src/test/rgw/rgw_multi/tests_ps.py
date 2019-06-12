@@ -85,6 +85,14 @@ def create_http_thread(host, port):
     return task, httpd
 
 
+def close_http_server(task, httpd):
+    """ close the http server and wait for it to finish """
+    time.sleep(5)
+    log.info('terminating HTTP Server: %s', httpd.server_address)
+    httpd.server_close()
+    task.join()
+
+
 # AMQP endpoint functions
 
 class AMQPReceiver(object):
@@ -235,6 +243,8 @@ def init_rabbitmq():
     except Exception as error:
         log.info('failed to execute rabbitmq-server: %s', str(error))
         return None
+    # TODO add rabbitmq checkpoint instead of sleep
+    time.sleep(5)
     return proc #, port, data_dir, log_dir
 
 
@@ -1132,7 +1142,7 @@ def test_ps_push_http():
     _, status = sub_conf.set_config()
     assert_equal(status/100, 2)
     # create objects in the bucket
-    number_of_objects = 100
+    number_of_objects = 10
     for i in range(number_of_objects):
         key = bucket.new_key(str(i))
         key.set_contents_from_string('bar')
@@ -1156,9 +1166,7 @@ def test_ps_push_http():
     notification_conf.del_config()
     topic_conf.del_config()
     zones[0].delete_bucket(bucket_name)
-    time.sleep(5)
-    httpd.server_close()
-    task.join()
+    close_http_server(task, httpd)
 
 
 def test_ps_s3_push_http():
@@ -1218,9 +1226,7 @@ def test_ps_s3_push_http():
     s3_notification_conf.del_config()
     topic_conf.del_config()
     zones[0].delete_bucket(bucket_name)
-    time.sleep(5)
-    httpd.server_close()
-    task.join()
+    close_http_server(task, httpd)
 
 
 def test_ps_push_amqp():
@@ -1229,8 +1235,6 @@ def test_ps_push_amqp():
     proc = init_rabbitmq()
     if proc is  None:
         return SkipTest('end2end amqp tests require rabbitmq-server installed')
-    # TODO add rabbitmq checkpoint instead of sleep
-    time.sleep(5)
     zones, ps_zones = init_env()
     bucket_name = gen_bucket_name()
     topic_name = bucket_name+TOPIC_SUFFIX
@@ -1291,8 +1295,6 @@ def test_ps_s3_push_amqp():
     proc = init_rabbitmq()
     if proc is  None:
         return SkipTest('end2end amqp tests require rabbitmq-server installed')
-    # TODO add rabbitmq checkpoint instead of sleep
-    time.sleep(5)
     zones, ps_zones = init_env()
     bucket_name = gen_bucket_name()
     topic_name = bucket_name+TOPIC_SUFFIX
@@ -1451,8 +1453,6 @@ def test_ps_s3_topic_update():
     rabbit_proc = init_rabbitmq()
     if rabbit_proc is  None:
         return SkipTest('end2end amqp tests require rabbitmq-server installed')
-    # TODO add rabbitmq checkpoint instead of sleep
-    time.sleep(5)
     zones, ps_zones = init_env()
     bucket_name = gen_bucket_name()
     topic_name = bucket_name+TOPIC_SUFFIX
@@ -1565,9 +1565,7 @@ def test_ps_s3_topic_update():
     s3_notification_conf.del_config()
     topic_conf.del_config()
     zones[0].delete_bucket(bucket_name)
-    time.sleep(5)
-    httpd.server_close()
-    http_task.join()
+    close_http_server(http_task, httpd)
     clean_rabbitmq(rabbit_proc)
 
 
@@ -1577,8 +1575,6 @@ def test_ps_s3_notification_update():
     rabbit_proc = init_rabbitmq()
     if rabbit_proc is  None:
         return SkipTest('end2end amqp tests require rabbitmq-server installed')
-    # TODO add rabbitmq checkpoint instead of sleep
-    time.sleep(5)
 
     zones, ps_zones = init_env()
     bucket_name = gen_bucket_name()
@@ -1666,15 +1662,8 @@ def test_ps_s3_notification_update():
     topic_conf1.del_config()
     topic_conf2.del_config()
     zones[0].delete_bucket(bucket_name)
-    time.sleep(5)
-    httpd.server_close()
-    http_task.join()
+    close_http_server(http_task, httpd)
     clean_rabbitmq(rabbit_proc)
-    if rabbit_proc is  None:
-        return SkipTest('end2end amqp tests require rabbitmq-server installed')
-    zones, ps_zones = init_env()
-    bucket_name = gen_bucket_name()
-    topic_name1 = bucket_name+'amqp'+TOPIC_SUFFIX
 
 
 def test_ps_s3_multiple_topics_notification():
@@ -1683,8 +1672,6 @@ def test_ps_s3_multiple_topics_notification():
     rabbit_proc = init_rabbitmq()
     if rabbit_proc is  None:
         return SkipTest('end2end amqp tests require rabbitmq-server installed')
-    # TODO add rabbitmq checkpoint instead of sleep
-    time.sleep(5)
 
     zones, ps_zones = init_env()
     bucket_name = gen_bucket_name()
@@ -1785,7 +1772,5 @@ def test_ps_s3_multiple_topics_notification():
     for key in bucket.list():
         key.delete()
     zones[0].delete_bucket(bucket_name)
-    time.sleep(5)
-    httpd.server_close()
-    http_task.join()
+    close_http_server(http_task, httpd)
     clean_rabbitmq(rabbit_proc)
