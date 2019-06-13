@@ -222,7 +222,7 @@ def verify_s3_records_by_elements(records, keys, exact_match=False, deletions=Fa
 
 def init_rabbitmq():
     """ start a rabbitmq broker """
-    hostname = get_ip()
+    #hostname = get_ip()
     #port = str(random.randint(20000, 30000))
     #data_dir = './' + port + '_data'
     #log_dir = './' + port + '_log'
