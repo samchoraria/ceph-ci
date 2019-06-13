@@ -2,6 +2,7 @@ import logging
 import json
 import tempfile
 import BaseHTTPServer
+from SocketServer import ThreadingMixIn
 import random
 import threading
 import subprocess
@@ -33,8 +34,8 @@ log = logging.getLogger(__name__)
 
 # HTTP endpoint functions
 
-class HTTPServer(BaseHTTPServer.HTTPServer):
-    """http server class also holding list of events received into the handler"""
+class HTTPServer(ThreadingMixIn, BaseHTTPServer.HTTPServer):
+    """threaded http server class also holding list of events received into the handler"""
     def __init__(self, host, port):
         BaseHTTPServer.HTTPServer.__init__(self, (host, port), HTTPPostHandler)
         self.events = []
