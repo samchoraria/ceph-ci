@@ -2,7 +2,7 @@ import logging
 import json
 import tempfile
 import BaseHTTPServer
-from SocketServer import ThreadingMixIn
+import SocketServer
 import random
 import threading
 import subprocess
@@ -33,22 +33,7 @@ log = logging.getLogger(__name__)
 ####################################
 
 # HTTP endpoint functions
-
-class HTTPServer(ThreadingMixIn, BaseHTTPServer.HTTPServer):
-    """threaded http server class also holding list of events received into the handler"""
-    def __init__(self, host, port):
-        BaseHTTPServer.HTTPServer.__init__(self, (host, port), HTTPPostHandler)
-        self.events = []
-
-    def verify_s3_events(self, keys, exact_match=False, deletions=False):
-        """verify stored s3 records agains a list of keys"""
-        verify_s3_records_by_elements(self.events, keys, exact_match=exact_match, deletions=deletions)
-        self.events = []
-
-    def verify_events(self, keys, exact_match=False, deletions=False):
-        """verify stored events agains a list of keys"""
-        verify_events_by_elements(self.events, keys, exact_match=exact_match, deletions=deletions)
-        self.events = []
+# multithreaded streaming server, based on: https://stackoverflow.com/questions/46210672/
 
 class HTTPPostHandler(BaseHTTPServer.BaseHTTPRequestHandler):
     """http POST hanler class storing the received events in its http server"""
@@ -57,8 +42,8 @@ class HTTPPostHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         try:
             content_length = int(self.headers['Content-Length'])
             body = self.rfile.read(content_length)
-            log.info('HTTP Server received event: %s', str(body))
-            self.server.events.append(json.loads(body))
+            log.info('HTTP Server (%d) received event: %s', self.server.worker_id, str(body))
+            self.server.append(json.loads(body))
         except:
             log.error('HTTP Server received empty event: %s', str(body))
             self.send_response(400)
@@ -68,30 +53,79 @@ class HTTPPostHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             self.end_headers()
 
 
-def http_thread_runner(httpd):
-    """main thread function for the http server"""
-    try:
-        log.info('HTTP Server started on: %s', httpd.server_address)
-        httpd.serve_forever()
-        log.info('HTTP Server ended')
-    except Exception as error:
-        log.info('HTTP Server ended unexpectedly: %s', str(error))
+class HTTPServerWithEvents(BaseHTTPServer.HTTPServer):
+    def __init__(self, addr, handler, worker_id):
+        BaseHTTPServer.HTTPServer.__init__(self, addr, handler, False)
+        self.worker_id = worker_id
+        self.events = []
+
+    def append(self, event):
+        self.events.append(event)
 
 
-def create_http_thread(host, port):
-    """create an https server and thread"""
-    httpd = HTTPServer(host, port)
-    task = threading.Thread(target=http_thread_runner, args=(httpd,))
-    task.daemon = True
-    return task, httpd
+class HTTPServerThread(threading.Thread):
+    def __init__(self, i, sock, addr):
+        threading.Thread.__init__(self)
+        self.i = i
+        self.daemon = True
+        self.httpd = HTTPServerWithEvents(addr, HTTPPostHandler, i)
+        self.httpd.socket = sock
+        # prevent the HTTP server from re-binding every handler
+        self.httpd.server_bind = self.server_close = lambda self: None
+        self.start()
+
+    def run(self):
+        try:
+            log.info('HTTP Server (%d) started on: %s', self.i, self.httpd.server_address)
+            self.httpd.serve_forever()
+            log.info('HTTP Server (%d) ended', self.i)
+        except Exception as error:
+            # could happen if the server r/w to a closing socket during shutdown
+            log.info('HTTP Server (%d) ended unexpectedly: %s', self.i, str(error))
+
+    def close(self):
+        """ close the http server """
+        self.httpd.shutdown()
+
+    def get_events(self):
+        return self.httpd.events
 
 
-def close_http_server(task, httpd):
-    """ close the http server and wait for it to finish """
-    time.sleep(5)
-    log.info('terminating HTTP Server: %s', httpd.server_address)
-    httpd.server_close()
-    task.join()
+class StreamingHTTPServer:
+    """threaded http server class also holding list of events received into the handler"""
+    def __init__(self, host, port, num_workers=100):
+        addr = (host, port)
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.sock.bind(addr)
+        # maximum of 10 connection backlog on the listener
+        self.sock.listen(10)
+        self.workers = [HTTPServerThread(i, self.sock, addr) for i in range(num_workers)]
+
+    def verify_s3_events(self, keys, exact_match=False, deletions=False):
+        """verify stored s3 records agains a list of keys"""
+        events = []
+        for worker in self.workers:
+            events += worker.get_events()
+        verify_s3_records_by_elements(events, keys, exact_match=exact_match, deletions=deletions)
+
+    def verify_events(self, keys, exact_match=False, deletions=False):
+        """verify stored events agains a list of keys"""
+        events = []
+        for worker in self.workers:
+            events += worker.get_events()
+        verify_events_by_elements(events, keys, exact_match=exact_match, deletions=deletions)
+
+    def close(self):
+        """close all workers in the http server and wait for it to finish"""
+        # make sure that the shared socket is closed
+        # this is needed in case that one of the threads is blocked on the socket
+        self.sock.shutdown(socket.SHUT_RDWR)
+        self.sock.close()
+        # wait for server threads to finish
+        for worker in self.workers:
+            worker.close()
+            worker.join()
 
 
 # AMQP endpoint functions
@@ -1121,8 +1155,7 @@ def test_ps_push_http():
     host = get_ip()
     port = random.randint(10000, 20000)
     # start an http server in a separate thread
-    task, httpd, = create_http_thread(host, port)
-    task.start()
+    http_server = StreamingHTTPServer(host, port, 20)
 
     # create topic
     topic_conf = PSTopic(ps_zones[0].conn, topic_name)
@@ -1151,7 +1184,7 @@ def test_ps_push_http():
     zone_bucket_checkpoint(ps_zones[0].zone, zones[0].zone, bucket_name)
     # check http server
     keys = list(bucket.list())
-    httpd.verify_events(keys)
+    http_server.verify_events(keys)
 
     # delete objects from the bucket
     for key in bucket.list():
@@ -1160,14 +1193,14 @@ def test_ps_push_http():
     zone_meta_checkpoint(ps_zones[0].zone)
     zone_bucket_checkpoint(ps_zones[0].zone, zones[0].zone, bucket_name)
     # check http server
-    httpd.verify_events(keys, deletions=True)
+    http_server.verify_events(keys, deletions=True)
 
     # cleanup
     sub_conf.del_config()
     notification_conf.del_config()
     topic_conf.del_config()
     zones[0].delete_bucket(bucket_name)
-    close_http_server(task, httpd)
+    http_server.close()
 
 
 def test_ps_s3_push_http():
@@ -1180,8 +1213,7 @@ def test_ps_s3_push_http():
     host = get_ip()
     port = random.randint(10000, 20000)
     # start an http server in a separate thread
-    task, httpd, = create_http_thread(host, port)
-    task.start()
+    http_server = StreamingHTTPServer(host, port, 20)
 
     # create topic
     topic_conf = PSTopic(ps_zones[0].conn, topic_name,
@@ -1212,7 +1244,7 @@ def test_ps_s3_push_http():
     zone_bucket_checkpoint(ps_zones[0].zone, zones[0].zone, bucket_name)
     # check http server
     keys = list(bucket.list())
-    httpd.verify_s3_events(keys)
+    http_server.verify_s3_events(keys)
 
     # delete objects from the bucket
     for key in bucket.list():
@@ -1221,13 +1253,13 @@ def test_ps_s3_push_http():
     zone_meta_checkpoint(ps_zones[0].zone)
     zone_bucket_checkpoint(ps_zones[0].zone, zones[0].zone, bucket_name)
     # check http server
-    httpd.verify_s3_events(keys, deletions=True)
+    http_server.verify_s3_events(keys, deletions=True)
 
     # cleanup
     s3_notification_conf.del_config()
     topic_conf.del_config()
     zones[0].delete_bucket(bucket_name)
-    close_http_server(task, httpd)
+    http_server.close()
 
 
 def test_ps_push_amqp():
@@ -1480,8 +1512,7 @@ def test_ps_s3_topic_update():
     # create http server
     port = random.randint(10000, 20000)
     # start an http server in a separate thread
-    http_task, httpd, = create_http_thread(hostname, port)
-    http_task.start()
+    http_server = StreamingHTTPServer(hostname, port)
 
     # create bucket on the first of the rados zones
     bucket = zones[0].create_bucket(bucket_name)
@@ -1557,7 +1588,7 @@ def test_ps_s3_topic_update():
     keys = list(bucket.list())
     # TODO: set exact_match to true
     # check that updates switched to http
-    httpd.verify_s3_events(keys)
+    http_server.verify_s3_events(keys)
 
     # cleanup
     # delete objects from the bucket
@@ -1566,7 +1597,7 @@ def test_ps_s3_topic_update():
     s3_notification_conf.del_config()
     topic_conf.del_config()
     zones[0].delete_bucket(bucket_name)
-    close_http_server(http_task, httpd)
+    http_server.close()
     clean_rabbitmq(rabbit_proc)
 
 
@@ -1586,10 +1617,9 @@ def test_ps_s3_notification_update():
     # create random port for the http server
     http_port = random.randint(10000, 20000)
     # start an http server in a separate thread
-    http_task, httpd, = create_http_thread(hostname, http_port)
+    http_server = StreamingHTTPServer(hostname, http_port, 20)
     exchange = 'ex1'
     amqp_task, receiver = create_amqp_receiver_thread(exchange, topic_name1)
-    http_task.start()
     amqp_task.start()
 
     topic_conf1 = PSTopic(ps_zones[0].conn, topic_name1,
@@ -1605,7 +1635,7 @@ def test_ps_s3_notification_update():
     parsed_result = json.loads(result)
     topic_arn2 = parsed_result['arn']
     assert_equal(status/100, 2)
-    
+
     # create bucket on the first of the rados zones
     bucket = zones[0].create_bucket(bucket_name)
     # wait for sync
@@ -1653,7 +1683,7 @@ def test_ps_s3_notification_update():
     keys = list(bucket.list())
     # TODO: set exact_match to true
     # check that updates switched to http
-    httpd.verify_s3_events(keys)
+    http_server.verify_s3_events(keys)
 
     # cleanup
     # delete objects from the bucket
@@ -1663,7 +1693,7 @@ def test_ps_s3_notification_update():
     topic_conf1.del_config()
     topic_conf2.del_config()
     zones[0].delete_bucket(bucket_name)
-    close_http_server(http_task, httpd)
+    http_server.close()
     clean_rabbitmq(rabbit_proc)
 
 
@@ -1683,10 +1713,9 @@ def test_ps_s3_multiple_topics_notification():
     # create random port for the http server
     http_port = random.randint(10000, 20000)
     # start an http server in a separate thread
-    http_task, httpd, = create_http_thread(hostname, http_port)
+    http_server = StreamingHTTPServer(hostname, http_port)
     exchange = 'ex1'
     amqp_task, receiver = create_amqp_receiver_thread(exchange, topic_name1)
-    http_task.start()
     amqp_task.start()
 
     topic_conf1 = PSTopic(ps_zones[0].conn, topic_name1,
@@ -1763,7 +1792,7 @@ def test_ps_s3_multiple_topics_notification():
         log.debug(record)
     # TODO: set exact_match to true
     verify_s3_records_by_elements(parsed_result['Records'], keys, exact_match=False)
-    httpd.verify_s3_events(keys)
+    http_server.verify_s3_events(keys)
 
     # cleanup
     s3_notification_conf.del_config()
@@ -1773,5 +1802,5 @@ def test_ps_s3_multiple_topics_notification():
     for key in bucket.list():
         key.delete()
     zones[0].delete_bucket(bucket_name)
-    close_http_server(http_task, httpd)
+    http_server.close()
     clean_rabbitmq(rabbit_proc)
