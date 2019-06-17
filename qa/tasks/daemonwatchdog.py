@@ -21,13 +21,13 @@ class DaemonWatchdog(Greenlet):
         is allowed to be failed before the watchdog will bark.
     """
 
-    def __init__(self, ctx, manager, config, thrashers):
+    def __init__(self, ctx, config, thrashers):
         Greenlet.__init__(self)
         self.ctx = ctx
         self.config = config
         self.e = None
         self.logger = log.getChild('daemon_watchdog')
-        self.manager = manager
+        #self.manager = manager
         self.name = 'watchdog'
         self.stopping = Event()
         self.thrashers = thrashers
@@ -56,11 +56,11 @@ class DaemonWatchdog(Greenlet):
             except:
                 self.logger.exception("ignoring exception:")
         daemons = []
-        daemons.extend(filter(lambda daemon: daemon.running() and not daemon.proc.finished, self.ctx.daemons.iter_daemons_of_role('osd', cluster=self.manager.cluster)))
-        daemons.extend(filter(lambda daemon: daemon.running() and not daemon.proc.finished, self.ctx.daemons.iter_daemons_of_role('mds', cluster=self.manager.cluster)))
-        daemons.extend(filter(lambda daemon: daemon.running() and not daemon.proc.finished, self.ctx.daemons.iter_daemons_of_role('mon', cluster=self.manager.cluster)))
-        daemons.extend(filter(lambda daemon: daemon.running() and not daemon.proc.finished, self.ctx.daemons.iter_daemons_of_role('rgw', cluster=self.manager.cluster)))
-        daemons.extend(filter(lambda daemon: daemon.running() and not daemon.proc.finished, self.ctx.daemons.iter_daemons_of_role('mgr', cluster=self.manager.cluster)))
+        daemons.extend(filter(lambda daemon: daemon.running() and not daemon.proc.finished, self.ctx.daemons.iter_daemons_of_role('osd', cluster=self.ctx.cluster)))
+        daemons.extend(filter(lambda daemon: daemon.running() and not daemon.proc.finished, self.ctx.daemons.iter_daemons_of_role('mds', cluster=self.ctx.cluster)))
+        daemons.extend(filter(lambda daemon: daemon.running() and not daemon.proc.finished, self.ctx.daemons.iter_daemons_of_role('mon', cluster=self.ctx.cluster)))
+        daemons.extend(filter(lambda daemon: daemon.running() and not daemon.proc.finished, self.ctx.daemons.iter_daemons_of_role('rgw', cluster=self.ctx.cluster)))
+        daemons.extend(filter(lambda daemon: daemon.running() and not daemon.proc.finished, self.ctx.daemons.iter_daemons_of_role('mgr', cluster=self.ctx.cluster)))
 
         for daemon in daemons:
             try:
@@ -76,11 +76,11 @@ class DaemonWatchdog(Greenlet):
             bark = False
             now = time.time()
 
-            osds = self.ctx.daemons.iter_daemons_of_role('osd', cluster=self.manager.cluster)
-            mons = self.ctx.daemons.iter_daemons_of_role('mon', cluster=self.manager.cluster)
-            mdss = self.ctx.daemons.iter_daemons_of_role('mds', cluster=self.manager.cluster)
-            rgws = self.ctx.daemons.iter_daemons_of_role('rgw', cluster=self.manager.cluster)
-            mgrs = self.ctx.daemons.iter_daemons_of_role('mgr', cluster=self.manager.cluster)
+            osds = self.ctx.daemons.iter_daemons_of_role('osd', cluster=self.ctx.cluster)
+            mons = self.ctx.daemons.iter_daemons_of_role('mon', cluster=self.ctx.cluster)
+            mdss = self.ctx.daemons.iter_daemons_of_role('mds', cluster=self.ctx.cluster)
+            rgws = self.ctx.daemons.iter_daemons_of_role('rgw', cluster=self.ctx.cluster)
+            mgrs = self.ctx.daemons.iter_daemons_of_role('mgr', cluster=self.ctx.cluster)
 
             daemon_failures = []
             daemon_failures.extend(filter(lambda daemon: daemon.running() and daemon.proc.finished, osds))
@@ -121,15 +121,15 @@ class DaemonWatchdog(Greenlet):
         daemons = []
         delay = random.randrange(0.0, 1000.0)
         if delay <= 200.0:
-            daemons.extend(filter(lambda daemon: daemon.running() and not daemon.proc.finished, self.ctx.daemons.iter_daemons_of_role('osd', cluster=self.manager.cluster)))
+            daemons.extend(filter(lambda daemon: daemon.running() and not daemon.proc.finished, self.ctx.daemons.iter_daemons_of_role('osd', cluster=self.ctx.cluster)))
         elif delay > 200.0 and delay <= 400:
-            daemons.extend(filter(lambda daemon: daemon.running() and not daemon.proc.finished, self.ctx.daemons.iter_daemons_of_role('mds', cluster=self.manager.cluster)))
+            daemons.extend(filter(lambda daemon: daemon.running() and not daemon.proc.finished, self.ctx.daemons.iter_daemons_of_role('mds', cluster=self.ctx.cluster)))
         elif delay > 400 and delay <= 600:
-            daemons.extend(filter(lambda daemon: daemon.running() and not daemon.proc.finished, self.ctx.daemons.iter_daemons_of_role('mon', cluster=self.manager.cluster)))
+            daemons.extend(filter(lambda daemon: daemon.running() and not daemon.proc.finished, self.ctx.daemons.iter_daemons_of_role('mon', cluster=self.ctx.cluster)))
         elif delay > 600 and delay <= 800:
-            daemons.extend(filter(lambda daemon: daemon.running() and not daemon.proc.finished, self.ctx.daemons.iter_daemons_of_role('rgw', cluster=self.manager.cluster)))
+            daemons.extend(filter(lambda daemon: daemon.running() and not daemon.proc.finished, self.ctx.daemons.iter_daemons_of_role('rgw', cluster=self.ctx.cluster)))
         elif delay > 800 and delay <=1000:
-            daemons.extend(filter(lambda daemon: daemon.running() and not daemon.proc.finished, self.ctx.daemons.iter_daemons_of_role('mgr', cluster=self.manager.cluster)))
+            daemons.extend(filter(lambda daemon: daemon.running() and not daemon.proc.finished, self.ctx.daemons.iter_daemons_of_role('mgr', cluster=self.ctx.cluster)))
 
         for daemon in daemons:
             try:
