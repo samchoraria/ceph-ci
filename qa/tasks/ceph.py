@@ -420,11 +420,11 @@ def cephfs_setup(ctx, config):
 
 @contextlib.contextmanager
 def watchdog_setup(ctx, config):
-    cluster_name = config['cluster']
-    manager = ctx.managers[cluster_name]
+    #cluster_name = config['cluster']
+    #manager = ctx.managers[cluster_name]
     ctx.ceph[config['cluster']].thrashers = []
 
-    ctx.ceph[config['cluster']].watchdog = DaemonWatchdog(ctx, manager, config, thrashers)
+    ctx.ceph[config['cluster']].watchdog = DaemonWatchdog(ctx, config, thrashers)
     ctx.ceph[config['cluster']].watchdog.start()
     yield
 
