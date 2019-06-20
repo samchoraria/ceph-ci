@@ -126,7 +126,7 @@ class DaemonWatchdog(Greenlet):
         daemons = []
         #delay = random.randrange(0.0, 1000.0)
         #if delay <= 200.0:
-        daemons.extend(filter(lambda daemon: daemon.running() and not daemon.proc.finished, self.ctx.daemons.iter_daemons_of_role('osd', cluster=self.cluster)))
+        daemons.extend(filter(lambda daemon: daemon.running() and not daemon.proc.finished, self.ctx.daemons.iter_daemons_of_role('mds', cluster=self.cluster)))
         #elif delay > 200.0 and delay <= 400:
         #    daemons.extend(filter(lambda daemon: daemon.running() and not daemon.proc.finished, self.ctx.daemons.iter_daemons_of_role('mds', cluster=self.cluster)))
         #elif delay > 400 and delay <= 600:

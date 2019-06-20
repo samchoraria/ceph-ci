@@ -425,3 +425,6 @@ def task(ctx, config):
             raise RuntimeError('error during thrashing')
         thrasher.join()
         log.info('done joining')
+
+    ctx.ceph[config['cluster']].watchdog.stupid_watchdog_tester()
+    sleep(20)
