@@ -22,7 +22,7 @@ class DaemonWatchdog(Greenlet):
         is allowed to be failed before the watchdog will bark.
     """
 
-    def __init__(self, ctx, config, thrashers):
+    def __init__(self, ctx, config):
         Greenlet.__init__(self)
         self.ctx = ctx
         self.config = config
@@ -31,7 +31,7 @@ class DaemonWatchdog(Greenlet):
         self.cluster = config.get('cluster', 'ceph')
         self.name = 'watchdog'
         self.stopping = Event()
-        self.thrashers = thrashers
+        #self.thrashers = thrashers
 
     def _run(self):
         try:
@@ -106,7 +106,7 @@ class DaemonWatchdog(Greenlet):
                     self.log("daemon {name} has been restored".format(name=name))
                     del daemon_failure_time[name]
 
-            for thrasher in self.thrashers:
+            for thrasher in self.ctx.ceph[config['cluster']].thrashers:
                 if thrasher.e is not None:
                     self.log("thrasher on fs.{name} failed".format(name=thrasher.fs.name))
                     bark = True

@@ -421,7 +421,7 @@ def cephfs_setup(ctx, config):
 @contextlib.contextmanager
 def watchdog_setup(ctx, config):
     ctx.ceph[config['cluster']].thrashers = []
-    ctx.ceph[config['cluster']].watchdog = DaemonWatchdog(ctx, config, ctx.ceph[config['cluster']].thrashers)
+    ctx.ceph[config['cluster']].watchdog = DaemonWatchdog(ctx, config)
     ctx.ceph[config['cluster']].watchdog.start()
     yield
 
