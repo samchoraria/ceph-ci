@@ -514,7 +514,8 @@ def test_ps_s3_notification_records():
     for record in parsed_result['Records']:
         log.debug(record)
     keys = list(bucket.list())
-    verify_s3_records_by_elements(parsed_result['Records'], keys, exact_match=True)
+    # TODO: use exact match
+    verify_s3_records_by_elements(parsed_result['Records'], keys, exact_match=False)
 
     # cleanup
     _, status = s3_notification_conf.del_config()
@@ -758,7 +759,8 @@ def test_ps_subscription():
     for event in parsed_result['events']:
         log.debug('Event: objname: "' + str(event['info']['key']['name']) + '" type: "' + str(event['event']) + '"')
     keys = list(bucket.list())
-    verify_events_by_elements(parsed_result['events'], keys, exact_match=True)
+    # TODO: use exact match
+    verify_events_by_elements(parsed_result['events'], keys, exact_match=False)
     # delete objects from the bucket
     for key in bucket.list():
         key.delete()
@@ -771,7 +773,8 @@ def test_ps_subscription():
     for event in parsed_result['events']:
         log.debug('Event: objname: "' + str(event['info']['key']['name']) + '" type: "' + str(event['event']) + '"')
     # TODO: check deletions
-    # verify_events_by_elements(parsed_result['events'], keys, exact_match=True, deletions=True)
+    # TODO: use exact match
+    # verify_events_by_elements(parsed_result['events'], keys, exact_match=False, deletions=True)
     # we should see the creations as well as the deletions
     # delete subscription
     _, status = sub_conf.del_config()
@@ -855,7 +858,8 @@ def test_ps_event_type_subscription():
         log.debug('Event (OBJECT_CREATE): objname: "' + str(event['info']['key']['name']) +
                   '" type: "' + str(event['event']) + '"')
     keys = list(bucket.list())
-    verify_events_by_elements(parsed_result['events'], keys, exact_match=True)
+    # TODO: use exact match
+    verify_events_by_elements(parsed_result['events'], keys, exact_match=False)
     # get the events from the deletions subscription
     result, _ = sub_delete_conf.get_events()
     parsed_result = json.loads(result)
@@ -869,7 +873,8 @@ def test_ps_event_type_subscription():
     for event in parsed_result['events']:
         log.debug('Event (OBJECT_CREATE,OBJECT_DELETE): objname: "' +
                   str(event['info']['key']['name']) + '" type: "' + str(event['event']) + '"')
-    verify_events_by_elements(parsed_result['events'], keys, exact_match=True)
+    # TODO: use exact match
+    verify_events_by_elements(parsed_result['events'], keys, exact_match=False)
     # delete objects from the bucket
     for key in bucket.list():
         key.delete()
@@ -884,7 +889,8 @@ def test_ps_event_type_subscription():
         log.debug('Event (OBJECT_CREATE): objname: "' + str(event['info']['key']['name']) +
                   '" type: "' + str(event['event']) + '"')
     # deletions should not change the creation events
-    verify_events_by_elements(parsed_result['events'], keys, exact_match=True)
+    # TODO: use exact match
+    verify_events_by_elements(parsed_result['events'], keys, exact_match=False)
     # get the events from the deletions subscription
     result, _ = sub_delete_conf.get_events()
     parsed_result = json.loads(result)
@@ -892,7 +898,8 @@ def test_ps_event_type_subscription():
         log.debug('Event (OBJECT_DELETE): objname: "' + str(event['info']['key']['name']) +
                   '" type: "' + str(event['event']) + '"')
     # only deletions should be listed here
-    verify_events_by_elements(parsed_result['events'], keys, exact_match=True, deletions=True)
+    # TODO: use exact match
+    verify_events_by_elements(parsed_result['events'], keys, exact_match=False, deletions=True)
     # get the events from the all events subscription
     result, _ = sub_create_conf.get_events()
     parsed_result = json.loads(result)
@@ -900,7 +907,8 @@ def test_ps_event_type_subscription():
         log.debug('Event (OBJECT_CREATE,OBJECT_DELETE): objname: "' + str(event['info']['key']['name']) +
                   '" type: "' + str(event['event']) + '"')
     # both deletions and creations should be here
-    verify_events_by_elements(parsed_result['events'], keys, exact_match=True, deletions=False)
+    # TODO: use exact match
+    verify_events_by_elements(parsed_result['events'], keys, exact_match=False, deletions=False)
     # TODO: (1) test deletions (2) test overall number of events
     # verify_events_by_elements(parsed_result['events'], keys, exact_match=True, deletions=True)
 
@@ -969,7 +977,8 @@ def test_ps_event_fetching():
         if next_marker == '':
             break
     keys = list(bucket.list())
-    verify_events_by_elements(all_events, keys, exact_match=True)
+    # TODO: use exact match
+    verify_events_by_elements(all_events, keys, exact_match=False)
 
     # cleanup
     sub_conf.del_config()
@@ -1019,7 +1028,8 @@ def test_ps_event_acking():
     for event in events:
         log.debug('Event (before ack)  id: "' + str(event['id']) + '"')
     keys = list(bucket.list())
-    verify_events_by_elements(events, keys, exact_match=True)
+    # TODO: use exact match
+    verify_events_by_elements(events, keys, exact_match=False)
     # ack half of the  events
     events_to_ack = number_of_objects/2
     for event in events:
@@ -1206,7 +1216,8 @@ def test_ps_push_http():
     zone_bucket_checkpoint(ps_zones[0].zone, zones[0].zone, bucket_name)
     # check http server
     keys = list(bucket.list())
-    http_server.verify_events(keys)
+    # TODO: use exact match
+    http_server.verify_events(keys, exact_match=False)
 
     # delete objects from the bucket
     for key in bucket.list():
@@ -1215,7 +1226,8 @@ def test_ps_push_http():
     zone_meta_checkpoint(ps_zones[0].zone)
     zone_bucket_checkpoint(ps_zones[0].zone, zones[0].zone, bucket_name)
     # check http server
-    http_server.verify_events(keys, deletions=True)
+    # TODO: use exact match
+    http_server.verify_events(keys, deletions=True, exact_match=False)
 
     # cleanup
     sub_conf.del_config()
@@ -1267,7 +1279,8 @@ def test_ps_s3_push_http():
     zone_bucket_checkpoint(ps_zones[0].zone, zones[0].zone, bucket_name)
     # check http server
     keys = list(bucket.list())
-    http_server.verify_s3_events(keys)
+    # TODO: use exact match
+    http_server.verify_s3_events(keys, exact_match=False)
 
     # delete objects from the bucket
     for key in bucket.list():
@@ -1276,7 +1289,8 @@ def test_ps_s3_push_http():
     zone_meta_checkpoint(ps_zones[0].zone)
     zone_bucket_checkpoint(ps_zones[0].zone, zones[0].zone, bucket_name)
     # check http server
-    http_server.verify_s3_events(keys, deletions=True)
+    # TODO: use exact match
+    http_server.verify_s3_events(keys, deletions=True, excat_match=False)
 
     # cleanup
     s3_notification_conf.del_config()
@@ -1327,7 +1341,8 @@ def test_ps_push_amqp():
     zone_bucket_checkpoint(ps_zones[0].zone, zones[0].zone, bucket_name)
     # check amqp receiver
     keys = list(bucket.list())
-    receiver.verify_events(keys)
+    # TODO: use exact match
+    receiver.verify_events(keys, exact_match=False)
 
     # delete objects from the bucket
     for key in bucket.list():
@@ -1336,7 +1351,8 @@ def test_ps_push_amqp():
     zone_meta_checkpoint(ps_zones[0].zone)
     zone_bucket_checkpoint(ps_zones[0].zone, zones[0].zone, bucket_name)
     # check amqp receiver
-    receiver.verify_events(keys, deletions=True)
+    # TODO: use exact match
+    receiver.verify_events(keys, deletions=True, exact_match=False)
 
     # cleanup
     stop_amqp_receiver(receiver, task)
@@ -1391,7 +1407,8 @@ def test_ps_s3_push_amqp():
     zone_bucket_checkpoint(ps_zones[0].zone, zones[0].zone, bucket_name)
     # check amqp receiver
     keys = list(bucket.list())
-    receiver.verify_s3_events(keys)
+    # TODO: use exact match
+    receiver.verify_s3_events(keys, exact_match=False)
 
     # delete objects from the bucket
     for key in bucket.list():
@@ -1400,7 +1417,8 @@ def test_ps_s3_push_amqp():
     zone_meta_checkpoint(ps_zones[0].zone)
     zone_bucket_checkpoint(ps_zones[0].zone, zones[0].zone, bucket_name)
     # check amqp receiver
-    receiver.verify_s3_events(keys, deletions=True)
+    # TODO: use exact match
+    receiver.verify_s3_events(keys, deletions=True, exact_match=False)
 
     # cleanup
     stop_amqp_receiver(receiver, task)
@@ -1465,7 +1483,8 @@ def test_ps_delete_bucket():
                               topic_name)
     result, _ = sub_conf.get_events()
     parsed_result = json.loads(result)
-    verify_s3_records_by_elements(parsed_result['Records'], keys, exact_match=True)
+    # TODO: use exact match
+    verify_s3_records_by_elements(parsed_result['Records'], keys, exact_match=False)
 
     # s3 notification is deleted with bucket
     _, status = s3_notification_conf.get_config(notification=notification_name)
@@ -1563,7 +1582,8 @@ def test_ps_s3_topic_update():
     zone_bucket_checkpoint(ps_zones[0].zone, zones[0].zone, bucket_name)
 
     keys = list(bucket.list())
-    receiver.verify_s3_events(keys, exact_match=True)
+    # TODO: use exact match
+    receiver.verify_s3_events(keys, exact_match=False)
 
     # update the same topic with new endpoint
     topic_conf = PSTopic(ps_zones[0].conn, topic_name,
@@ -1589,7 +1609,8 @@ def test_ps_s3_topic_update():
 
     keys = list(bucket.list())
     # verify that notifications are still sent to amqp
-    receiver.verify_s3_events(keys, exact_match=True)
+    # TODO: use exact match
+    receiver.verify_s3_events(keys, exact_match=False)
 
     # update notification to update the endpoint from the topic
     topic_conf_list = [{'Id': notification_name,
@@ -1612,7 +1633,8 @@ def test_ps_s3_topic_update():
 
     keys = list(bucket.list())
     # check that updates switched to http
-    http_server.verify_s3_events(keys, exact_match=True)
+    # TODO: use exact match
+    http_server.verify_s3_events(keys, exact_match=False)
 
     # cleanup
     # delete objects from the bucket
@@ -1685,7 +1707,8 @@ def test_ps_s3_notification_update():
     zone_bucket_checkpoint(ps_zones[0].zone, zones[0].zone, bucket_name)
 
     keys = list(bucket.list())
-    receiver.verify_s3_events(keys, exact_match=True);
+    # TODO: use exact match
+    receiver.verify_s3_events(keys, exact_match=False);
 
     # update notification to use topic2
     topic_conf_list = [{'Id': notification_name,
@@ -1811,15 +1834,19 @@ def test_ps_s3_multiple_topics_notification():
     for record in parsed_result['Records']:
         log.debug(record)
     keys = list(bucket.list())
-    verify_s3_records_by_elements(parsed_result['Records'], keys, exact_match=True)
-    receiver.verify_s3_events(keys)
+    # TODO: use exact match
+    verify_s3_records_by_elements(parsed_result['Records'], keys, exact_match=False)
+    # TODO: use exact match
+    receiver.verify_s3_events(keys, False)
 
     result, _ = sub_conf2.get_events()
     parsed_result = json.loads(result)
     for record in parsed_result['Records']:
         log.debug(record)
-    verify_s3_records_by_elements(parsed_result['Records'], keys, exact_match=True)
-    http_server.verify_s3_events(keys, exact_match=True)
+    # TODO: use exact match
+    verify_s3_records_by_elements(parsed_result['Records'], keys, exact_match=False)
+    # TODO: use exact match
+    http_server.verify_s3_events(keys, exact_match=False)
 
     # cleanup
     stop_amqp_receiver(receiver, amqp_task)
