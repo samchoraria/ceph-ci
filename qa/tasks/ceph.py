@@ -1970,6 +1970,6 @@ def task(ctx, config):
             #    if i > 4:
             #        break
 
-            ctx.ceph[config['cluster']].watchdog.stupid_watchdog_tester()
-            sleep(20)
+            #ctx.ceph[config['cluster']].watchdog.stupid_watchdog_tester()
+            #sleep(20)
                 #i += 1
