@@ -71,6 +71,10 @@ public:
 
   mempool::pgmap::map<int64_t,interval_set<snapid_t>> purged_snaps;
 
+  bool use_per_pool_stats() const {
+    return osd_sum.num_osds == osd_sum.num_per_pool_osds;
+  }
+
   // recent deltas, and summation
   /**
    * keep track of last deltas for each pool, calculated using
@@ -166,10 +170,12 @@ public:
 				    Formatter *f, bool verbose) const;
   void dump_cluster_stats(stringstream *ss, Formatter *f, bool verbose) const;
   static void dump_object_stat_sum(TextTable &tbl, Formatter *f,
-			    const pool_stat_t &pool_stat,
-			    uint64_t avail,
-			    float raw_used_rate,
-			    bool verbose, const pg_pool_t *pool);
+				   const pool_stat_t &pool_stat,
+				   uint64_t avail,
+				   float raw_used_rate,
+				   bool verbose,
+				   bool per_pool,
+				   const pg_pool_t *pool);
 
   size_t get_num_pg_by_osd(int osd) const {
     auto p = num_pg_by_osd.find(osd);
