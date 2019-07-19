@@ -110,6 +110,7 @@ static RGWObjCategory main_category = RGWObjCategory::Main;
 
 const std::string MP_META_SUFFIX = ".meta";
 
+constexpr int64_t RGWRados::Bucket::List::bucket_list_objects_absolute_max;
 
 static bool rgw_get_obj_data_pool(const RGWZoneGroup& zonegroup, const RGWZoneParams& zone_params,
                                   const rgw_placement_rule& head_placement_rule,
@@ -2378,6 +2379,22 @@ int RGWRados::Bucket::update_bucket_id(const string& new_bucket_id)
 }
 
 
+static inline std::string after_delim(std::string_view delim)
+{
+  // assert: ! delim.empty()
+  unsigned char e = delim.back();
+  delim.remove_suffix(1);
+  std::string result{delim.data(), delim.length()};
+  if (uint8_t(e) < 255) {
+    result += char(++e);
+  } else {
+    result += e;
+    result += char(255);
+  }
+  return result;
+}
+
+
 /**
  * Get ordered listing of the objects in a bucket.
  *
@@ -2395,20 +2412,11 @@ int RGWRados::Bucket::update_bucket_id(const string& new_bucket_id)
  * is_truncated: if number of objects in the bucket is bigger than
  * max, then truncated.
  */
-static inline std::string after_delim(std::string_view delim)
-{
-  // assert: ! delim.empty()
-  std::string result{delim.data(), delim.length()};
-  result += char(255);
-  return result;
-}
-
-int RGWRados::Bucket::List::list_objects_ordered(
-  int64_t max,
-  vector<rgw_bucket_dir_entry> *result,
-  map<string, bool> *common_prefixes,
-  bool *is_truncated,
-  optional_yield y)
+int RGWRados::Bucket::List::list_objects_ordered(int64_t max_p,
+						 vector<rgw_bucket_dir_entry> *result,
+						 map<string, bool> *common_prefixes,
+						 bool *is_truncated,
+						 optional_yield y)
 {
   RGWRados *store = target->get_store();
   CephContext *cct = store->ctx();
@@ -2416,7 +2424,9 @@ int RGWRados::Bucket::List::list_objects_ordered(
 
   int count = 0;
   bool truncated = true;
-  int read_ahead = std::max(cct->_conf->rgw_list_bucket_min_readahead,max);
+  const int64_t max = // protect against memory issues and non-positive vals
+    std::min(bucket_list_objects_absolute_max, std::max(int64_t(1), max_p));
+  int read_ahead = std::max(cct->_conf->rgw_list_bucket_min_readahead, max);
 
   result->clear();
 
@@ -2591,7 +2601,7 @@ done:
  * is_truncated: if number of objects in the bucket is bigger than max, then
  *               truncated.
  */
-int RGWRados::Bucket::List::list_objects_unordered(int64_t max,
+int RGWRados::Bucket::List::list_objects_unordered(int64_t max_p,
 						   vector<rgw_bucket_dir_entry> *result,
 						   map<string, bool> *common_prefixes,
 						   bool *is_truncated,
@@ -2603,6 +2613,9 @@ int RGWRados::Bucket::List::list_objects_unordered(int64_t max,
 
   int count = 0;
   bool truncated = true;
+
+  const int64_t max = // protect against memory issues and non-positive vals
+    std::min(bucket_list_objects_absolute_max, std::max(int64_t(1), max_p));
 
   // read a few extra in each call to cls_bucket_list_unordered in
   // case some are filtered out due to namespace matching, versioning,
