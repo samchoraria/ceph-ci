@@ -3304,6 +3304,12 @@ void BlueStore::Onode::dump(Formatter* f) const
   extent_map.dump(f);
 }
 
+
+const string& BlueStore::Onode::get_omap_prefix()
+{
+  return onode.is_pgmeta_omap() ? PREFIX_PGMETA_OMAP
+    : PREFIX_OMAP;
+}
 // =======================================================
 // WriteContext
  
@@ -9503,8 +9509,7 @@ int BlueStore::omap_get(
     goto out;
   o->flush();
   {
-    const string& prefix =
-      o->onode.is_pgmeta_omap() ? PREFIX_PGMETA_OMAP : PREFIX_OMAP;
+    const string& prefix = o->get_omap_prefix();
     KeyValueDB::Iterator it = db->get_iterator(prefix);
     string head, tail;
     get_omap_header(o->onode.nid, &head);
@@ -9557,8 +9562,7 @@ int BlueStore::omap_get_header(
   {
     string head;
     get_omap_header(o->onode.nid, &head);
-    if (db->get(o->onode.is_pgmeta_omap() ? PREFIX_PGMETA_OMAP : PREFIX_OMAP,
-		head, header) >= 0) {
+    if (db->get(o->get_omap_prefix(), head, header) >= 0) {
       dout(30) << __func__ << "  got header" << dendl;
     } else {
       dout(30) << __func__ << "  no header" << dendl;
@@ -9591,8 +9595,7 @@ int BlueStore::omap_get_keys(
     goto out;
   o->flush();
   {
-    const string& prefix =
-      o->onode.is_pgmeta_omap() ? PREFIX_PGMETA_OMAP : PREFIX_OMAP;
+    const string& prefix = o->get_omap_prefix();
     KeyValueDB::Iterator it = db->get_iterator(prefix);
     string head, tail;
     get_omap_key(o->onode.nid, string(), &head);
@@ -9639,8 +9642,7 @@ int BlueStore::omap_get_values(
   if (!o->onode.has_omap())
     goto out;
   {
-    const string& prefix =
-      o->onode.is_pgmeta_omap() ? PREFIX_PGMETA_OMAP : PREFIX_OMAP;
+    const string& prefix = o->get_omap_prefix();
     o->flush();
     _key_encode_u64(o->onode.nid, &final_key);
     final_key.push_back('.');
@@ -9683,8 +9685,7 @@ int BlueStore::omap_check_keys(
   if (!o->onode.has_omap())
     goto out;
   {
-    const string& prefix =
-      o->onode.is_pgmeta_omap() ? PREFIX_PGMETA_OMAP : PREFIX_OMAP;
+    const string& prefix = o->get_omap_prefix();
     o->flush();
     _key_encode_u64(o->onode.nid, &final_key);
     final_key.push_back('.');
@@ -9726,8 +9727,7 @@ ObjectMap::ObjectMapIterator BlueStore::get_omap_iterator(
   }
   o->flush();
   dout(10) << __func__ << " has_omap = " << (int)o->onode.has_omap() <<dendl;
-  KeyValueDB::Iterator it = db->get_iterator(
-    o->onode.is_pgmeta_omap() ? PREFIX_PGMETA_OMAP : PREFIX_OMAP);
+  KeyValueDB::Iterator it = db->get_iterator(o->get_omap_prefix());
   return ObjectMap::ObjectMapIterator(new OmapIteratorImpl(c, o, it));
 }
 
@@ -13166,8 +13166,7 @@ int BlueStore::_rmattrs(TransContext *txc,
 
 void BlueStore::_do_omap_clear(TransContext *txc, OnodeRef& o)
 {
-  const string& omap_prefix = o->onode.is_pgmeta_omap() ? PREFIX_PGMETA_OMAP
-    : PREFIX_OMAP;
+  const string& omap_prefix = o->get_omap_prefix();
   const uint64_t id = o->onode.nid;
   string prefix, tail;
   get_omap_header(id, &prefix);
@@ -13211,8 +13210,7 @@ int BlueStore::_omap_setkeys(TransContext *txc,
     }
     txc->write_onode(o);
 
-    const string& prefix =
-      o->onode.is_pgmeta_omap() ? PREFIX_PGMETA_OMAP : PREFIX_OMAP;
+    const string& prefix = o->get_omap_prefix();
     string key_tail;
     bufferlist tail;
     get_omap_tail(o->onode.nid, &key_tail);
@@ -13220,8 +13218,7 @@ int BlueStore::_omap_setkeys(TransContext *txc,
   } else {
     txc->note_modified_object(o);
   }
-  const string& prefix =
-    o->onode.is_pgmeta_omap() ? PREFIX_PGMETA_OMAP : PREFIX_OMAP;
+  const string& prefix = o->get_omap_prefix();
   string final_key;
   _key_encode_u64(o->onode.nid, &final_key);
   final_key.push_back('.');
@@ -13257,8 +13254,7 @@ int BlueStore::_omap_setheader(TransContext *txc,
     }
     txc->write_onode(o);
 
-    const string& prefix =
-      o->onode.is_pgmeta_omap() ? PREFIX_PGMETA_OMAP : PREFIX_OMAP;
+    const string& prefix = o->get_omap_prefix();
     string key_tail;
     bufferlist tail;
     get_omap_tail(o->onode.nid, &key_tail);
@@ -13266,8 +13262,7 @@ int BlueStore::_omap_setheader(TransContext *txc,
   } else {
     txc->note_modified_object(o);
   }
-  const string& prefix =
-    o->onode.is_pgmeta_omap() ? PREFIX_PGMETA_OMAP : PREFIX_OMAP;
+  const string& prefix = o->get_omap_prefix();
   get_omap_header(o->onode.nid, &key);
   txc->t->set(prefix, key, bl);
   r = 0;
@@ -13290,8 +13285,7 @@ int BlueStore::_omap_rmkeys(TransContext *txc,
     goto out;
   }
   {
-    const string& prefix =
-      o->onode.is_pgmeta_omap() ? PREFIX_PGMETA_OMAP : PREFIX_OMAP;
+    const string& prefix = o->get_omap_prefix();
     _key_encode_u64(o->onode.nid, &final_key);
     final_key.push_back('.');
     decode(num, p);
@@ -13324,8 +13318,7 @@ int BlueStore::_omap_rmkey_range(TransContext *txc,
     goto out;
   }
   {
-    const string& prefix =
-      o->onode.is_pgmeta_omap() ? PREFIX_PGMETA_OMAP : PREFIX_OMAP;
+    const string& prefix = o->get_omap_prefix();
     o->flush();
     get_omap_key(o->onode.nid, first, &key_first);
     get_omap_key(o->onode.nid, last, &key_last);
@@ -13414,8 +13407,7 @@ int BlueStore::_clone(TransContext *txc,
     if (newo->oid.is_pgmeta()) {
       newo->onode.flags |= bluestore_onode_t::FLAG_PGMETA_OMAP;
     }
-    const string& prefix =
-      newo->onode.is_pgmeta_omap() ? PREFIX_PGMETA_OMAP : PREFIX_OMAP;
+    const string& prefix = newo->get_omap_prefix();
     KeyValueDB::Iterator it = db->get_iterator(prefix);
     string head, tail;
     get_omap_header(oldo->onode.nid, &head);
