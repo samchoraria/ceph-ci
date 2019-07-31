@@ -341,10 +341,16 @@ private:
 			  uint64_t jump_to = 0);
   uint64_t _estimate_log_size();
   bool _should_compact_log();
-  uint64_t _default_bluefs_alloc_size() {
-    if (cct->_conf->bluefs_alloc_size > 0)
+  uint64_t _default_bluefs_alloc_size(uint64_t bluestore_min_alloc_size) {
+    uint64_t min_allowed_size = 16384U; // same as bluestore_min_alloc_size_ssd
+    if (cct->_conf->bluefs_alloc_size > 0 &&
+	  cct->_conf->bluefs_alloc_size >= min_allowed_size)
       return cct->_conf->bluefs_alloc_size;
-    return 1024 * 1024U;
+    else if (bluestore_min_alloc_size > 0 &&
+	       bluestore_min_alloc_size >= min_allowed_size)
+      return bluestore_min_alloc_size;
+    else
+      return min_allowed_size;
   }
 
   enum {
@@ -407,7 +413,6 @@ private:
   void _add_block_extent(unsigned bdev, uint64_t offset, uint64_t len);
 
 public:
-  BlueFS(CephContext* cct);
   BlueFS(CephContext* cct, uint64_t bluestore_min_alloc_size);
   ~BlueFS();
 
