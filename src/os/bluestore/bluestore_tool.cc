@@ -173,7 +173,8 @@ BlueFS *open_bluefs(
   const vector<string>& devs)
 {
   validate_path(cct, path, true);
-  BlueFS *fs = new BlueFS(cct, 0);
+  uint64_t alloc_size = 1024 * 1024U;
+  BlueFS *fs = new BlueFS(cct, alloc_size);
 
   add_devices(fs, cct, devs);
 
