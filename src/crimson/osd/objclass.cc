@@ -7,6 +7,8 @@
 #include "common/config.h"
 #include "common/debug.h"
 
+#include "crimson/osd/pg_backend.h"
+
 #include "objclass/objclass.h"
 #include "osd/ClassHandler.h"
 
@@ -63,6 +65,31 @@ int cls_cxx_remove(cls_method_context_t hctx)
 
 int cls_cxx_stat(cls_method_context_t hctx, uint64_t *size, time_t *mtime)
 {
+  OSDOp op;//{CEPH_OSD_OP_STAT};
+  op.op.op = CEPH_OSD_OP_STAT;
+
+  // we're blocking here which presumes execution in Seastar's thread.
+  try {
+    hctx.backend->stat(*hctx.os, op).get();
+  } catch (std::system_error& e) {
+    return -e.code().value();
+  }
+
+  utime_t ut;
+  uint64_t s;
+  try {
+    auto iter = op.outdata.cbegin();
+    decode(s, iter);
+    decode(ut, iter);
+  } catch (buffer::error& err) {
+    return -EIO;
+  }
+  if (size) {
+    *size = s;
+  }
+  if (mtime) {
+    *mtime = ut.sec();
+  }
   return 0;
 }
 
