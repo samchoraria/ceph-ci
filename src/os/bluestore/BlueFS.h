@@ -344,13 +344,15 @@ private:
   uint64_t _default_bluefs_alloc_size(uint64_t bluestore_min_alloc_size) {
     uint64_t min_allowed_size = 16384U; // same as bluestore_min_alloc_size_ssd
     if (cct->_conf->bluefs_alloc_size > 0 &&
-	  cct->_conf->bluefs_alloc_size >= min_allowed_size)
+	  cct->_conf->bluefs_alloc_size >= min_allowed_size) {
+      if (bluestore_min_alloc_size > 0)
+        ceph_assert(cct->_conf->bluefs_alloc_size % bluestore_min_alloc_size == 0);
       return cct->_conf->bluefs_alloc_size;
-    else if (bluestore_min_alloc_size > 0 &&
+    } else if (bluestore_min_alloc_size > 0 &&
 	       bluestore_min_alloc_size >= min_allowed_size)
-      return bluestore_min_alloc_size;
-    else
-      return min_allowed_size;
+        return bluestore_min_alloc_size;
+      else
+        return min_allowed_size;
   }
 
   enum {
