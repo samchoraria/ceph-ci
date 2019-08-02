@@ -3,14 +3,7 @@ import os
 import socket
 import logging
 
-try:
-    from more_itertools import pairwise
-except ImportError:
-    def pairwise(iterable):
-        from itertools import tee
-        a, b = tee(iterable)
-        next(b, None)
-        return zip(a, b)
+from utils.more_itertools import pairwise
 
 (
     BLACK,
