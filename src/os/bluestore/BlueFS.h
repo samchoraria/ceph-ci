@@ -346,7 +346,8 @@ private:
       if (bluestore_min_alloc_size > 0)
         ceph_assert(cct->_conf->bluefs_alloc_size % bluestore_min_alloc_size == 0);
       return cct->_conf->bluefs_alloc_size;
-    }
+    } else if (bluestore_min_alloc_size == 0)
+      return 1024 * 1024U;
     return bluestore_min_alloc_size;
   }
 
