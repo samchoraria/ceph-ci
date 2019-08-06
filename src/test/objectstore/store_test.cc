@@ -6502,7 +6502,7 @@ TEST_P(StoreTestSpecificAUSize, ExcessiveFragmentation) {
     stringify((uint64_t)2048 * 1024 * 1024));
 
   ASSERT_EQ(g_conf->get_val<uint64_t>("bluefs_alloc_size"),
-	    1024 * 1024);
+	    64 * 1024);
 
   size_t block_size = 0x10000;
   StartDeferred(block_size);
