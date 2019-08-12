@@ -41,7 +41,6 @@
 #include "messages/MOSDPGUpdateLogMissingReply.h"
 #include "messages/MCommandReply.h"
 #include "messages/MOSDScrubReserve.h"
-#include "mds/inode_backtrace.h" // Ugh
 #include "common/EventTrace.h"
 
 #include "common/config.h"
@@ -752,27 +751,6 @@ void PrimaryLogPG::maybe_force_recovery()
   if (soid != hobject_t())
     maybe_kick_recovery(soid);
 }
-
-class PGLSPlainFilter : public PGLSFilter {
-  string val;
-public:
-  int init(bufferlist::const_iterator &params) override
-  {
-    try {
-      decode(xattr, params);
-      decode(val, params);
-    } catch (buffer::error &e) {
-      return -EINVAL;
-    }
-
-    return 0;
-  }
-  ~PGLSPlainFilter() override {}
-  bool filter(const hobject_t& obj,
-              const bufferlist& xattr_data) const override {
-    return xattr_data.contents_equal(val.c_str(), val.size());
-  }
-};
 
 bool PrimaryLogPG::pgls_filter(const PGLSFilter& filter, const hobject_t& sobj)
 {
