@@ -1,20 +1,20 @@
 """
 Thrasher base class
 """
-class Thrasher:
+class Thrasher(object):
 
     def __init__(self):
+        super(Thrasher, self).__init__()
+        print "init start"
         self.exception = None
+        print "init end"
 
-    def setexception(self, e):
-        """
-        Sets the exception.
-        Called by the subclasses to store the exception.
-        """
-        self.exception = e
+    @property
+    def exception(self):
+        print "property"
+        return self._exception
 
-    def getexception(self):
-        """
-        returns the exception
-        """
-        return self.exception
+    @exception.setter
+    def exception(self, e):
+        print "setter"
+        self._exception = e
