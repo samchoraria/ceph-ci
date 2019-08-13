@@ -86,7 +86,7 @@ class MonitorThrasher(Thrasher):
             - mon/workloadgen.sh
     """
     def __init__(self, ctx, manager, config, logger):
-        super().__init__()
+        super(MonitorThrasher, self).__init__()
         self.ctx = ctx
         self.manager = manager
         self.manager.wait_for_clean()
@@ -229,7 +229,7 @@ class MonitorThrasher(Thrasher):
             self._do_thrash()
         except Exception as e:
             # See _run exception comment for MDSThrasher
-            self.setexception(e)
+            self.exception = e
             self.logger.exception("exception:")
             # Allow successful completion so gevent doesn't see an exception.
             # The DaemonWatchdog will observe the error and tear down the test.

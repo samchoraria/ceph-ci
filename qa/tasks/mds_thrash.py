@@ -18,7 +18,7 @@ from tasks.thrasher import Thrasher
 
 log = logging.getLogger(__name__)
 
-class MDSThrasher(Greenlet, Thrasher):
+class MDSThrasher(Greenlet, Thrasher, object):
     """
     MDSThrasher::
 
@@ -98,8 +98,7 @@ class MDSThrasher(Greenlet, Thrasher):
     """
 
     def __init__(self, ctx, manager, config, fs, max_mds):
-        Greenlet.__init__(self)
-        Thrasher.__init__(self)
+        super(MDSThrasher, self).__init__()
 
         self.config = config
         self.ctx = ctx
@@ -137,7 +136,7 @@ class MDSThrasher(Greenlet, Thrasher):
             #   File "/usr/lib/python2.7/traceback.py", line 13, in _print
             #     file.write(str+terminator)
             # 2017-02-03T14:34:01.261 CRITICAL:root:IOError
-            self.setexception(e)
+            self.exception = e
             self.logger.exception("exception:")
             # allow successful completion so gevent doesn't see an exception...
 
@@ -426,7 +425,7 @@ def task(ctx, config):
     finally:
         log.info('joining mds_thrasher')
         thrasher.stop()
-        if thrasher.getexception() is not None:
+        if thrasher.exception is not None:
             raise RuntimeError('error during thrashing')
         thrasher.join()
         log.info('done joining')

@@ -22,7 +22,7 @@ from tasks.thrasher import Thrasher
 log = logging.getLogger(__name__)
 
 
-class RBDMirrorThrasher(Greenlet, Thrasher):
+class RBDMirrorThrasher(Greenlet, Thrasher, object):
     """
     RBDMirrorThrasher::
 
@@ -64,8 +64,7 @@ class RBDMirrorThrasher(Greenlet, Thrasher):
     """
 
     def __init__(self, ctx, config, cluster, daemons):
-        Greenlet.__init__(self)
-        Thrasher.__init__(self)
+        super(RBDMirrorThrasher, self).__init__()
 
         self.ctx = ctx
         self.config = config
@@ -86,7 +85,7 @@ class RBDMirrorThrasher(Greenlet, Thrasher):
         try:
             self.do_thrash()
         except Exception as e:
-            self.setexception(e)
+            self.exception = e
             self.logger.exception("exception:")
 
     def log(self, x):
@@ -212,7 +211,7 @@ def task(ctx, config):
     finally:
         log.info('joining rbd_mirror_thrash')
         thrasher.stop()
-        if thrasher.getexception() is not None:
+        if thrasher.exception is not None:
             raise RuntimeError('error during thrashing')
         thrasher.join()
         log.info('done joining')

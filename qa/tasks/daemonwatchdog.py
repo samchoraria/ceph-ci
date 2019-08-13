@@ -10,7 +10,7 @@ from tasks.thrasher import Thrasher
 
 log = logging.getLogger(__name__)
 
-class DaemonWatchdog(Greenlet, Thrasher):
+class DaemonWatchdog(Greenlet, Thrasher, object):
     """
     DaemonWatchdog::
 
@@ -24,8 +24,7 @@ class DaemonWatchdog(Greenlet, Thrasher):
     """
 
     def __init__(self, ctx, config, thrashers):
-        Greenlet.__init__(self)
-        Thrasher.__init__(self)
+        super(DaemonWatchdog, self).__init__()
 
         self.ctx = ctx
         self.config = config
@@ -40,7 +39,7 @@ class DaemonWatchdog(Greenlet, Thrasher):
             self.watch()
         except Exception as e:
             # See _run exception comment for MDSThrasher
-            self.setexception(e)
+            self.exception = e
             self.logger.exception("exception:")
             # allow successful completion so gevent doesn't see an exception...
 
@@ -108,7 +107,7 @@ class DaemonWatchdog(Greenlet, Thrasher):
                     del daemon_failure_time[name]
 
             for thrasher in self.thrashers:
-                if thrasher.getexception() is not None:
+                if thrasher.exception is not None:
                     self.log("thrasher on fs.{name} failed".format(name=thrasher.fs.name))
                     bark = True
 

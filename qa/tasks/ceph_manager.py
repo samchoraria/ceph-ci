@@ -106,7 +106,7 @@ class OSDThrasher(Thrasher):
     Object used to thrash Ceph
     """
     def __init__(self, manager, config, logger):
-        super().__init__()
+        super(OSDThrasher, self).__init__()
         self.ceph_manager = manager
         self.cluster = manager.cluster
         self.ceph_manager.wait_for_clean()
@@ -965,7 +965,7 @@ class OSDThrasher(Thrasher):
             self._do_thrash()
         except Exception as e:
             # See _run exception comment for MDSThrasher
-            self.setexception(e)
+            self.exception = e
             self.logger.exception("exception:")
             # Allow successful completion so gevent doesn't see an exception.
             # The DaemonWatchdog will observe the error and tear down the test.
