@@ -1,20 +1,27 @@
 """
 Thrasher base class
 """
+import logging
+log = logging.getLogger(__name__)
 class Thrasher(object):
 
     def __init__(self):
         super(Thrasher, self).__init__()
-        print "init start"
+        self.logger = log.getChild('Thrasher')
+        self.log("init start")
         self.exception = None
-        print "init end"
+        self.log("init end")
 
     @property
     def exception(self):
-        print "property"
+        self.log("property:")
         return self._exception
 
     @exception.setter
     def exception(self, e):
-        print "setter"
+        self.log("setter:")
         self._exception = e
+
+    def log(self, x):
+        """Write data to logger"""
+        self.logger.info(x)
