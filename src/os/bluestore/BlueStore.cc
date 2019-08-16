@@ -10523,7 +10523,7 @@ int BlueStore::_do_alloc_write(
   prealloc_left = alloc->allocate(
     need, min_alloc_size, need,
     0, &prealloc);
-  if (prealloc_left  < 0) {
+  if (prealloc_left < 0 || prealloc_left < (int64_t)need) {
     derr << __func__ << " failed to allocate 0x" << std::hex << need << std::dec
 	 << dendl;
     return -ENOSPC;
