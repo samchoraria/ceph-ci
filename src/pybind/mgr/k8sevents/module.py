@@ -237,7 +237,7 @@ class NamespaceWatcher(RookCeph, BaseThread):
         # TODO - Perhaps test for auth problem to be more specific in the except clause?
         except:
             self.active = False
-            self.health = "[WRN] Unable to access events API (list_namespaced_event call failed)"
+            self.health = "Unable to access events API (list_namespaced_event call failed)"
             log.warning(self.health)
         else:
             self.active = True
@@ -245,14 +245,14 @@ class NamespaceWatcher(RookCeph, BaseThread):
             
             for item in resp.items:
                 self.events[item.metadata.name] = item
-            log.info('[INF] added {} events'.format(len(resp.items)))
+            log.info('Added {} events'.format(len(resp.items)))
 
     def run(self):
         self.fetch()
         func = getattr(self.api, "list_namespaced_event")
 
         if self.active:
-            log.info("[INF] Namespace event watcher started")
+            log.info("Namespace event watcher started")
 
             
             while True:
@@ -276,7 +276,7 @@ class NamespaceWatcher(RookCeph, BaseThread):
                 # Attribute error is generated when urllib3 on the system is old and doesn't have a
                 # read_chunked method
                 except AttributeError as e:
-                    self.health = ("[WRN] : Unable to 'watch' events API in namespace {} - "
+                    self.health = ("Unable to 'watch' events API in namespace {} - "
                                 "incompatible urllib3? ({})".format(self.namespace, e))
                     self.active = False
                     log.warning(self.health)
@@ -284,8 +284,8 @@ class NamespaceWatcher(RookCeph, BaseThread):
 
                 except ApiException as e:
                     # refresh the resource_version & watcher
-                    log.warning("[WRN] API exception caught in watcher ({})".format(e))
-                    log.info("[INF] Restarting namespace watcher")
+                    log.warning("API exception caught in watcher ({})".format(e))
+                    log.info("Restarting namespace watcher")
                     self.fetch()
 
                 except Exception:
@@ -297,7 +297,7 @@ class NamespaceWatcher(RookCeph, BaseThread):
                     self.active = False
                     break
 
-            log.warning("[WRN] Namespace event watcher stopped")
+            log.warning("Namespace event watcher stopped")
 
 
 class KubernetesEvent(RookCeph):
@@ -488,12 +488,12 @@ class EventProcessor(BaseThread):
                 break
             else:
                 # drop this event
-                log.debug("[DBG] removing old event : {}".format(event_name))
+                log.debug("Removing old event : {}".format(event_name))
                 del self.events[event_name]
 
     def process(self, log_object):
         
-        log.debug("[DBG] k8sevents processing : {}".format(str(log_object)))
+        log.debug("K8sevents processing : {}".format(str(log_object)))
 
         event_out = False
         unique_name = True
@@ -501,7 +501,7 @@ class EventProcessor(BaseThread):
         if log_object.msg_type == 'audit':
             # audit traffic : operator commands
             if log_object.msg.endswith('finished'):
-                log.debug("[DBG] k8sevents received command finished msg")
+                log.debug("K8sevents received command finished msg")
                 event_out = True
             else:
                 # NO OP - ignoring 'dispatch' log records
@@ -524,7 +524,7 @@ class EventProcessor(BaseThread):
             log_object.msg = str(self.config_watcher)
 
         else:
-            log.warning("[WRN] k8sevents received unknown msg_type - {}".format(log_object.msg_type))
+            log.warning("K8sevents received unknown msg_type - {}".format(log_object.msg_type))
 
         if event_out:
             # we don't cache non-unique events like heartbeats or config changes
@@ -532,21 +532,21 @@ class EventProcessor(BaseThread):
                 event = KubernetesEvent(log_entry=log_object,
                                         unique_name=unique_name)
                 event.write()
-                log.debug("[DBG] event(unique={}) creation ended : {}".format(unique_name, event.api_status))
+                log.debug("event(unique={}) creation ended : {}".format(unique_name, event.api_status))
                 if event.api_success and unique_name:
                     self.events[log_object.event_name] = event
             else:
                 event = self.events[log_object.event_name]
                 event.update(log_object)
-                log.debug("[DBG] event update ended : {}".format(event.api_status))
+                log.debug("Event update ended : {}".format(event.api_status))
 
             self.prune_events()
 
         else:
-            log.debug("[DBG] k8sevents ignored message : {}".format(log_object.msg))
+            log.debug("K8sevents ignored message : {}".format(log_object.msg))
 
     def run(self):
-        log.info("[INF] Ceph event processing thread started")
+        log.info("Ceph event processing thread started")
 
         while True:
 
@@ -570,7 +570,7 @@ class EventProcessor(BaseThread):
 
             time.sleep(0.5)
 
-        log.warning("[WRN] Ceph event processing thread stopped")
+        log.warning("Ceph event processing thread stopped")
 
 
 class ListDiff(object):
@@ -701,7 +701,7 @@ class CephConfigWatcher(BaseThread):
 
     def push_events(self, changes):
         """Add config change to the global queue to generate an event in kubernetes"""
-        log.debug("[DBG] {} events will be generated")
+        log.debug("{} events will be generated")
         for change in changes:
             event_queue.put(change)
 
@@ -715,7 +715,7 @@ class CephConfigWatcher(BaseThread):
         )
     
     def _check_hosts(self, server_map):
-        log.debug("[DBG] k8sevents checking host membership")
+        log.debug("K8sevents checking host membership")
         changes = list()
         servers = ListDiff(self.server_map.keys(), server_map.keys())
         if servers.is_equal:
@@ -737,7 +737,7 @@ class CephConfigWatcher(BaseThread):
         return changes
 
     def _check_osds(self,server_map, osd_map):
-        log.debug("[DBG] k8sevents checking OSD configuration")
+        log.debug("K8sevents checking OSD configuration")
         changes = list()
         before_osds = list()
         for svr in self.server_map:
@@ -779,7 +779,7 @@ class CephConfigWatcher(BaseThread):
 
     def _check_pools(self, pool_map):
         changes = list()
-        log.debug("[DBG] k8sevents checking pool configurations")
+        log.debug("K8sevents checking pool configurations")
         if self.pool_map.keys() == pool_map.keys():
             # no pools added/removed
             pass
@@ -852,7 +852,7 @@ class CephConfigWatcher(BaseThread):
         return changes
 
     def run(self):
-        log.info("[INF] Ceph configuration watcher started")
+        log.info("Ceph configuration watcher started")
 
         self.server_map, self.service_map = self.fetch_servers()
         self.pool_map = self.fetch_pools()
@@ -884,7 +884,7 @@ class CephConfigWatcher(BaseThread):
                 # interval
                 if checks_duration > self.config_check_secs:
                     new_interval = self.config_check_secs * 2
-                    log.warning("[WRN] k8sevents check interval warning. "
+                    log.warning("K8sevents check interval warning. "
                                 "Current checks took {}s, interval was {}s. "
                                 "Increasing interval to {}s".format(int(checks_duration),
                                                                    self.config_check_secs,
@@ -901,7 +901,7 @@ class CephConfigWatcher(BaseThread):
                 log.exception(self.health)
                 break
 
-        log.warning("[WRN] Ceph configuration watcher stopped")
+        log.warning("Ceph configuration watcher stopped")
 
 
 class Module(MgrModule):
@@ -1039,13 +1039,13 @@ class Module(MgrModule):
         self.ns_watcher = NamespaceWatcher()
 
         if self.event_processor.ok:
-            log.info("[INF] Ceph Log processor thread starting")
+            log.info("Ceph Log processor thread starting")
             self.event_processor.start()        # start log consumer thread
-            log.info("[INF] Ceph log watcher thread starting")
+            log.info("Ceph log watcher thread starting")
             self.watch_ceph_log()               # start the log producer thread
-            log.info("[INF] Ceph config watcher thread starting")
+            log.info("Ceph config watcher thread starting")
             self.config_watcher.start()
-            log.info("[INF] Rook-ceph namespace events watcher starting")
+            log.info("Rook-ceph namespace events watcher starting")
             self.ns_watcher.start()
 
             self.trackers.extend([self.event_processor, self.config_watcher, self.ns_watcher])
@@ -1057,12 +1057,12 @@ class Module(MgrModule):
                 trackers = self.trackers
                 for t in trackers:
                     if not t.is_alive() and not t.reported:
-                        log.error("[ERR] k8sevents tracker thread '{}' stopped: {}".format(t.__class__.__name__, t.health))
+                        log.error("K8sevents tracker thread '{}' stopped: {}".format(t.__class__.__name__, t.health))
                         t.reported = True
 
         else:
-            log.warning('[WRN] Unable to access kubernetes event API - check RBAC rules')
-            log.warning("[WRN] k8sevents module exiting")
+            log.warning('Unable to access kubernetes event API - check RBAC rules')
+            log.warning("k8sevents module exiting")
             self.run = False
 
     def shutdown(self):
