@@ -63,10 +63,7 @@ int RGWSI_Zone::do_start()
   if (ret < 0) {
     return ret;
   }
-  ret = sync_modules_svc->start();
-  if (ret < 0) {
-    return ret;
-  }
+
   ret = realm->init(cct, sysobj_svc);
   if (ret < 0 && ret != -ENOENT) {
     ldout(cct, 0) << "failed reading realm info: ret "<< ret << " " << cpp_strerror(-ret) << dendl;
@@ -146,7 +143,7 @@ int RGWSI_Zone::do_start()
   }
   if (zone_iter != zonegroup->zones.end()) {
     *zone_public_config = zone_iter->second;
-    ldout(cct, 20) << "zone " << zone_params->get_name() << dendl;
+    ldout(cct, 20) << "zone " << zone_params->get_name() << " found"  << dendl;
   } else {
     lderr(cct) << "Cannot find zone id=" << zone_params->get_id() << " (name=" << zone_params->get_name() << ")" << dendl;
     return -EINVAL;
@@ -173,7 +170,7 @@ int RGWSI_Zone::do_start()
   if (zone_by_id.find(zone_id()) == zone_by_id.end()) {
     ldout(cct, 0) << "WARNING: could not find zone config in zonegroup for local zone (" << zone_id() << "), will use defaults" << dendl;
   }
-  *zone_public_config = zone_by_id[zone_id()];
+
   for (const auto& ziter : zonegroup->zones) {
     const string& id = ziter.first;
     const RGWZone& z = ziter.second;
@@ -199,6 +196,14 @@ int RGWSI_Zone::do_start()
       ldout(cct, 20) << "NOTICE: not syncing to/from zone " << z.name << " id " << z.id << dendl;
     }
   }
+
+  ret = sync_modules_svc->start();
+  if (ret < 0) {
+    return ret;
+  }
+
+  ldout(cct, 20) << "started zone id=" << zone_params->get_id() << " (name=" << zone_params->get_name() << 
+        ") with tier type = " << zone_public_config->tier_type << dendl;
 
   return 0;
 }
