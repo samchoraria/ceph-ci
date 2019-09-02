@@ -33,7 +33,6 @@ from collections import OrderedDict
 
 import rados
 from mgr_module import MgrModule
-from ceph_argparse import run_in_thread
 
 try:
     import queue
@@ -66,11 +65,6 @@ else:
             involved_object = client.V1ObjectReference(api_version="1")
         self._involved_object = involved_object
     V1Event.involved_object = V1Event.involved_object.setter(local_involved_object)
-    #setattr(V1Event, 'involved_object', property(fget=V1Event.involved_object.fget, fset=local_involved_object))
-
-DEFAULT_LOG_LEVEL = 'info'
-DEFAULT_CONFIG_CHECK_SECS = 10
-DEFAULT_CEPH_EVENT_RETENTION_DAYS = 7
 
 log = logging.getLogger(__name__)
 
@@ -82,35 +76,31 @@ def text_suffix(num):
 class HealthCheck(object):
     """Transform a healthcheck msg into it's component parts"""
 
-    def __init__(self, msg):
+    def __init__(self, msg, msg_level):
 
         # msg looks like
-        # 2019-07-17 02:59:12.714672 mon.a [WRN] Health check failed: Reduced data availability: 100 pgs inactive (PG_AVAILABILITY)
-        # 2019-07-17 03:16:39.103929 mon.a [INF] Health check cleared: OSDMAP_FLAGS (was: nodown flag(s) set)
-        # 2019-07-29 04:28:13.123868 mon.a [WRN] Health check failed: nodown flag(s) set (OSDMAP_FLAGS)
-
+        #
+        # Health check failed: Reduced data availability: 100 pgs inactive (PG_AVAILABILITY)
+        # Health check cleared: OSDMAP_FLAGS (was: nodown flag(s) set)
+        # Health check failed: nodown flag(s) set (OSDMAP_FLAGS)
+        #
         self.msg = None
-        self.state = None
         self.name = None
         self.text = None
-        self.fulltext = None
         self.valid = False
         
-        if 'health check' in msg.lower():
-            self.valid = True
+        if msg.lower().startswith('health check'):
 
+            self.valid = True
             self.msg = msg
-            tokens = msg.split()
-            self.state = tokens[3][1:-1]
-            self.fulltext =' '.join(tokens[4:])
-            msg_tokens = self.fulltext.split()
+            msg_tokens = self.msg.split()
             
-            if self.state == 'INF':
+            if msg_level == 'INF':
                 self.text = ' '.join(msg_tokens[3:])
-                self.name = msg_tokens[3]
+                self.name = msg_tokens[3]   # health check name e.g. OSDMAP_FLAGS
             else:   # WRN or ERR
                 self.text = ' '.join(msg_tokens[3:-1])
-                self.name = tokens[-1][1:-1]
+                self.name = msg_tokens[-1][1:-1]
 
 
 class LogEntry(object):
@@ -134,7 +124,7 @@ class LogEntry(object):
         self.healthcheck = None
         
         if 'health check ' in self.msg.lower():
-            self.healthcheck = HealthCheck(self.msg)
+            self.healthcheck = HealthCheck(self.msg, self.level)
 
     
     def __str__(self):
@@ -363,7 +353,9 @@ class KubernetesEvent(RookCeph):
                 # this could happen if the event has been created, and then the k8sevent module
                 # disabled and reenabled - i.e. the internal event tracking no longer matches k8s
                 response = self.api.read_namespaced_event(self.event_name, self.namespace)
+                #
                 # response looks like
+                #
                 # {'action': None,
                 # 'api_version': 'v1',
                 # 'count': 1,
@@ -433,7 +425,8 @@ class KubernetesEvent(RookCeph):
             self.api.patch_namespaced_event(self.event_name, self.namespace, self.event_body)
         except ApiException as e:
             if e.status == 404:
-                # tried to patch 404 indicates it's TTL has expired
+                # tried to patch, but hit a 404. The event's TTL must have been reached, and 
+                # pruned by the kube-apiserver
                 try:
                     self.api.create_namespaced_event(self.namespace, self.event_body)
                 except ApiException as e:
@@ -546,7 +539,7 @@ class EventProcessor(BaseThread):
             log.debug("K8sevents ignored message : {}".format(log_object.msg))
 
     def run(self):
-        log.info("Ceph event processing thread started")
+        log.info("Ceph event processing thread started, event retention set to {} days".format(self.event_retention_days))
 
         while True:
 
@@ -595,16 +588,14 @@ class CephConfigWatcher(BaseThread):
     """Detect configuration changes within the cluster and generate human readable events"""
 
     def __init__(self, mgr):
+        super(CephConfigWatcher, self).__init__()
         self.mgr = mgr
         self.server_map = dict()
         self.osd_map = dict()
         self.pool_map = dict()
         self.service_map = dict()
         
-        self.config_check_secs = self.mgr.get_localized_module_option(
-            'config_check_secs', DEFAULT_CONFIG_CHECK_SECS)
-
-        threading.Thread.__init__(self)
+        self.config_check_secs = mgr.config_check_secs
     
     @property
     def raw_capacity(self):
@@ -845,14 +836,14 @@ class CephConfigWatcher(BaseThread):
         changes.extend(self._check_osds(server_map, osd_map))
         changes.extend(self._check_pools(pool_map))
 
-        # TODO
+        # FUTURE
         # Could generate an event if a ceph daemon has moved hosts
         # (assumes the ceph metadata host information is valid - which may not be the case)
 
         return changes
 
     def run(self):
-        log.info("Ceph configuration watcher started")
+        log.info("Ceph configuration watcher started, interval set to {}s".format(self.config_check_secs))
 
         self.server_map, self.service_map = self.fetch_servers()
         self.pool_map = self.fetch_pools()
@@ -923,9 +914,15 @@ class Module(MgrModule):
         }
     ]
     MODULE_OPTIONS = [
-        {'name': 'log_level'},
-        {'name': 'config_check_secs'},
-        {'name': 'ceph_event_retention_days'}
+        {'name': 'config_check_secs',
+         'type': 'int',
+         'default': 10,
+         'min': 10,
+         'desc': "interval (secs) to check for cluster configuration changes"},
+        {'name': 'ceph_event_retention_days',
+         'type': 'int',
+         'default': 7,
+         'desc': "Days to hold ceph event information within local cache"}
     ]
 
     def __init__(self, *args, **kwargs):
@@ -934,18 +931,78 @@ class Module(MgrModule):
         self.config_watcher = None
         self.ns_watcher = None
         self.trackers = list()
+        
+        # Declare the module options we accept
+        self.config_check_secs = None
+        self.ceph_event_retention_days = None
+
         super(Module, self).__init__(*args, **kwargs)
+
+    def config_notify(self):
+        """Apply module options to runtime"""
+        for opt in self.MODULE_OPTIONS:
+            setattr(self,
+                    opt['name'],
+                    self.get_module_option(opt['name']) or opt['default'])
 
     def fetch_events(self, limit=None):
         """Interface to expose current events to another mgr module"""
-        # TODO
+        # FUTURE: Implement this to provide k8s events to the dashboard?
         raise NotImplementedError
+
+    def process_clog(self, log_message):
+        """Add log message to the event queue
+        
+        :param log_message:     dict from the cluster log (audit/cluster channels)
+        """
+        required_fields = ['channel', 'message', 'priority', 'stamp']
+        _message_attrs = log_message.keys()
+        if all(_field in _message_attrs for _field in required_fields):
+            if log_message.get('message').startswith('overall HEALTH'):
+                m_type = 'heartbeat'
+            else:
+                m_type = log_message.get('channel')
+
+            event_queue.put(
+                LogEntry(
+                    source='log',
+                    msg_type=m_type,
+                    msg=log_message.get('message'),
+                    level=log_message.get('priority')[1:-1],
+                    tstamp=log_message.get('stamp')
+                )
+            )
+            
+        else:
+            log.warning("Unexpected clog message format received - skipped: {}".format(log_message))
+
+    def notify(self, notify_type, notify_id):
+        """
+        Called by the ceph-mgr service to notify the Python plugin
+        that new state is available.
+
+        :param notify_type: string indicating what kind of notification,
+                            such as osd_map, mon_map, fs_map, mon_status,
+                            health, pg_summary, command, service_map
+        :param notify_id:  string (may be empty) that optionally specifies
+                            which entity is being notified about.  With
+                            "command" notifications this is set to the tag
+                            ``from send_command``.
+        """
+        
+        # only interested in cluster log messages for now
+        if notify_type == 'clog':
+            if isinstance(notify_id, dict):
+                # create a log object to process
+                self.process_clog(notify_id)
+            else:
+                log.warning("Expecting log record format of dict received {}".format(type(notify_type)))
 
     def _show_events(self, events):
 
         max_msg_length = max([len(events[k].message) for k in events])
-        fmt = "{:<20}  {:>5}  {:<" + str(max_msg_length) + "}  {}\n"
-        s = fmt.format("Last Seen", "Count", "Message", "Event Object Name")
+        fmt = "{:<20}  {:<8}  {:>5}  {:<" + str(max_msg_length) + "}  {}\n"
+        s = fmt.format("Last Seen", "Type", "Count", "Message", "Event Object Name")
 
         for event_name in sorted(events, 
                                  key = lambda name: events[name].last_timestamp,
@@ -955,6 +1012,7 @@ class Module(MgrModule):
 
             s += fmt.format(
                     datetime.strftime(event.last_timestamp,"%Y/%m/%d %H:%M:%S"),
+                    event.type,
                     event.count,
                     event.message,
                     event_name
@@ -968,7 +1026,7 @@ class Module(MgrModule):
         if len(events):
             return 0, "", self._show_events(events)
         else:
-            return 0, "", "No events"
+            return 0, "", "No events emitted yet, local cache is empty"
 
     def show_status(self):
         s = "Tracker Health\n"
@@ -980,7 +1038,7 @@ class Module(MgrModule):
         return 0, "", s
 
     def handle_command(self, inbuf, cmd):
-        # TODO Should we implement dynamic options for the monitoring?
+        # FUTURE: Should we implement dynamic options for the monitoring?
         if cmd["prefix"] == "k8sevents status":
             return self.show_status()
         elif cmd["prefix"] == "k8sevents list":
@@ -998,51 +1056,17 @@ class Module(MgrModule):
             return False, "kubernetes python client is unavailable"
         return True, ""
 
-    def log_callback(self, arg, line, channel, name, who, stamp_sec, stamp_nsec, seq, level, msg):
-        """Receive the ceph log entry and add it to the global queue"""
-
-        if sys.version_info[0] >= 3:
-            channel = channel.decode('utf-8')
-
-        _msg = msg.decode('utf-8')
-        # if this is an hourly heartbeat type message from the cluster channel, we'll
-        # rename it
-        if 'overall HEALTH' in _msg:    
-            channel = 'heartbeat'
-
-        event_queue.put(
-            LogEntry(
-                source='log',
-                msg_type=channel,
-                msg=line.decode('utf-8'),
-                level=level[1:-1].decode('utf-8'),
-                tstamp=stamp_sec
-            )
-        )
-
-    def watch_ceph_log(self):
-        """Initiate the log_monitor2 call to mimic ceph -w behavior"""
-
-        level = self.get_localized_module_option(
-            'log_level', DEFAULT_LOG_LEVEL)
-
-        # create a daemon thread for monitor_log2
-        run_in_thread(self.rados.monitor_log2, level, self.log_callback, 0)
-
     def serve(self):
-
-        ceph_event_retention_days = self.get_localized_module_option(
-            'ceph_event_retention_days', DEFAULT_CEPH_EVENT_RETENTION_DAYS)
+        self.config_notify()
 
         self.config_watcher = CephConfigWatcher(self)
-        self.event_processor = EventProcessor(self.config_watcher, ceph_event_retention_days)
+        self.event_processor = EventProcessor(self.config_watcher, 
+                                              self.ceph_event_retention_days)
         self.ns_watcher = NamespaceWatcher()
 
         if self.event_processor.ok:
             log.info("Ceph Log processor thread starting")
             self.event_processor.start()        # start log consumer thread
-            log.info("Ceph log watcher thread starting")
-            self.watch_ceph_log()               # start the log producer thread
             log.info("Ceph config watcher thread starting")
             self.config_watcher.start()
             log.info("Rook-ceph namespace events watcher starting")
