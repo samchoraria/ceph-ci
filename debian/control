@@ -282,15 +282,14 @@ Depends: ceph-mgr (= ${binary:Version}),
          python-kubernetes,
          ${misc:Depends},
          ${python:Depends},
-         ${shlibs:Depends},
-Description: rook plugin for ceph-mgr
+Description: kubernetes events plugin for ceph-mgr
  Ceph is a massively scalable, open-source, distributed
  storage system that runs on commodity hardware and delivers object,
  block and file system storage.
  .
- This package contains the rook plugin for ceph-k8sevents-mgr's orchestration
- functionality, to allow ceph-mgr to send ceph related events to the kubernetes
- events API.
+ This package contains the k8sevents plugin, to allow ceph-mgr to send
+ ceph related events to the kubernetes events API, and track all events
+ that occur within the rook-ceph namespace.
 
 Package: ceph-mgr-ssh
 Architecture: all
