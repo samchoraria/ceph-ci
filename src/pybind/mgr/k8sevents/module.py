@@ -307,6 +307,11 @@ class KubernetesEvent(RookCeph):
         self.last_timestamp = None
 
     @property
+    def type(self):
+        """provide a type property matching a V1Event object"""
+        return self.event_type
+
+    @property
     def event_body(self):
         if self.unique_name:
             obj_meta = client.V1ObjectMeta(name="{}".format(self.event_name)) 
