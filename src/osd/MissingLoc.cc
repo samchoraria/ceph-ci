@@ -188,6 +188,9 @@ void MissingLoc::check_recovery_sources(const OSDMapRef& osdmap)
 void MissingLoc::remove_stray_recovery_sources(pg_shard_t stray)
 {
   set<pg_shard_t> now_stray;
+  now_stray.insert(stray);
+  ldout(cct, 10) << __func__ << " osd " << stray << " became stray" << dendl;
+  /*
   for (set<pg_shard_t>::iterator p = missing_loc_sources.begin();
        p != missing_loc_sources.end();
        ) {
@@ -205,7 +208,7 @@ void MissingLoc::remove_stray_recovery_sources(pg_shard_t stray)
   } else {
     ldout(cct, 10) << __func__ << " sources osds " << now_stray << " now stray, remaining sources are "
                        << missing_loc_sources << dendl;
-
+  */
     // filter missing_loc
     map<hobject_t, set<pg_shard_t>>::iterator p = missing_loc.begin();
     while (p != missing_loc.end()) {
