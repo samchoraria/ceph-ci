@@ -958,6 +958,7 @@ TEST_F(cls_rgw, bi_log_trim)
     EXPECT_EQ(40u, entries.size());
     EXPECT_FALSE(truncated);
   }
+#if 0
   // bilog list
   vector<rgw_bi_log_entry> bilog1;
   {
@@ -1001,6 +1002,7 @@ TEST_F(cls_rgw, bi_log_trim)
     EXPECT_EQ(27u, bilog.entries.size());
     ASSERT_EQ(-ENODATA, bilog_trim(ioctx, bucket_oid, from, to));
   }
+#endif
   // trim full bilog
   {
     const std::string from = "";
