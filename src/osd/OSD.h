@@ -2007,7 +2007,6 @@ protected:
     }
   } command_wq;
 
-  void handle_command(class MMonCommand *m);
   void handle_command(class MCommand *m);
   void do_command(Connection *con, ceph_tid_t tid, vector<string>& cmd, bufferlist& data);
   int _do_command(
