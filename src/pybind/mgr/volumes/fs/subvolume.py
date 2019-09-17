@@ -189,6 +189,29 @@ class SubVolume(object):
             raise VolumeException(-e.args[0], e.args[1])
         return path
 
+    def get_dir_names(self, path):
+        """
+        Get the directory names in a given path
+        :param path: the given path
+        :return: the list of directory names in json format
+        """
+        try:
+            dir_handle = self.fs.opendir(path)
+        except cephfs.ObjectNotFound:
+            raise VolumeException(-errno.ENOENT,
+                                  "Path '{0}' not found".format(path))
+        except cephfs.Error as e:
+            raise VolumeException(-e.args[0], e.args[1])
+
+        dirs = []
+        d = self.fs.readdir(dir_handle)
+        while d:
+            if d.d_name not in (b".", b".."):
+                dirs.append({'name': d.d_name.decode('utf-8')})
+            d = self.fs.readdir(dir_handle)
+        self.fs.closedir(dir_handle)
+        return dirs
+
     ### group operations
 
     def create_group(self, spec, mode=0o755, pool=None):

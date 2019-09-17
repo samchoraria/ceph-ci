@@ -424,6 +424,27 @@ class VolumeClient(object):
             ret = self.volume_exception_to_retval(ve)
         return ret
 
+    @connection_pool_wrap
+    def list_subvolumes(self, fs_handle, **kwargs):
+        ret        = 0, "", ""
+        groupname  = kwargs['group_name']
+
+        try:
+            with SubVolume(self.mgr, fs_handle) as sv:
+                spec = SubvolumeSpec(None, groupname)
+                if not self.group_exists(sv, spec):
+                    raise VolumeException(
+                        -errno.ENOENT, "Subvolume group '{0}' not found".format(groupname))
+                path = sv.get_group_path(spec)
+                # When default subvolume group is not yet created we just return an empty list.
+                if path is None:
+                    return 0, '[]', ""
+                subvolumes = sv.get_dir_names(path)
+                ret = 0, json.dumps(subvolumes, indent=2), ""
+        except VolumeException as ve:
+            ret = self.volume_exception_to_retval(ve)
+        return ret
+
     ### subvolume snapshot
 
     @connection_pool_wrap
@@ -476,6 +497,31 @@ class VolumeClient(object):
             ret = self.volume_exception_to_retval(ve)
         return ret
 
+    @connection_pool_wrap
+    def list_subvolume_snapshots(self, fs_handle, **kwargs):
+        ret        = 0, "", ""
+        subvolname = kwargs['sub_name']
+        groupname  = kwargs['group_name']
+
+        try:
+            with SubVolume(self.mgr, fs_handle) as sv:
+                spec = SubvolumeSpec(subvolname, groupname)
+                if not self.group_exists(sv, spec):
+                    raise VolumeException(
+                        -errno.ENOENT, "Subvolume group '{0}' not found".format(groupname))
+
+                if sv.get_subvolume_path(spec) == None:
+                    raise VolumeException(-errno.ENOENT,
+                                          "Subvolume '{0}' not found".format(subvolname))
+
+                path = spec.make_subvol_snapdir_path(self.mgr.rados.conf_get('client_snapdir'))
+                snapshots = sv.get_dir_names(path)
+                ret = 0, json.dumps(snapshots, indent=2), ""
+        except VolumeException as ve:
+            ret = self.volume_exception_to_retval(ve)
+        return ret
+
+
     ### group operations
 
     @connection_pool_wrap
@@ -524,6 +570,18 @@ class VolumeClient(object):
         except VolumeException as ve:
             return self.volume_exception_to_retval(ve)
 
+    @connection_pool_wrap
+    def list_subvolume_groups(self, fs_handle, **kwargs):
+        ret = 0, "", ""
+
+        try:
+            with SubVolume(self.mgr, fs_handle) as sv:
+                subvolumegroups = sv.get_dir_names(SubvolumeSpec.DEFAULT_SUBVOL_PREFIX)
+                ret = 0, json.dumps(subvolumegroups, indent=2), ""
+        except VolumeException as ve:
+            ret = self.volume_exception_to_retval(ve)
+        return ret
+
     ### group snapshot
 
     @connection_pool_wrap
@@ -560,6 +618,25 @@ class VolumeClient(object):
                     raise VolumeException(
                         -errno.ENOENT, "Subvolume group '{0}' not found, cannot " \
                         "remove it".format(groupname))
+        except VolumeException as ve:
+            ret = self.volume_exception_to_retval(ve)
+        return ret
+
+    @connection_pool_wrap
+    def list_subvolume_group_snapshots(self, fs_handle, **kwargs):
+        ret        = 0, "", ""
+        groupname  = kwargs['group_name']
+
+        try:
+            with SubVolume(self.mgr, fs_handle) as sv:
+                spec = SubvolumeSpec(None, groupname)
+                if not self.group_exists(sv, spec):
+                    raise VolumeException(
+                        -errno.ENOENT, "Subvolume group '{0}' not found".format(groupname))
+
+                path = spec.make_group_snapdir_path(self.mgr.rados.conf_get('client_snapdir'))
+                snapshots = sv.get_dir_names(path)
+                ret = 0, json.dumps(snapshots, indent=2), ""
         except VolumeException as ve:
             ret = self.volume_exception_to_retval(ve)
         return ret
