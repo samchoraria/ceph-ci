@@ -3370,6 +3370,7 @@ ostream& operator<<(ostream& out, const PG& pg)
     out << " rops=" << pg.recovery_ops_active;
 
   //out << " (" << pg.pg_log.get_tail() << "," << pg.pg_log.get_head() << "]";
+  out << " llen=" << pg.recovery_state.log.log.size();
   if (pg.recovery_state.have_missing()) {
     out << " m=" << pg.recovery_state.get_num_missing();
     if (pg.is_primary()) {

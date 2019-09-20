@@ -3647,7 +3647,13 @@ void PeeringState::recover_got(
   bool is_delete,
   ObjectStore::Transaction &t)
 {
+  if (pg_log.get_log().complete_to != pg_log.get_log().log.end()) {
+    psdout(10) << __func__ << " before not, complete_to != end" << dendl;
+  } else {
+    psdout(10) << __func__ << " before not, complete_to == end" << dendl;
+  }
   if (v > pg_log.get_can_rollback_to()) {
+    psdout(10) << __func__ << " doing roll_Forward_to" << dendl;
     /* This can only happen during a repair, and even then, it would
      * be one heck of a race.  If we are repairing the object, the
      * write in question must be fully committed, so it's not valid
