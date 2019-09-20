@@ -3657,6 +3657,12 @@ void PeeringState::recover_got(
     pg_log.roll_forward_to(v, handler.get());
   }
 
+  if (pg_log.get_log().complete_to != pg_log.get_log().log.end()) {
+    psdout(10) << __func__ << " before not, complete_to != end" << dendl;
+  } else {
+    psdout(10) << __func__ << " before not, complete_to == end" << dendl;
+  }
+
   psdout(10) << "got missing " << oid << " v " << v << dendl;
   pg_log.recover_got(oid, v, info);
   if (pg_log.get_log().complete_to != pg_log.get_log().log.end()) {
