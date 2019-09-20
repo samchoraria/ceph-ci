@@ -645,7 +645,7 @@ function run_osd() {
     ceph_args+=$EXTRA_OPTS
     ceph_args+=" --run-dir=$dir"
     ceph_args+=" --admin-socket=$(get_asok_path)"
-    ceph_args+=" --debug-osd=20"
+    ceph_args+=" --debug-osd=30"
     ceph_args+=" --debug-ms=1"
     ceph_args+=" --debug-monc=20"
     ceph_args+=" --log-file=$dir/\$name.log"
