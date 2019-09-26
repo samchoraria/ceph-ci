@@ -1093,7 +1093,7 @@ int RocksDBStore::cf_create(const std::string& cf_name, const std::string& cf_op
 }
 
 
-KeyValueDB::ColumnFamilyHandle RocksDBStore::cf_wrap_handle(rocksdb::ColumnFamilyHandle* rocks_cfh) const
+KeyValueDB::ColumnFamilyHandle RocksDBStore::cf_wrap_handle(rocksdb::ColumnFamilyHandle* rocks_cfh)
 {
   KeyValueDB::ColumnFamilyHandle cfh;
   cfh.priv = static_cast<void*>(rocks_cfh);
@@ -1405,7 +1405,7 @@ void RocksDBStore::RocksDBTransactionImpl::set(
 {
   rocksdb::ColumnFamilyHandle* cf = cf_handle;
   if (db->cf_check_mode(cf, prefix)) {
-    string key(k, keylen);  // fixme?
+    string key(k, keylen); 
     put_bat(bat, cf, key, to_set_bl);
   } else {
     string key;
@@ -1456,7 +1456,7 @@ void RocksDBStore::RocksDBTransactionImpl::rmkeys_by_prefix(const string &prefix
   bool is_mono = db->cf_check_mode(cf, prefix);
   uint64_t cnt = db->delete_range_threshold;
   bat.SetSavePoint();
-  auto it = db->get_iterator(prefix);
+  auto it = db->get_iterator_cf(RocksDBStore::cf_wrap_handle(cf), prefix);
   for (it->seek_to_first(); it->valid(); it->next()) {
     if (!cnt) {
       bat.RollbackToSavePoint();
@@ -1489,7 +1489,7 @@ void RocksDBStore::RocksDBTransactionImpl::rm_range_keys(const string &prefix,
   rocksdb::ColumnFamilyHandle* cf = cf_handle;
   bool is_mono = db->cf_check_mode(cf, prefix);
   uint64_t cnt = db->delete_range_threshold;
-  auto it = db->get_iterator(prefix);
+  auto it = db->get_iterator_cf(RocksDBStore::cf_wrap_handle(cf), prefix); 
   bat.SetSavePoint();
   it->lower_bound(start);
   while (it->valid()) {
