@@ -1,6 +1,7 @@
 import logging
 import signal
 import time
+import errno
 from textwrap import dedent
 from tasks.cephfs.fuse_mount import FuseMount
 from tasks.cephfs.cephfs_test_case import CephFSTestCase
@@ -442,3 +443,39 @@ class TestSnapshots(CephFSTestCase):
 
         self.mount_a.run_shell(["rmdir", "d1/.snap/s1"])
         self.mount_a.run_shell(["rm", "-rf", "d0", "d1"])
+
+    def create_snaps(self, dir_name, snaps):
+        self.mount_a.run_shell(["mkdir", dir_name])
+        
+        # creating first 100 snapshots must be successful
+        for sno in range(1, snaps, 1):
+            sname = "{dir_name}/.snap/s_{sno}".format(dir_name, sno)
+            try:
+                self.mount_a.run_shell(["mkdir", sname])
+            except OSError as e:
+                # failing at the last mkdir is expected
+                if sno == snaps and e.errno == errno.EMLINK:
+                    log.info("failed while creating snap #{}".format(sno))
+                    pass
+
+
+    def test_mds_max_snaps_per_dir(self):
+        """
+        Test the newly introudced option named mds_max_snaps_per_dir
+        Default snaps limit is 100
+        """
+        self.fs.set_allow_new_snaps(True)
+        status = self.fs.wait_for_daemons()
+        self.create_snaps("accounts", 101)
+        self.mount_a.run_shell(["rm", "-rf", "accounts"])
+
+    def test_mds_max_snaps_per_dir_2(self):
+        """
+        Test the newly introudced option named mds_max_snaps_per_dir
+        Change the default limit to test the configuration path
+        """
+        self.fs.set_allow_new_snaps(True)
+        status = self.fs.wait_for_daemons()
+        self.fs.set_var("mds_max_snaps_per_dir", "51", '--yes-i-really-mean-it')
+        self.create_snaps("accounts2", 51)
+        self.mount_a.run_shell(["rm", "-rf", "accounts2"])
