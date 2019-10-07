@@ -285,7 +285,7 @@ struct errorator {
 
 private:
   // see the comment for `using future = _future` below.
-  template <class...>
+  template <class>
   class _future {};
   template <class... ValuesT>
   class _future<::ceph::errorated_future_marker<ValuesT...>>
@@ -695,8 +695,10 @@ private:
   // needed because of:
   //  * ReturnErrorator::template futurize<...> in `safe_then()`,
   //  * conversion to `std::exception_ptr` in `future::future(ErrorT&&)`.
-  template <class... ValueT>
+  template <class>
   friend class _future;
+  template <class... ValuesT>
+  friend class future;
 
   template<class Container, class AsyncAction>
   friend inline auto ::ceph::do_for_each(Container&, AsyncAction);
