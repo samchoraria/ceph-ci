@@ -19,6 +19,7 @@
 #include "osd/osd_types.h"
 #include "osd/osd_internal_types.h"
 
+#include "crimson/common/errorator.h"
 #include "crimson/common/type_helpers.h"
 #include "crimson/osd/osd_operations/client_request.h"
 #include "crimson/osd/osd_operations/peering_event.h"
@@ -64,7 +65,14 @@ class OpsExecuter {
   template <class Context, class MainFunc, class EffectFunc>
   auto with_effect(Context&& ctx, MainFunc&& main_func, EffectFunc&& effect_func);
 
-  seastar::future<> do_op_call(class OSDOp& osd_op);
+  using call_errorator = ceph::errorator<
+    ceph::stateful_ec,
+    ceph::ct_error::enoent,
+    ceph::ct_error::invarg,
+    ceph::ct_error::permission_denied,
+    ceph::ct_error::operation_not_supported,
+    ceph::ct_error::input_output_error>;
+  call_errorator::future<> do_op_call(class OSDOp& osd_op);
 
   template <class Func>
   auto do_const_op(Func&& f) {
@@ -92,9 +100,12 @@ class OpsExecuter {
                                  std::as_const(msg->get_hobj().nspace));
   }
 
-  seastar::future<> dont_do_legacy_op() {
-    throw ceph::osd::operation_not_supported();
+  decltype(auto) dont_do_legacy_op() {
+    return ceph::ct_error::operation_not_supported::make();
   }
+
+  using read_errorator = PGBackend::read_errorator;
+  using get_attr_errorator = PGBackend::get_attr_errorator;
 
 public:
   OpsExecuter(PGBackend::cached_os_t os, PG& pg, Ref<MOSDOp> msg)
@@ -107,7 +118,12 @@ public:
     : OpsExecuter{PGBackend::cached_os_t{}, pg, std::move(msg)}
   {}
 
-  seastar::future<> execute_osd_op(class OSDOp& osd_op);
+  using osd_op_errorator = ceph::compound_errorator_t<
+    call_errorator,
+    read_errorator,
+    get_attr_errorator,
+    PGBackend::stat_errorator>;
+  osd_op_errorator::future<> execute_osd_op(class OSDOp& osd_op);
   seastar::future<> execute_pg_op(class OSDOp& osd_op);
 
   template <typename Func>
