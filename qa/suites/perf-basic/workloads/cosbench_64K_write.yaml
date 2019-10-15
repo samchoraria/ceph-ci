@@ -9,6 +9,8 @@ overrides:
     index_pool_pg_size: 64
 tasks:
 - cbt:
+    repo: 'https://github.com/rzarzynski/cbt.git'
+    branch: 'cbt-testing'
     benchmarks:
       cosbench:
         obj_size: [64KB]

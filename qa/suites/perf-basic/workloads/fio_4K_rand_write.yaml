@@ -5,6 +5,8 @@ meta:
 
 tasks:
 - cbt:
+    repo: 'https://github.com/rzarzynski/cbt.git'
+    branch: 'cbt-testing'
     benchmarks:
       librbdfio:
         op_size: [4096]
