@@ -40,7 +40,7 @@ if [ -e CMakeCache.txt ]; then
   fi
 fi
 
-# use CEPH_BUILD_ROOT to vstart from a 'make install' 
+# use CEPH_BUILD_ROOT to vstart from a 'make install'
 if [ -n "$CEPH_BUILD_ROOT" ]; then
         [ -z "$CEPH_BIN" ] && CEPH_BIN=$CEPH_BUILD_ROOT/bin
         [ -z "$CEPH_LIB" ] && CEPH_LIB=$CEPH_BUILD_ROOT/lib
@@ -67,7 +67,7 @@ export PYTHONPATH=$PYBIND:$CEPH_LIB/cython_modules/lib.${CEPH_PY_VERSION_MAJOR}:
 export LD_LIBRARY_PATH=$CEPH_LIB:$LD_LIBRARY_PATH
 export DYLD_LIBRARY_PATH=$CEPH_LIB:$DYLD_LIBRARY_PATH
 # Suppress logging for regular use that indicated that we are using a
-# development version. vstart.sh is only used during testing and 
+# development version. vstart.sh is only used during testing and
 # development
 export CEPH_DEV=1
 
@@ -307,12 +307,12 @@ case $1 in
     -X )
 	    cephx=0
 	    ;;
-    
+
     -g | --gssapi)
-	    gssapi_authx=1 
+	    gssapi_authx=1
 	    ;;
     -G)
-	    gssapi_authx=0 
+	    gssapi_authx=0
 	    ;;
 
     -k )
@@ -539,7 +539,7 @@ EOF
 	auth client required = gss
 	gss ktab client file = $CEPH_DEV_DIR/gss_\$name.keytab
 EOF
-	else 
+	else
 		wconf <<EOF
 	auth cluster required = none
 	auth service required = none
@@ -590,11 +590,12 @@ $extra_conf
         ; needed for passing lc time based s3-tests (can be verbose)
         ; rgw lc debug interval = 10
         ; The following settings are for SSE-KMS with Vault
-        ; rgw crypt s3 kms backend = vault
-        ; rgw crypt vault auth = token
-        ; rgw crypt vault addr = http://127.0.0.1:8200
-        ; rgw crypt vault prefix = /v1/secret/data
-        ; rgw crypt vault token file = $CEPH_CONF_PATH/vault.token
+        ;rgw crypt s3 kms backend = vault
+        ;rgw crypt vault auth = token
+        ;rgw crypt vault addr = http://127.0.0.1:8200
+        ;rgw crypt vault prefix = /v1/transit/export/encryption-key/
+        ;rgw crypt vault token file = $CEPH_CONF_PATH/vault.token
+        ;rgw crypt vault secret engine = transit
 [mds]
 $DAEMONOPTS
         mds data = $CEPH_DEV_DIR/mds.\$id
