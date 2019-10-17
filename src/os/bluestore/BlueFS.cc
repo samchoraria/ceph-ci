@@ -1015,7 +1015,7 @@ int BlueFS::_replay(bool noop, bool to_stdout)
 	  p.second->fnode.ino > 1) {
 	derr << __func__ << " file with link count 0: " << p.second->fnode
 	     << dendl;
-	return -EIO;
+	//return -EIO;
       }
     }
   }
