@@ -186,6 +186,9 @@ class TestClientRecovery(CephFSTestCase):
         # The mount goes away while the MDS is offline
         self.mount_a.kill()
 
+        # wait for it to die so it doesn't voluntarily release buffer cap
+        time.sleep(5)
+
         self.fs.mds_restart()
 
         # Enter reconnect phase
