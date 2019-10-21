@@ -46,6 +46,42 @@ if cherrypy is not None:
 
         HTTPConnection.__init__ = fixed_init
 
+    # cherrypy.wsgiserver was extracted wsgiserver into cheroot in cherrypy v9.0.0
+    def patch_builtin_ssl_wrap(new_wrap):
+        if v < StrictVersion("9.0.0"):
+            from cherrypy.wsgiserver.ssl_builtin import BuiltinSSLAdapter as builtin_ssl
+        else:
+            from cherrypy.cheroot.ssl.builtin import BuiltinSSLAdapter as builtin_ssl
+        builtin_ssl.wrap = new_wrap(builtin_ssl.wrap)
+
+    # the fix was included by cheroot v5.2.0, which was included by cherrypy
+    # 10.2.0.
+    if v < StrictVersion("10.2.0"):
+        # see https://github.com/cherrypy/cheroot/pull/4
+        import ssl
+        def accept_ssl_errors(func):
+            def wrapper(self, sock):
+                try:
+                    return func(self, sock)
+                except ssl.SSLError as e:
+                    if e.errno == ssl.SSL_ERROR_SSL:
+                        # Check if it's one of the known errors
+                        # Errors that are caught by PyOpenSSL, but thrown by
+                        # built-in ssl
+                        _block_errors = ('unknown protocol', 'unknown ca',
+                                         'unknown_ca', 'inappropriate fallback',
+                                         'wrong version number',
+                                         'no shared cipher', 'certificate unknown',
+                                         'ccs received early')
+                        for error_text in _block_errors:
+                            if error_text in e.args[1].lower():
+                                # Accepted error, let's pass
+                                return None, {}
+                        raise
+            return wrapper
+        patch_builtin_ssl_wrap(accept_ssl_errors)
+
+
 # When the CherryPy server in 3.2.2 (and later) starts it attempts to verify
 # that the ports its listening on are in fact bound. When using the any address
 # "::" it tries both ipv4 and ipv6, and in some environments (e.g. kubernetes)
