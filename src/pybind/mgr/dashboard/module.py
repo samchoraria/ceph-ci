@@ -59,6 +59,7 @@ if cherrypy is not None:
     if v < StrictVersion("10.2.0"):
         # see https://github.com/cherrypy/cheroot/pull/4
         import ssl
+
         def accept_ssl_errors(func):
             def wrapper(self, sock):
                 try:
@@ -80,6 +81,43 @@ if cherrypy is not None:
                         raise
             return wrapper
         patch_builtin_ssl_wrap(accept_ssl_errors)
+
+    try:
+        import cheroot
+        cheroot_version = cheroot.__version__
+        del cheroot
+    except ImportError:
+        cheroot_version = None
+    if v < StrictVersion("9.0.0") or cheroot_version < StrictVersion("6.5.5"):
+        import six
+        if six.PY3:
+            generic_socket_error = OSError
+        else:
+            generic_socket_error = socket.error
+
+        def accept_socket_error_0(func):
+            def wrapper(self, sock):
+                try:
+                    return func(self, sock)
+                except generic_socket_error as e:
+                    """It is unclear why exactly this happens.
+
+                    It's reproducible only with openssl>1.0 and stdlib ``ssl`` wrapper.
+                    In CherryPy it's triggered by Checker plugin, which connects
+                    to the app listening to the socket port in TLS mode via plain
+                    HTTP during startup (from the same process).
+
+                    Ref: https://github.com/cherrypy/cherrypy/issues/1618
+                    """
+                    import ssl
+                    is_error0 = e.args == (0, 'Error')
+                    IS_ABOVE_OPENSSL10 = ssl.OPENSSL_VERSION_INFO >= (1, 1)
+                    del ssl
+                    if is_error0 and IS_ABOVE_OPENSSL10:
+                        return None, {}
+                    raise
+            return wrapper
+        patch_builtin_ssl_wrap(accept_socket_error_0)
 
 
 # When the CherryPy server in 3.2.2 (and later) starts it attempts to verify
