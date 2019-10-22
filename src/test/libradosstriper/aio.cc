@@ -17,7 +17,7 @@ using std::pair;
 class AioTestData
 {
 public:
-  AioTestData() : m_complete(false), m_safe(false) {
+  AioTestData() : m_complete(false) {
     m_sem = sem_open("test_libradosstriper_aio_sem", O_CREAT, 0644, 0);
   }
 
@@ -28,7 +28,6 @@ public:
 
   sem_t *m_sem;
   bool m_complete;
-  bool m_safe;
 };
 
 void set_completion_complete(rados_completion_t cb, void *arg)
@@ -38,18 +37,11 @@ void set_completion_complete(rados_completion_t cb, void *arg)
   sem_post(test->m_sem);
 }
 
-void set_completion_safe(rados_completion_t cb, void *arg)
-{
-  AioTestData *test = static_cast<AioTestData*>(arg);
-  test->m_safe = true;
-  sem_post(test->m_sem);
-}
-
 TEST_F(StriperTest, SimpleWrite) {
   AioTestData test_data;
   rados_completion_t my_completion;
   ASSERT_EQ(0, rados_aio_create_completion
-            ((void*)&test_data, set_completion_complete, set_completion_safe, &my_completion));
+            ((void*)&test_data, set_completion_complete, &my_completion));
   char buf[128];
   memset(buf, 0xcc, sizeof(buf));
   ASSERT_EQ(0, rados_striper_aio_write(striper, "StriperTest", my_completion, buf, sizeof(buf), 0));
@@ -62,7 +54,7 @@ TEST_F(StriperTest, SimpleWrite) {
 TEST_F(StriperTestPP, SimpleWritePP) {
   AioTestData test_data;
   AioCompletion *my_completion = librados::Rados::aio_create_completion
-    ((void*)&test_data, set_completion_complete, set_completion_safe);
+    ((void*)&test_data, set_completion_complete);
   char buf[128];
   memset(buf, 0xcc, sizeof(buf));
   bufferlist bl1;
@@ -585,7 +577,7 @@ TEST_F(StriperTest, RemoveTest) {
   // async remove it
   AioTestData test_data;
   rados_completion_t my_completion;
-  ASSERT_EQ(0, rados_aio_create_completion((void*)&test_data,
+  ASSERT_EQ(0, rados_aio_create_completion2((void*)&test_data,
 	      set_completion_complete, set_completion_safe, &my_completion));
   ASSERT_EQ(0, rados_striper_aio_remove(striper, "RemoveTest", my_completion));
   {
