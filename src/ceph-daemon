@@ -708,7 +708,6 @@ class CephContainer:
         return [
             podman_path,
             'run',
-            '-it',
             '--net=host',
             '--env', 'LANG=C',
         ] + self.podman_args + envs + vols + [
@@ -720,8 +719,7 @@ class CephContainer:
         return [
             podman_path,
             'exec',
-            '--env', 'LANG=C',
-            '-it',
+        ] + self.podman_args + [
             self.cname,
         ] + cmd
 
@@ -1131,11 +1129,17 @@ def command_shell():
         mounts[pathify(args.config)] = '/etc/ceph/ceph.conf:z'
     if args.keyring:
         mounts[pathify(args.keyring)] = '/etc/ceph/ceph.keyring:z'
+    podman_args = ['--privileged']
+    if args.command:
+        command = args.command
+    else:
+        command = ['bash']
+        podman_args += '-it'
     c = CephContainer(
         image=args.image,
         entrypoint='doesnotmatter',
         args=[],
-        podman_args=['--privileged'],
+        podman_args=podman_args,
         volume_mounts=mounts)
     return subprocess.call(c.shell_cmd(args.command))
 
@@ -1143,8 +1147,18 @@ def command_shell():
 
 def command_enter():
     (daemon_type, daemon_id) = args.name.split('.')
-    c = get_container(args.fsid, daemon_type, daemon_id)
-    return subprocess.call(c.exec_cmd(args.command))
+    podman_args = []
+    if args.command:
+        command = args.command
+    else:
+        command = ['bash']
+        podman_args += [
+            '-it',
+            '--env', 'LANG=C',
+        ]
+    c = get_container(args.fsid, daemon_type, daemon_id,
+                      podman_args=podman_args)
+    return subprocess.call(c.exec_cmd(command))
 
 ##################################
 
@@ -1508,7 +1522,6 @@ parser_shell.add_argument(
     help='ceph.keyring to pass through to the container')
 parser_shell.add_argument(
     'command', nargs='*',
-    default=['bash'],
     help='command (optional)')
 
 parser_enter = subparsers.add_parser(
@@ -1524,7 +1537,6 @@ parser_enter.add_argument(
     help='daemon name (type.id)')
 parser_enter.add_argument(
     'command', nargs='*',
-    default=['bash'],
     help='command')
 
 parser_ceph_volume = subparsers.add_parser(
