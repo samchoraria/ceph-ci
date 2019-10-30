@@ -121,7 +121,6 @@ class MonClient;
 class MgrClient;
 class Finisher;
 class ScrubStack;
-class C_MDS_Send_Command_Reply;
 class C_ExecAndReply;
 
 /**
