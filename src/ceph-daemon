@@ -115,6 +115,8 @@ def call(command, desc=None, verbose=False, **kwargs):
     err = ''
     reads = None
     stop = False
+    out_buffer = ''   # partial line (no newline yet)
+    err_buffer = ''   # partial line (no newline yet)
     while not stop:
         if reads and process.poll() is not None:
             # we want to stop, but first read off anything remaining
@@ -131,15 +133,21 @@ def call(command, desc=None, verbose=False, **kwargs):
                 if not isinstance(message, str):
                     message = message.decode('utf-8')
                 if fd == process.stdout.fileno():
+                    message = out_buffer + message
                     out += message
-                    for line in message.splitlines():
+                    lines = message.split('\n')
+                    out_buffer = lines.pop()
+                    for line in lines:
                         if verbose:
                             logger.info(desc + ':stdout ' + line)
                         else:
                             logger.debug(desc + ':stdout ' + line)
                 elif fd == process.stderr.fileno():
+                    message = err_buffer + message
                     err += message
-                    for line in message.splitlines():
+                    lines = message.split('\n')
+                    err_buffer = lines.pop()
+                    for line in lines:
                         if verbose:
                             logger.info(desc + ':stderr ' + line)
                         else:
@@ -150,6 +158,17 @@ def call(command, desc=None, verbose=False, **kwargs):
                 pass
 
     returncode = process.wait()
+
+    if out_buffer != '':
+        if verbose:
+            logger.info(desc + ':stdout ' + out_buffer)
+        else:
+            logger.debug(desc + ':stdout ' + out_buffer)
+    if err_buffer != '':
+        if verbose:
+            logger.info(desc + ':stderr ' + err_buffer)
+        else:
+            logger.debug(desc + ':stderr ' + err_buffer)
 
     if returncode != 0 and verbose_on_failure and not verbose:
         # dump stdout + stderr
