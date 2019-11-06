@@ -15,6 +15,7 @@ Requirements
 ============
 
 - ``python-six``
+- ``python-more-itertools``
 
 Usage
 =====
