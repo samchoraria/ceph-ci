@@ -3,7 +3,7 @@ import os
 import socket
 import logging
 
-from utils.more_itertools import pairwise
+from more_itertools import pairwise
 
 (
     BLACK,
