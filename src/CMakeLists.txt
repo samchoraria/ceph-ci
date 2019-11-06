@@ -735,6 +735,11 @@ if(WITH_RBD)
   add_subdirectory(rbd_replay)
 endif(WITH_RBD)
 
+if(WITH_BOOST_CONTEXT)
+  set(SPAWN_BUILD_TESTS OFF CACHE INTERNAL "disable building of spawn unit tests")
+  add_subdirectory(spawn)
+endif()
+
 # RadosGW
 if(WITH_KVS)
   add_subdirectory(key_value_store)
