@@ -5,7 +5,9 @@ import { RouterTestingModule } from '@angular/router/testing';
 import { NgBootstrapFormValidationModule } from 'ng-bootstrap-form-validation';
 import { BsDropdownModule } from 'ngx-bootstrap/dropdown';
 import { TabsetComponent, TabsModule } from 'ngx-bootstrap/tabs';
+import { ToastrModule } from 'ngx-toastr';
 import { of } from 'rxjs';
+
 import { configureTestBed, i18nProviders } from '../../../../../testing/unit-test-helper';
 import { CoreModule } from '../../../../core/core.module';
 import { OrchestratorService } from '../../../../shared/api/orchestrator.service';
@@ -26,7 +28,8 @@ describe('HostDetailsComponent', () => {
       NgBootstrapFormValidationModule.forRoot(),
       RouterTestingModule,
       CephModule,
-      CoreModule
+      CoreModule,
+      ToastrModule.forRoot()
     ],
     declarations: [],
     providers: [i18nProviders]
