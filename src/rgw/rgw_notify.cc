@@ -23,7 +23,7 @@ void populate_record_from_request(const req_state *s,
   record.eventSource = "aws:s3";
   record.eventTime = mtime;
   record.eventName = to_string(event_type);
-  record.userIdentity = s->user->user_id.id;    // user that triggered the change
+  record.userIdentity = s->user->get_id().id;    // user that triggered the change
   record.sourceIPAddress = "";                  // IP address of client that triggered the change: TODO
   record.x_amz_request_id = s->req_id;          // request ID of the original change
   record.x_amz_id_2 = s->host_id;               // RGW on which the change was made
@@ -67,7 +67,7 @@ int publish(const req_state* s,
         const std::string& etag, 
         EventType event_type,
         rgw::sal::RGWRadosStore* store) {
-    RGWUserPubSub ps_user(store, s->user->user_id);
+    RGWUserPubSub ps_user(store, s->user->get_id());
     RGWUserPubSub::Bucket ps_bucket(&ps_user, s->bucket);
     rgw_pubsub_bucket_topics bucket_topics;
     auto rc = ps_bucket.get_topics(&bucket_topics);
