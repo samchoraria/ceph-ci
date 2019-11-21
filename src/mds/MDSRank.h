@@ -17,7 +17,6 @@
 
 #include <string_view>
 
-#include "common/async/context_pool.h"
 #include "common/DecayCounter.h"
 #include "common/LogClient.h"
 #include "common/Timer.h"
@@ -179,7 +178,6 @@ class MDSRank {
 
     std::unique_ptr<MDSMap> &mdsmap; /* MDSDaemon::mdsmap */
 
-    ceph::async::io_context_pool ctxpool;
     Objecter     *objecter;
 
     // sub systems
@@ -344,8 +342,7 @@ class MDSRank {
         MonClient *monc_,
         MgrClient *mgrc,
         Context *respawn_hook_,
-        Context *suicide_hook_,
-	boost::asio::io_context& ictx);
+        Context *suicide_hook_);
 
   protected:
     ~MDSRank();
@@ -668,8 +665,7 @@ public:
       MonClient *monc_,
       MgrClient *mgrc,
       Context *respawn_hook_,
-      Context *suicide_hook_,
-      boost::asio::io_context& ictx);
+      Context *suicide_hook_);
 };
 
 // This utility for MDS and MDSRank dispatchers.
