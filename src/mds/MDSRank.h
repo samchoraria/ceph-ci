@@ -17,6 +17,7 @@
 
 #include <string_view>
 
+#include "common/async/context_pool.h"
 #include "common/DecayCounter.h"
 #include "common/LogClient.h"
 #include "common/Timer.h"
@@ -151,7 +152,8 @@ class MDSRank {
         MonClient *monc_,
         MgrClient *mgrc,
         Context *respawn_hook_,
-        Context *suicide_hook_);
+        Context *suicide_hook_,
+        boost::asio::io_context& ictx);
 
     mds_rank_t get_nodeid() const { return whoami; }
     int64_t get_metadata_pool();
@@ -354,6 +356,7 @@ class MDSRank {
 
     std::unique_ptr<MDSMap> &mdsmap; /* MDSDaemon::mdsmap */
 
+    ceph::async::io_context_pool ctxpool;
     Objecter *objecter;
 
     // sub systems
@@ -627,7 +630,8 @@ public:
       MonClient *monc_,
       MgrClient *mgrc,
       Context *respawn_hook_,
-      Context *suicide_hook_);
+      Context *suicide_hook_,
+      boost::asio::io_context& ictx);
 
   void init();
   void tick();
