@@ -4,7 +4,7 @@ from nose.tools import eq_ as eq, ok_ as ok, assert_raises
 from rados import (Rados, Error, RadosStateError, Object, ObjectExists,
                    ObjectNotFound, ObjectBusy, requires, opt,
                    LIBRADOS_ALL_NSPACES, WriteOpCtx, ReadOpCtx,
-                   LIBRADOS_SNAP_HEAD, LIBRADOS_OPERATION_BALANCE_READS, LIBRADOS_OPERATION_SKIPRWLOCKS, MonitorLog)
+                   LIBRADOS_SNAP_HEAD, LIBRADOS_OPERATION_BALANCE_READS, LIBRADOS_OPERATION_SKIPRWLOCKS, MonitorLog, MAX_ERRNO)
 import time
 import threading
 import json
@@ -332,6 +332,11 @@ class TestIoctx(object):
         eq(self.ioctx.read('abc'), b'ab')
         size = self.ioctx.stat('abc')[0]
         eq(size, 2)
+
+    def test_cmpext(self):
+        self.ioctx.write('test_object', b'abcdefghi')
+        eq(0, self.ioctx.cmpext('test_object', b'abcdefghi', 0))
+        eq(-MAX_ERRNO - 4, self.ioctx.cmpext('test_object', b'abcdxxxxx', 0))
 
     def test_list_objects_empty(self):
         eq(list(self.ioctx.list_objects()), [])
