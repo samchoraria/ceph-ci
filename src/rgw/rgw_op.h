@@ -1811,6 +1811,7 @@ protected:
   map<string, bool> common_prefixes;
   bool is_truncated;
   int default_max;
+  bool encode_url {false};
 
 public:
   RGWListBucketMultiparts() {
