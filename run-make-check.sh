@@ -59,6 +59,11 @@ function detect_ceph_dev_pkgs() {
         cmake_opts+=" -DBOOST_J=$(get_processors)"
     fi
     echo "$cmake_opts"
+
+    source /etc/os-release
+    if [[ "$ID" == "ubuntu" ]] && [[ "$VERSION" =~ .*Xenial*. ]]; then 
+        cmake_opts+=" -DWITH_RADOSGW_KAFKA_ENDPOINT=NO"
+    fi
 }
 
 function run() {
