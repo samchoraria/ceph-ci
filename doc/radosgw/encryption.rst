@@ -4,6 +4,7 @@ Encryption
 
 .. versionadded:: Luminous
 
+
 The Ceph Object Gateway supports server-side encryption of uploaded objects,
 with 3 options for the management of encryption keys. Server-side encryption
 means that the data is sent over HTTP in its unencrypted form, and the Ceph
