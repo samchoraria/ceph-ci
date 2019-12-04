@@ -81,6 +81,7 @@ static const actpair actpairs[] =
  { "s3:GetBucketLogging", s3GetBucketLogging },
  { "s3:GetBucketNotification", s3GetBucketNotification },
  { "s3:GetBucketPolicy", s3GetBucketPolicy },
+ { "s3:GetBucketPublicAccessBlock", s3GetBucketPublicAccessBlock },
  { "s3:GetBucketRequestPayment", s3GetBucketRequestPayment },
  { "s3:GetBucketTagging", s3GetBucketTagging },
  { "s3:GetBucketVersioning", s3GetBucketVersioning },
@@ -123,6 +124,7 @@ static const actpair actpairs[] =
  { "s3:PutObjectRetention", s3PutObjectRetention },
  { "s3:PutObjectLegalHold", s3PutObjectLegalHold },
  { "s3:BypassGovernanceRetention", s3BypassGovernanceRetention },
+ { "s3:PutBucketPublicAccessBlock", s3PutBucketPublicAccessBlock },
  { "s3:PutReplicationConfiguration", s3PutReplicationConfiguration },
  { "s3:RestoreObject", s3RestoreObject },
  { "iam:PutUserPolicy", iamPutUserPolicy },
@@ -1431,5 +1433,35 @@ ostream& operator <<(ostream& m, const Policy& p) {
   return m << " }";
 }
 
+static const Environment iam_all_env = {
+					{"aws:SourceIp","1.1.1.1"},
+					{"aws:UserId","anonymous"},
+					{"s3:x-amz-server-side-encryption-aws-kms-key-id","secret"}
+};
+
+struct IsPublicStatement
+{
+  bool operator() (const Statement &s) const {
+    if (s.effect == Effect::Allow) {
+      for (const auto& p : s.princ) {
+	if (p.is_wildcard()) {
+	  return s.eval_conditions(iam_all_env) == Effect::Allow;
+	}
+      }
+      // no princ should not contain fixed values
+      return std::none_of(s.noprinc.begin(), s.noprinc.end(), [](const rgw::auth::Principal& p) {
+								return p.is_wildcard();
+							      });
+    }
+    return false;
+  }
+};
+
+
+bool is_public(const Policy& p)
+{
+  return std::any_of(p.statements.begin(), p.statements.end(), IsPublicStatement());
 }
-}
+
+} // namespace IAM
+} // namespace rgw
