@@ -723,6 +723,10 @@ TEST_F(TestClsRbd, snapshot_limits)
 
   ASSERT_EQ(0, create_image(&ioctx, oid, 0, 22, RBD_FEATURE_LAYERING, oid, -1));
 
+  // if snapshot doesn't set limit, the limit is UINT64_MAX
+  ASSERT_EQ(0, snapshot_get_limit(&ioctx, oid, &limit));
+  ASSERT_EQ(UINT64_MAX, limit);
+
   snapshot_set_limit(&op, 2);
 
   ASSERT_EQ(0, ioctx.operate(oid, &op));
@@ -1119,6 +1123,9 @@ TEST_F(TestClsRbd, snapshots)
   ASSERT_EQ(1u, snapc.snaps[0]);
   ASSERT_EQ(0u, snapc.snaps[1]);
   ASSERT_EQ(1u, snapc.seq);
+
+  // snap id less than current snap seq
+  ASSERT_EQ(-ESTALE, snapshot_add(&ioctx, oid, 0, "snap3"));
 
   ASSERT_EQ(0, snapshot_get(&ioctx, oid, 1, &snap));
   ASSERT_EQ("snap2", snap.name);

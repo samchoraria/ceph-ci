@@ -1,10 +1,14 @@
 tasks:
 - s3tests:
     client.0:
-      force-branch: ceph-master
+      git_remote: git://github.com/theanalyst/
+      force-branch: public-access-qa
       barbican:
         kms_key: my-key-1
         kms_key2: my-key-2
-      vault:
-        key_path: /v1/kv/data/my-key-1
-        key_path2: /v1/kv/data/my-key-2
+      vault_kv:
+        key_path: my-key-1
+        key_path2: my-key-2
+      vault_transit:
+        key_path: my-key-1/1
+        key_path2: my-key-2/1

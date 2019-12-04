@@ -59,6 +59,7 @@ Build-Depends: cmake (>= 3.5),
                libxml2-dev,
 # Crimson      libyaml-cpp-dev,
                librabbitmq-dev,
+               librdkafka-dev,
 # Make-Check   libxmlsec1,
 # Make-Check   libxmlsec1-nss,
 # Make-Check   libxmlsec1-openssl,
@@ -332,6 +333,7 @@ Depends: ceph-mgr (= ${binary:Version}),
 	 python-six,
          ${misc:Depends},
          ${python:Depends},
+         openssh-client
 Description: ssh orchestrator plugin for ceph-mgr
  Ceph is a massively scalable, open-source, distributed
  storage system that runs on commodity hardware and delivers object,

@@ -32,11 +32,11 @@
 %bcond_without selinux
 %if 0%{?rhel} >= 8
 %bcond_with cephfs_java
-%bcond_with amqp_endpoint
 %else
 %bcond_without cephfs_java
-%bcond_without amqp_endpoint
 %endif
+%bcond_without amqp_endpoint
+%bcond_without kafka_endpoint
 %bcond_without lttng
 %bcond_without libradosstriper
 %bcond_without ocf
@@ -46,6 +46,7 @@
 %bcond_with selinux
 %bcond_with cephfs_java
 %bcond_with amqp_endpoint
+%bcond_with kafka_endpoint
 #Compat macro for new _fillupdir macro introduced in Nov 2017
 %if ! %{defined _fillupdir}
 %global _fillupdir /var/adm/fillup-templates
@@ -201,6 +202,9 @@ BuildRequires:	yasm
 %if 0%{with amqp_endpoint}
 BuildRequires:  librabbitmq-devel
 %endif
+%if 0%{with kafka_endpoint}
+BuildRequires:  librdkafka-devel
+%endif
 %if 0%{with make_check}
 BuildRequires:  jq
 BuildRequires:	libuuid-devel
@@ -344,6 +348,9 @@ BuildRequires:  protobuf-compiler
 BuildRequires:  libcryptopp-devel
 BuildRequires:  libnuma-devel
 %endif
+%endif
+%if 0%{?rhel} >= 8
+BuildRequires:  /usr/bin/pathfix.py
 %endif
 
 %description
@@ -578,6 +585,12 @@ Group:          System/Filesystems
 %endif
 Requires:       ceph-mgr = %{_epoch_prefix}%{version}-%{release}
 Requires:       python%{_python_buildid}-kubernetes
+%if 0%{?fedora} || 0%{?rhel}
+Requires:       python%{_python_buildid}-yaml
+%endif
+%if 0%{?suse_version}
+Requires:       python%{_python_buildid}-PyYAML
+%endif
 %description mgr-k8sevents
 ceph-mgr-k8sevents is a ceph-mgr plugin that sends every ceph-events
 to kubernetes' events API
@@ -591,6 +604,12 @@ Group:          System/Filesystems
 Requires:       ceph-mgr = %{_epoch_prefix}%{version}-%{release}
 Requires:       python%{_python_buildid}-remoto
 Requires:       ceph-daemon = %{_epoch_prefix}%{version}-%{release}
+%if 0%{?suse_version}
+Requires:       openssh
+%endif
+%if 0%{?rhel} || 0%{?fedora}
+Requires:       openssh-clients
+%endif
 %description mgr-ssh
 ceph-mgr-ssh is a ceph-mgr module for orchestration functions using
 direct SSH connections for management operations.
@@ -1289,6 +1308,11 @@ ${CMAKE} .. \
 %else
     -DWITH_RADOSGW_AMQP_ENDPOINT=OFF \
 %endif
+%if 0%{with kafka_endpoint}
+    -DWITH_RADOSGW_KAFKA_ENDPOINT=ON \
+%else
+    -DWITH_RADOSGW_KAFKA_ENDPOINT=OFF \
+%endif
     -DBOOST_J=$CEPH_SMP_NCPUS \
     -DWITH_GRAFANA=ON
 
@@ -1324,7 +1348,7 @@ chmod 0644 %{buildroot}%{_docdir}/ceph/sample.ceph.conf
 install -m 0644 -D COPYING %{buildroot}%{_docdir}/ceph/COPYING
 install -m 0644 -D etc/sysctl/90-ceph-osd.conf %{buildroot}%{_sysctldir}/90-ceph-osd.conf
 
-install -m 0755 src/ceph-daemon %{buildroot}%{_sbindir}/ceph-daemon
+install -m 0755 src/ceph-daemon/ceph-daemon %{buildroot}%{_sbindir}/ceph-daemon
 
 # firewall templates and /sbin/mount.ceph symlink
 %if 0%{?suse_version}
@@ -1337,6 +1361,12 @@ install -m 0644 -D udev/50-rbd.rules %{buildroot}%{_udevrulesdir}/50-rbd.rules
 
 # sudoers.d
 install -m 0600 -D sudoers.d/ceph-osd-smartctl %{buildroot}%{_sysconfdir}/sudoers.d/ceph-osd-smartctl
+install -m 0600 -D sudoers.d/cephdaemon %{buildroot}%{_sysconfdir}/sudoers.d/cephdaemon
+
+%if 0%{?rhel} >= 8
+pathfix.py -pni "%{__python3} %{py3_shbang_opts}" %{buildroot}%{_bindir}/*
+pathfix.py -pni "%{__python3} %{py3_shbang_opts}" %{buildroot}%{_sbindir}/*
+%endif
 
 #set up placeholder directories
 mkdir -p %{buildroot}%{_sysconfdir}/ceph
@@ -1479,8 +1509,31 @@ if [ $1 -ge 1 ] ; then
   fi
 fi
 
+%pre daemon
+# create user
+if ! getent passwd | grep -q '^cephdaemon:'; then
+   useradd -r -s /bin/bash -c "Ceph-daemon user for mgr/ssh" -m cephdaemon
+fi
+# set up (initially empty) .ssh/authorized_keys file
+if ! test -d /home/cephdaemon/.ssh; then
+   mkdir /home/cephdaemon/.ssh
+   chown --reference /home/cephdaemon /home/cephdaemon/.ssh
+   chmod 0700 /home/cephdaemon/.ssh
+fi
+if ! test -e /home/cephdaemon/.ssh/authorized_keys; then
+   touch /home/cephdaemon/.ssh/authorized_keys
+   chown --reference /home/cephdaemon /home/cephdaemon/.ssh/authorized_keys
+   chmod 0600 /home/cephdaemon/.ssh/authorized_keys
+fi
+exit 0
+
+%postun daemon
+userdel -r cephdaemon || true
+exit 0
+
 %files daemon
 %{_sbindir}/ceph-daemon
+%{_sysconfdir}/sudoers.d/cephdaemon
 
 %files common
 %dir %{_docdir}/ceph

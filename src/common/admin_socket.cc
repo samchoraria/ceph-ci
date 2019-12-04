@@ -29,6 +29,8 @@
 
 #include "messages/MCommand.h"
 #include "messages/MCommandReply.h"
+#include "messages/MMonCommand.h"
+#include "messages/MMonCommandAck.h"
 
 // re-include our assert to clobber the system one; fix dout:
 #include "include/ceph_assert.h"
@@ -174,6 +176,7 @@ std::string AdminSocket::bind_and_listen(const std::string &sock_path, int *fd)
 	<< "failed to create socket: " << cpp_strerror(err);
     return oss.str();
   }
+  // FIPS zeroization audit 20191115: this memset is fine.
   memset(&address, 0, sizeof(struct sockaddr_un));
   address.sun_family = AF_UNIX;
   snprintf(address.sun_path, sizeof(address.sun_path),
@@ -226,6 +229,7 @@ void AdminSocket::entry() noexcept
   ldout(m_cct, 5) << "entry start" << dendl;
   while (true) {
     struct pollfd fds[2];
+    // FIPS zeroization audit 20191115: this memset is fine.
     memset(fds, 0, sizeof(fds));
     fds[0].fd = m_sock_fd;
     fds[0].events = POLLIN | POLLRDBAND;
@@ -385,9 +389,11 @@ void AdminSocket::do_tell_queue()
 {
   ldout(m_cct,10) << __func__ << dendl;
   std::list<ref_t<MCommand>> q;
+  std::list<ref_t<MMonCommand>> lq;
   {
     std::lock_guard l(tell_lock);
     q.swap(tell_queue);
+    lq.swap(tell_legacy_queue);
   }
   for (auto& m : q) {
     bufferlist outbl;
@@ -396,6 +402,22 @@ void AdminSocket::do_tell_queue()
       m->get_data(),
       [m](int r, const std::string& err, bufferlist& outbl) {
 	auto reply = new MCommandReply(r, err);
+	reply->set_tid(m->get_tid());
+	reply->set_data(outbl);
+#ifdef WITH_SEASTAR
+#warning "fix message send with crimson"
+#else
+	m->get_connection()->send_message(reply);
+#endif
+      });
+  }
+  for (auto& m : lq) {
+    bufferlist outbl;
+    execute_command(
+      m->cmd,
+      m->get_data(),
+      [m](int r, const std::string& err, bufferlist& outbl) {
+	auto reply = new MMonCommandAck(m->cmd, r, err, 0);
 	reply->set_tid(m->get_tid());
 	reply->set_data(outbl);
 #ifdef WITH_SEASTAR
@@ -510,6 +532,13 @@ void AdminSocket::queue_tell_command(ref_t<MCommand> m)
   ldout(m_cct,10) << __func__ << " " << *m << dendl;
   std::lock_guard l(tell_lock);
   tell_queue.push_back(std::move(m));
+  wakeup();
+}
+void AdminSocket::queue_tell_command(ref_t<MMonCommand> m)
+{
+  ldout(m_cct,10) << __func__ << " " << *m << dendl;
+  std::lock_guard l(tell_lock);
+  tell_legacy_queue.push_back(std::move(m));
   wakeup();
 }
 
