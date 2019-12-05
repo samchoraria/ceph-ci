@@ -13,6 +13,14 @@
  */
 
 #include "common/pick_address.h"
+
+#include <netdb.h>
+#include <string>
+#include <string.h>
+#include <vector>
+
+#include <fmt/format.h>
+
 #include "include/ipaddr.h"
 #include "include/str_list.h"
 #include "common/ceph_context.h"
@@ -23,11 +31,6 @@
 #include "common/debug.h"
 #include "common/errno.h"
 #include "common/numa.h"
-
-#include <netdb.h>
-#include <string>
-#include <string.h>
-#include <vector>
 
 #define dout_subsys ceph_subsys_
 
@@ -512,15 +515,14 @@ int get_iface_numa_node(
   int *node)
 {
   int ifatype = IFACE_DEFAULT;
-  string ifa = iface;
-  int pos = ifa.find(":");
-  if (pos != string::npos) {
-    ifa.erase(pos);
+  string_view ifa{iface};
+  if (auto pos = ifa.find(":"); pos != ifa.npos) {
+    ifa.remove_suffix(ifa.size() - pos);
   }
-  string fn = std::string("/sys/class/net/") + ifa + "/device/numa_node";
+  string fn = fmt::format("/sys/class/net/{}/device/numa_node", ifa);
   int fd = ::open(fn.c_str(), O_RDONLY);
   if (fd < 0) {
-    fn = std::string("/sys/class/net/") + ifa + "/bonding/slaves";
+    fn = fmt::format("/sys/class/net/{}/bonding/slaves", ifa);
     fd = ::open(fn.c_str(), O_RDONLY);
     if (fd < 0) {
       return -errno;
