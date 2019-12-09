@@ -4,7 +4,7 @@ from nose.tools import eq_ as eq, ok_ as ok, assert_raises
 from rados import (Rados, Error, RadosStateError, Object, ObjectExists,
                    ObjectNotFound, ObjectBusy, requires, opt,
                    LIBRADOS_ALL_NSPACES, WriteOpCtx, ReadOpCtx,
-                   LIBRADOS_SNAP_HEAD, LIBRADOS_OPERATION_BALANCE_READS, LIBRADOS_OPERATION_SKIPRWLOCKS, MonitorLog)
+                   LIBRADOS_SNAP_HEAD, LIBRADOS_OPERATION_BALANCE_READS, LIBRADOS_OPERATION_SKIPRWLOCKS, MonitorLog, NoData)
 import time
 import threading
 import json
@@ -582,6 +582,18 @@ class TestIoctx(object):
             eq(ret, 0)
             self.ioctx.operate_read_op(read_op, "hw")
             eq(list(iter), [])
+
+    def test_xattrs_op(self):
+        with WriteOpCtx() as write_op:
+            write_op.new(LIBRADOS_CREATE_EXCLUSIVE)
+            write_op.set_xattr('key', 'value')
+            self.ioctx.operate_write_op(write_op, "abc")
+            eq(self.ioctx.get_xattr('abc', 'key'), 'value')
+            write_op.rm_xattr('key')
+            self.ioctx.operate_write_op(write_op, "abc")
+            with assert_raises(NoData):
+                self.ioctx.get_xattr('abc', 'key')
+            write_op.remove()
 
     def test_locator(self):
         self.ioctx.set_locator_key("bar")
