@@ -40,7 +40,7 @@ fi
 PYTHONS="python3 python2"  # which pythons we test
 if [ -z "$PYTHON_KLUDGE" ]; then
    TMPBINDIR=`mktemp -d $TMPDIR`
-   trap "rm -rf $TMPBINDIR" EXIT TERM HUP INT
+   trap "rm -rf $TMPBINDIR" EXIT TERM HUP INT EXIT
    ORIG_CEPH_DAEMON="$CEPH_DAEMON"
    CEPH_DAEMON="$TMPBINDIR/ceph-daemon"
    for p in $PYTHONS; do
@@ -203,10 +203,6 @@ for tarball in $TEST_TARS; do
     $SUDO tar xzvf $tarball -C $TMP_TAR_DIR
     NAMES=$($CEPH_DAEMON ls --legacy-dir $TMP_TAR_DIR | jq -r '.[].name')
     for name in $NAMES; do
-        # TODO: skip osd test for now
-        if [[ $name =~ "osd" ]]; then
-           continue
-        fi
         $SUDO $CEPH_DAEMON --image $IMAGE_MASTER adopt \
                            --style legacy \
                            --legacy-dir $TMP_TAR_DIR \
