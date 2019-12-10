@@ -6859,6 +6859,7 @@ next:
       utime_t last_update_ut(last_stats_update);
       encode_json("last_stats_update", last_update_ut, formatter);
     }
+    formatter->flush(cout);
   }
 
   if (opt_cmd == OPT_METADATA_GET) {
