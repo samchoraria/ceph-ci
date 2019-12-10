@@ -11,7 +11,8 @@ tasks:
 - s3tests:
     client.0:
       rgw_server: client.0
-      force-branch: master
+      git_remote: git://github.com/theanalyst/
+      force-branch: public-access-qa
 overrides:
   ceph:
     fs: xfs
