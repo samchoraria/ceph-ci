@@ -4,7 +4,6 @@ import { FormsModule } from '@angular/forms';
 
 import { getterForProp } from '@swimlane/ngx-datatable/release/utils';
 import * as _ from 'lodash';
-import { ToastrModule } from 'ngx-toastr';
 
 import {
   configureTestBed,
@@ -91,7 +90,7 @@ describe('InventoryDevicesComponent', () => {
   ];
 
   configureTestBed({
-    imports: [FormsModule, HttpClientTestingModule, SharedModule, ToastrModule.forRoot()],
+    imports: [FormsModule, HttpClientTestingModule, SharedModule],
     providers: [i18nProviders],
     declarations: [InventoryDevicesComponent]
   });

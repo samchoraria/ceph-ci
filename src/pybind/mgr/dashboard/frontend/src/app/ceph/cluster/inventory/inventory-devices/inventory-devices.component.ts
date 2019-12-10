@@ -9,14 +9,12 @@ import { OrchestratorService } from '../../../../shared/api/orchestrator.service
 import { FormModalComponent } from '../../../../shared/components/form-modal/form-modal.component';
 import { CellTemplate } from '../../../../shared/enum/cell-template.enum';
 import { Icons } from '../../../../shared/enum/icons.enum';
-import { NotificationType } from '../../../../shared/enum/notification-type.enum';
 import { CdTableAction } from '../../../../shared/models/cd-table-action';
 import { CdTableColumn } from '../../../../shared/models/cd-table-column';
 import { CdTableSelection } from '../../../../shared/models/cd-table-selection';
 import { Permission } from '../../../../shared/models/permissions';
 import { DimlessBinaryPipe } from '../../../../shared/pipes/dimless-binary.pipe';
 import { AuthStorageService } from '../../../../shared/services/auth-storage.service';
-import { NotificationService } from '../../../../shared/services/notification.service';
 import { InventoryDeviceFilter } from './inventory-device-filter.interface';
 import { InventoryDeviceFiltersChangeEvent } from './inventory-device-filters-change-event.interface';
 import { InventoryDevice } from './inventory-device.model';
@@ -63,7 +61,6 @@ export class InventoryDevicesComponent implements OnInit, OnChanges {
     private dimlessBinary: DimlessBinaryPipe,
     private i18n: I18n,
     private modalService: BsModalService,
-    private notificationService: NotificationService,
     private orchService: OrchestratorService
   ) {}
 
@@ -258,15 +255,7 @@ export class InventoryDevicesComponent implements OnInit, OnChanges {
         ],
         submitButtonText: this.i18n('Execute'),
         onSubmit: (values) => {
-          this.orchService.identifyDevice(hostname, device, values.duration).subscribe(() => {
-            this.notificationService.show(
-              NotificationType.success,
-              this.i18n(`Identifying '{{device}}' started on host '{{hostname}}'`, {
-                hostname,
-                device
-              })
-            );
-          });
+          this.orchService.identifyDevice(hostname, device, values.duration).subscribe();
         }
       }
     });

@@ -2,6 +2,7 @@
 from __future__ import absolute_import
 
 import time
+import uuid
 
 import cherrypy
 
@@ -17,7 +18,7 @@ from ..exceptions import DashboardException
 from ..security import Scope
 from ..services.exception import handle_orchestrator_error
 from ..services.orchestrator import OrchClient
-from ..tools import TaskManager, wraps
+from ..tools import wraps
 
 
 def get_device_osd_map():
@@ -80,7 +81,6 @@ class Orchestrator(RESTController):
     @UpdatePermission
     @raise_if_no_orchestrator
     @handle_orchestrator_error('osd')
-    @orchestrator_task('identify_device', ['{hostname}', '{device}'])
     def identify_device(self, hostname, device, duration):
         # type: (str, str, int) -> None
         """
@@ -89,15 +89,15 @@ class Orchestrator(RESTController):
         :param device: The device identifier to process, e.g. ``ABC1234DEF567-1R1234_ABC8DE0Q``.
         :param duration: The duration in seconds how long the LED should flash.
         """
+        ev_id = str(uuid.uuid4())
+        ev_msg = 'Identifying device {} on host {}'.format(device, hostname)
         orch = OrchClient.instance()
-        TaskManager.current_task().set_progress(0)
         orch.blink_device_light(hostname, device, 'ident', True)
         for i in range(int(duration)):
-            percentage = int(round(i / float(duration) * 100))
-            TaskManager.current_task().set_progress(percentage)
+            mgr.remote('progress', 'update', ev_id, ev_msg, i / float(duration))
             time.sleep(1)
         orch.blink_device_light(hostname, device, 'ident', False)
-        TaskManager.current_task().set_progress(100)
+        mgr.remote('progress', 'complete', ev_id)
 
 
 @ApiController('/orchestrator/inventory', Scope.HOSTS)
