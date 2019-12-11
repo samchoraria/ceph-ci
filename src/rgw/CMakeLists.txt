@@ -408,6 +408,9 @@ endif()
 if(WITH_RADOSGW_KAFKA_ENDPOINT)
   target_link_libraries(rgw_admin_user PRIVATE RDKafka::RDKafka)
 endif()
+if(WITH_BOOST_CONTEXT)
+  target_link_libraries(rgw_admin_user PRIVATE spawn)
+endif()
 
 if(WITH_TESTS)
   add_executable(ceph_rgw_jsonparser
