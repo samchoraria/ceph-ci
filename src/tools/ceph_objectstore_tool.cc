@@ -627,8 +627,8 @@ int ObjectStoreTool::export_file(ObjectStore *store, coll_t cid, ghobject_t &obj
     bufferlist bl;
     ret = store->getattr(cid, obj, OI_ATTR, bp);
     if (ret < 0) {
-      cerr << "getattr failure object_info " << ret << std::endl;
-      return ret;
+      cerr << "getattr failure object_info " << ret << " (skipping)" << std::endl;
+      return 0;
     }
     bl.push_back(bp);
     decode(objb.oi, bl);
