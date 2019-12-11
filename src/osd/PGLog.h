@@ -886,7 +886,12 @@ protected:
 	// in increasing order of version
 	assert(i->version > last);
 	// prior_version correct (unless it is an ERROR entry)
-	assert(i->prior_version == last || i->is_error());
+	// assert(i->prior_version == last || i->is_error());
+        if (i->prior_version != last && !i->is_error()) {
+          ldpp_dout(dpp, 0) << __func__ << ": ignoring " << *i
+                            << " due to prior_version incorrect" << dendl;
+          continue;
+        }
       }
       if (i->is_error()) {
 	ldpp_dout(dpp, 20) << __func__ << ": ignoring " << *i << dendl;
