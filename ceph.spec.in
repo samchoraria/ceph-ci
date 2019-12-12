@@ -38,6 +38,7 @@
 %bcond_without amqp_endpoint
 %bcond_without kafka_endpoint
 %bcond_without lttng
+%bcond_without boost_context
 %bcond_without libradosstriper
 %bcond_without ocf
 %global _remote_tarball_prefix https://download.ceph.com/tarballs/
@@ -2225,6 +2226,13 @@ fi
 %if %{with lttng}
 %{_libdir}/librgw_op_tp.so
 %{_libdir}/librgw_rados_tp.so
+%endif
+%if %{with boost_context}
+%dir %{_includedir}/spawn
+%{_includedir}/spawn/detail/is_stack_allocator.hpp
+%{_includedir}/spawn/detail/net.hpp
+%{_includedir}/spawn/impl/spawn.hpp
+%{_includedir}/spawn/spawn.hpp
 %endif
 
 %if 0%{with python2}
