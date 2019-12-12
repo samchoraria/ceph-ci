@@ -158,7 +158,8 @@ target_include_directories(rgw_common PUBLIC "${CMAKE_SOURCE_DIR}/src/dmclock/su
 target_include_directories(rgw_common PUBLIC "${CMAKE_SOURCE_DIR}/src/fmt/include")
 
 if(WITH_BOOST_CONTEXT)
-  target_link_libraries(rgw_common PUBLIC spawn)
+  target_include_directories(rgw_common PRIVATE
+    $<TARGET_PROPERTY:spawn,INTERFACE_INCLUDE_DIRECTORIES>)
 endif()
 
 if(WITH_LTTNG)
