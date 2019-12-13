@@ -1121,7 +1121,7 @@ class CephadmOrchestrator(MgrModule, orchestrator.Orchestrator):
                                    extra_args=extra_args)
 
     def update_mons(self, spec):
-        # type: (List[orchestrator.HostSpec]) -> orchestrator.Completion
+        # type: (orchestrator.StatefulServiceSpec) -> orchestrator.Completion
         """
         Adjust the number of cluster managers.
         """
@@ -1490,7 +1490,8 @@ class BaseScheduler(object):
         # type: (orchestrator.PlacementSpec) -> None
         self.placement_spec = placement_spec
 
-    def place(self):
+    def place(self, host_pool, count=None):
+        # type: (List, Optional[int]) -> List[HostSpec]
         raise NotImplementedError
 
 
@@ -1504,7 +1505,7 @@ class SimpleScheduler(BaseScheduler):
         super(SimpleScheduler, self).__init__(placement_spec)
 
     def place(self, host_pool, count=None):
-        # type: (List, Optional(int)) -> List
+        # type: (List, Optional[int]) -> List[HostSpec]
         if not host_pool:
             raise Exception('List of host candidates is empty')
         host_pool = [HostSpec(x, '', '') for x in host_pool]
@@ -1525,10 +1526,10 @@ class NodeAssignment(object):
     """
 
     def __init__(self,
-                 spec=None,  # type: orchestrator.PlacementSpec
-                 scheduler=None,  # type: BaseScheduler
-                 get_hosts_func=None,  # type: Callable
-                 service_type=None,  # type: str
+                 spec=None,  # type: Optional[orchestrator.StatefulServiceSpec]
+                 scheduler=None,  # type: Optional[BaseScheduler]
+                 get_hosts_func=None,  # type: Optional[Callable]
+                 service_type=None,  # type: Optional[str]
                  ):
         assert spec and get_hosts_func and service_type
         self.spec = spec
@@ -1537,7 +1538,7 @@ class NodeAssignment(object):
         self.service_type = service_type
 
     def load(self):
-        # type: () -> orchestrator.PlacementSpec
+        # type: () -> orchestrator.StatefulServiceSpec
         """
         Load nodes into the spec.placement.nodes container.
         """
@@ -1567,7 +1568,7 @@ class NodeAssignment(object):
         # If no imperative or declarative host assignments, use the scheduler to pick from the
         # host pool (assuming `count` is set)
         if not self.spec.placement.label and not self.spec.placement.nodes and self.spec.placement.count:
-            logger.info("Found num spec. Looking for labeled nodes.".format(self.scheduler))
+            logger.info("Found num spec. Looking for labeled nodes.")
             # TODO: actually query for labels (self.service_type)
             candidates = self.scheduler.place([x[0] for x in self.get_hosts_func()],
                                               count=self.spec.placement.count)
