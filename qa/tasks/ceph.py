@@ -1348,7 +1348,7 @@ def run_daemon(ctx, config, type_):
                     remote=remote,
                     path=datadir + '/fsid',
                     sudo=True,
-                ).strip()
+                ).strip().decode()
                 osd_uuids[id_] = osd_uuid
     for osd_id in range(len(osd_uuids)):
         id_ = str(osd_id)
