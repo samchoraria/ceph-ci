@@ -2545,6 +2545,7 @@ static void rados_aio_getxattr_complete(rados_completion_t c, void *arg) {
   }
   cdata->user_completion.finish(rc);
   delete cdata;
+  ((librados::AioCompletionImpl*)c)->put();
 }
 
 extern "C" int _rados_aio_getxattr(rados_ioctx_t io, const char *o,
@@ -2598,6 +2599,7 @@ static void rados_aio_getxattrs_complete(rados_completion_t c, void *arg) {
     cdata->user_completion.finish(0);
   }
   delete cdata;
+  ((librados::AioCompletionImpl*)c)->put();
 }
 
 extern "C" int _rados_aio_getxattrs(rados_ioctx_t io, const char *oid,
