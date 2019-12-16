@@ -3197,11 +3197,11 @@ void PeeringState::update_calc_stats()
   info.stats.avail_no_missing.clear();
   info.stats.object_location_counts.clear();
 
-  ceph_assert(info.stats.stats.sum.num_objects < 0);
   if (info.stats.stats.sum.num_objects < 0) {
     psdout(0) << __func__ << " Negative num_objects = "
               << info.stats.stats.sum.num_objects << " setting it to 0 "
               << dendl;
+    ceph_assert(info.stats.stats.sum.num_objects < 0);
     info.stats.stats.sum.num_objects = 0;
     state_set(PG_STATE_INCONSISTENT);
   }
