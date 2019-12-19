@@ -27,7 +27,7 @@ static void set_param_str(struct req_state *s, const char *name, string& str)
 }
 
 string render_log_object_name(const string& format,
-			      struct tm *dt, string& bucket_id,
+			      struct tm *dt, const string& bucket_id,
 			      const string& bucket_name)
 {
   string o;
@@ -337,7 +337,7 @@ int rgw_log_op(RGWRados *store, RGWREST* const rest, struct req_state *s,
     }
     bucket_id = "";
   } else {
-    bucket_id = s->bucket.bucket_id;
+    bucket_id = s->bucket->get_bucket_id();
   }
   entry.bucket = rgw_make_bucket_entry_name(s->bucket_tenant, s->bucket_name);
 
@@ -346,8 +346,8 @@ int rgw_log_op(RGWRados *store, RGWREST* const rest, struct req_state *s,
     return 0;
   }
 
-  if (!s->object.empty()) {
-    entry.obj = s->object;
+  if (!s->object->empty()) {
+    entry.obj = s->object->get_key();
   } else {
     entry.obj = rgw_obj_key("-");
   }
@@ -443,7 +443,7 @@ int rgw_log_op(RGWRados *store, RGWREST* const rest, struct req_state *s,
 
   if (s->cct->_conf->rgw_ops_log_rados) {
     string oid = render_log_object_name(s->cct->_conf->rgw_log_object_name, &bdt,
-				        s->bucket.bucket_id, entry.bucket);
+				        s->bucket->get_bucket_id(), entry.bucket);
 
     rgw_raw_obj obj(store->svc.zone->get_zone_params().log_pool, oid);
 

@@ -1371,7 +1371,7 @@ namespace rgw {
       /* start */
       std::string object_name = relative_object_name();
       f->write_req =
-	new RGWWriteRequest(fs->get_context(), &ruser, this,
+	new RGWWriteRequest(rgwlib.get_store(), &ruser, this,
 			    bucket_name(), object_name);
       rc = rgwlib.get_fe()->start_req(f->write_req);
       if (rc < 0) {
@@ -1538,9 +1538,9 @@ namespace rgw {
 
     perfcounter->inc(l_rgw_put);
     op_ret = -EINVAL;
-    rgw_obj obj{s->bucket, s->object};
+    rgw::sal::RGWRadosObject obj(*static_cast<rgw::sal::RGWRadosObject*>(s->object));
 
-    if (s->object.empty()) {
+    if (s->object->empty()) {
       ldout(s->cct, 0) << __func__ << " called on empty object" << dendl;
       goto done;
     }
@@ -1563,17 +1563,17 @@ namespace rgw {
 
     if (s->bucket_info.versioning_enabled()) {
       if (!version_id.empty()) {
-        obj.key.set_instance(version_id);
+        obj.set_instance(version_id);
       } else {
-        get_store()->getRados()->gen_rand_obj_instance_name(&obj);
-        version_id = obj.key.instance;
+	obj.gen_rand_obj_instance_name();
+        version_id = obj.get_instance();
       }
     }
     processor.emplace(&*aio, get_store(), s->bucket_info,
                       &s->dest_placement,
                       s->bucket_owner.get_id(),
                       *static_cast<RGWObjectCtx *>(s->obj_ctx),
-                      obj, olh_epoch, s->req_id, this, s->yield);
+                      &obj, olh_epoch, s->req_id, this, s->yield);
 
     op_ret = processor->prepare(s->yield);
     if (op_ret < 0) {
@@ -1611,8 +1611,9 @@ namespace rgw {
       return -EIO;
     }
 
-    op_ret = get_store()->getRados()->check_quota(s->bucket_owner.get_id(), s->bucket,
-                                      user_quota, bucket_quota, real_ofs, true);
+    op_ret = get_store()->getRados()->check_quota(s->bucket_owner.get_id(),
+				      s->bucket->get_bi(), user_quota, bucket_quota,
+				      real_ofs, true);
     /* max_size exceed */
     if (op_ret < 0)
       return -EIO;
@@ -1654,8 +1655,9 @@ namespace rgw {
       goto done;
     }
 
-    op_ret = get_store()->getRados()->check_quota(s->bucket_owner.get_id(), s->bucket,
-				      user_quota, bucket_quota, s->obj_size, true);
+    op_ret = get_store()->getRados()->check_quota(s->bucket_owner.get_id(),
+				      s->bucket->get_bi(), user_quota, bucket_quota,
+				      s->obj_size, true);
     /* max_size exceed */
     if (op_ret < 0) {
       goto done;

@@ -399,18 +399,19 @@ public:
 };
 
 
-RGWHandler_REST* RGWRESTMgr_MDSearch_S3::get_handler(struct req_state* const s,
+RGWHandler_REST* RGWRESTMgr_MDSearch_S3::get_handler(rgw::sal::RGWRadosStore *store,
+						     struct req_state* const s,
                                                      const rgw::auth::StrategyRegistry& auth_registry,
                                                      const std::string& frontend_prefix)
 {
   int ret =
-    RGWHandler_REST_S3::init_from_header(s,
+    RGWHandler_REST_S3::init_from_header(store, s,
 					RGW_FORMAT_XML, true);
   if (ret < 0) {
     return nullptr;
   }
 
-  if (!s->object.empty()) {
+  if (!s->object->empty()) {
     return nullptr;
   }
 

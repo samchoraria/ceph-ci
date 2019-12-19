@@ -72,7 +72,7 @@ int rgw_user_sync_all_stats(rgw::sal::RGWRadosStore *store, const rgw_user& user
 
       rgw::sal::RGWBucket* bucket = i->second;
 
-      ret = bucket->get_bucket_info(null_yield);
+      ret = bucket->get_bucket_info(NULL, null_yield);
       if (ret < 0) {
         ldout(cct, 0) << "ERROR: could not read bucket info: bucket=" << bucket << " ret=" << ret << dendl;
         continue;
@@ -1651,7 +1651,7 @@ int RGWUser::execute_rename(RGWUserAdminOpState& op_state, std::string *err_msg)
       rgw::sal::RGWBucket* bucket = it->second;
       marker = it->first;
 
-      ret = bucket->get_bucket_info(null_yield);
+      ret = bucket->get_bucket_info(NULL, null_yield);
       if (ret < 0) {
         set_err_msg(err_msg, "failed to fetch bucket info for bucket=" + bucket->get_name());
         return ret;

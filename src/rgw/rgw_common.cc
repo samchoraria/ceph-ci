@@ -1245,7 +1245,7 @@ bool verify_bucket_permission(const DoutPrefixProvider* dpp, struct req_state * 
 
   return verify_bucket_permission(dpp, 
                                   &ps,
-                                  s->bucket,
+                                  s->bucket->get_bi(),
                                   s->user_acl.get(),
                                   s->bucket_acl.get(),
                                   s->iam_policy,
@@ -1261,7 +1261,7 @@ int verify_bucket_owner_or_policy(struct req_state* const s,
 {
   auto e = eval_or_pass(s->iam_policy,
 			s->env, *s->auth.identity,
-			op, ARN(s->bucket));
+			op, ARN(s->bucket->get_bi()));
   if (e == Effect::Allow ||
       (e == Effect::Pass &&
        s->auth.identity->is_owner_of(s->bucket_owner.get_id()))) {
@@ -1459,7 +1459,7 @@ bool verify_object_permission(const DoutPrefixProvider* dpp, struct req_state *s
 
   return verify_object_permission(dpp,
                                   &ps,
-                                  rgw_obj(s->bucket, s->object),
+                                  rgw_obj(s->bucket->get_bi(), s->object->get_key()),
                                   s->user_acl.get(),
                                   s->bucket_acl.get(),
                                   s->object_acl.get(),

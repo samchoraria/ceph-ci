@@ -487,7 +487,8 @@ int RGWDataAccess::Object::put(bufferlist& data,
   rgw::BlockingAioThrottle aio(store->ctx()->_conf->rgw_put_obj_min_window_size);
 
   RGWObjectCtx obj_ctx(store);
-  rgw_obj obj(bucket_info.bucket, key);
+  rgw::sal::RGWRadosBucket b(store, bucket_info);
+  rgw::sal::RGWRadosObject obj(store, key, &b);
 
   auto& owner = bucket->policy.get_owner();
 
@@ -495,7 +496,7 @@ int RGWDataAccess::Object::put(bufferlist& data,
 
   using namespace rgw::putobj;
   AtomicObjectProcessor processor(&aio, store, bucket_info, nullptr,
-                                  owner.get_id(), obj_ctx, obj, olh_epoch,
+                                  owner.get_id(), obj_ctx, &obj, olh_epoch,
                                   req_id, dpp, y);
 
   int ret = processor.prepare(y);

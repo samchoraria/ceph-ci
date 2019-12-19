@@ -1022,7 +1022,7 @@ int RGWPutObj_ObjStore::get_params()
     {
       return ret;
     }
-    torrent.set_info_name((s->object).name);
+    torrent.set_info_name(s->object->get_name());
   }
   /* end gettorrent */
   supplied_md5_b64 = s->info.env->get("HTTP_CONTENT_MD5");
@@ -2296,7 +2296,7 @@ RGWHandler_REST* RGWREST::get_handler(
     *pmgr = m;
   }
 
-  RGWHandler_REST* handler = m->get_handler(s, auth_registry, frontend_prefix);
+  RGWHandler_REST* handler = m->get_handler(store, s, auth_registry, frontend_prefix);
   if (! handler) {
     *init_error = -ERR_METHOD_NOT_ALLOWED;
     return NULL;

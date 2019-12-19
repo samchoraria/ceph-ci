@@ -19,11 +19,19 @@
 #include <unistd.h>
 #include <sstream>
 
+#include "common/Clock.h"
 #include "common/errno.h"
 
 #include "rgw_sal.h"
 #include "rgw_bucket.h"
 #include "rgw_multi.h"
+#include "rgw_acl_s3.h"
+
+/* Stuff for RGWRadosStore.  Move to separate file when store split out */
+#include "rgw_zone.h"
+#include "rgw_rest_conn.h"
+#include "services/svc_sys_obj.h"
+#include "services/svc_zone.h"
 
 #define dout_subsys ceph_subsys_rgw
 
@@ -43,7 +51,7 @@ int RGWRadosUser::list_buckets(const string& marker, const string& end_marker,
 
   buckets.set_truncated(is_truncated);
   for (const auto& ent : ulist.get_buckets()) {
-    RGWRadosBucket *rb = new RGWRadosBucket(this->store, *this, ent.second);
+    RGWRadosBucket *rb = new RGWRadosBucket(this->store, ent.second);
     buckets.add(rb);
   }
 
@@ -64,10 +72,10 @@ RGWBucket* RGWRadosUser::add_bucket(rgw_bucket& bucket,
   return NULL;
 }
 
-int RGWRadosUser::get_by_id(rgw_user id, optional_yield y)
+int RGWRadosUser::get_by_id(optional_yield y)
 
 {
-    return store->ctl()->user->get_info_by_uid(id, &info, y);
+    return store->ctl()->user->get_info_by_uid(info.user_id, &info, y);
 }
 
 RGWObject *RGWRadosBucket::create_object(const rgw_obj_key &key)
@@ -87,7 +95,7 @@ int RGWRadosBucket::remove_bucket(bool delete_children, optional_yield y)
   map<string, bool> common_prefixes;
   string bucket_ver, master_ver;
 
-  ret = get_bucket_info(y);
+  ret = get_bucket_info(NULL, y);
   if (ret < 0)
     return ret;
 
@@ -156,10 +164,32 @@ int RGWRadosBucket::remove_bucket(bool delete_children, optional_yield y)
   return ret;
 }
 
-int RGWRadosBucket::get_bucket_info(optional_yield y)
+int RGWRadosBucket::get_bucket_info(real_time *pmtime, optional_yield y)
 {
-  return store->getRados()->get_bucket_info(store->svc(), ent.bucket.tenant, ent.bucket.name, info,
-					    NULL, y, &attrs);
+  auto obj_ctx = store->svc()->sysobj->init_obj_ctx();
+  RGWSI_MetaBackend_CtxParams bectx_params = RGWSI_MetaBackend_CtxParams_SObj(&obj_ctx);
+  RGWObjVersionTracker ep_ot;
+  int ret = store->ctl()->bucket->read_bucket_info(ent.bucket, &info, y,
+				      RGWBucketCtl::BucketInstance::GetParams()
+				      .set_mtime(pmtime)
+				      .set_attrs(&attrs.attrs)
+                                      .set_bectx_params(bectx_params),
+				      &ep_ot);
+  bucket_version = ep_ot.read_version;
+  return ret;
+}
+
+int RGWRadosBucket::load_by_name(const std::string& tenant, const std::string& bucket_name, const std::string bucket_instance_id, RGWSysObjectCtx *rctx, optional_yield y)
+{
+  ent.bucket.tenant = tenant;
+  ent.bucket.name = bucket_name;
+  ent.bucket.bucket_id = bucket_instance_id;
+
+  if (bucket_instance_id.empty()) {
+    return get_bucket_info(NULL, y);
+  }
+
+  return store->getRados()->get_bucket_instance_info(*rctx, ent.bucket, info, NULL, &attrs.attrs, y);
 }
 
 int RGWRadosBucket::get_bucket_stats(RGWBucketInfo& bucket_info, int shard_id,
@@ -177,7 +207,7 @@ int RGWRadosBucket::read_bucket_stats(optional_yield y)
 
 int RGWRadosBucket::sync_user_stats()
 {
-      return store->ctl()->bucket->sync_user_stats(user.info.user_id, info, &ent);
+      return store->ctl()->bucket->sync_user_stats(owner->get_id(), info, &ent);
 }
 
 int RGWRadosBucket::update_container_stats(void)
@@ -238,7 +268,7 @@ int RGWRadosBucket::chown(RGWUser* new_user, RGWUser* old_user, optional_yield y
 
 bool RGWRadosBucket::is_owner(RGWUser* user)
 {
-  get_bucket_info(null_yield);
+  get_bucket_info(NULL, null_yield);
 
   return (info.owner.compare(user->get_user()) == 0);
 }
@@ -267,9 +297,102 @@ RGWUser *RGWRadosStore::get_user(const rgw_user &u)
   //return bucket;
 //}
 //
-void RGWRadosStore::finalize(void) {
+void RGWRadosStore::finalize(void)
+{
   if (rados)
     rados->finalize();
+}
+
+int RGWRadosObject::get_obj_state(RGWObjectCtx *rctx, RGWBucket& bucket, RGWObjState **state, optional_yield y, bool follow_olh)
+{
+  rgw_obj obj(bucket.get_bi(), key.name);
+
+  return store->getRados()->get_obj_state(rctx, bucket.get_info(), obj, state, follow_olh, y);
+}
+
+int RGWRadosObject::read_attrs(RGWRados::Object::Read &read_op, optional_yield y, rgw_obj *target_obj)
+{
+  read_op.params.attrs = &attrs.attrs;
+  read_op.params.target_obj = target_obj;
+  read_op.params.obj_size = &obj_size;
+  read_op.params.lastmod = &mtime;
+
+  return read_op.prepare(y);
+}
+
+int RGWRadosObject::get_obj_attrs(RGWObjectCtx *rctx, optional_yield y, rgw_obj *target_obj)
+{
+  RGWRados::Object op_target(store->getRados(), bucket->get_info(), *rctx, get_obj());
+  RGWRados::Object::Read read_op(&op_target);
+
+  return read_attrs(read_op, y, target_obj);
+}
+
+int RGWRadosObject::modify_obj_attrs(RGWObjectCtx *rctx, const char *attr_name, bufferlist& attr_val, optional_yield y)
+{
+  int r = get_obj_attrs(rctx, y);
+  if (r < 0) {
+    return r;
+  }
+  set_atomic(rctx);
+  attrs.attrs[attr_name] = attr_val;
+  rgw_obj obj = get_obj();
+  return store->getRados()->set_attrs(rctx, bucket->get_info(), obj, attrs.attrs, NULL, y);
+}
+
+int RGWRadosObject::copy_obj_data(RGWObjectCtx& rctx, RGWBucket* dest_bucket,
+				  RGWObject* dest_obj,
+				  uint16_t olh_epoch,
+				  std::string* petag,
+				  const DoutPrefixProvider *dpp,
+				  optional_yield y)
+{
+  map<string, bufferlist> attrset;
+  RGWRados::Object op_target(store->getRados(), dest_bucket->get_info(), rctx, get_obj());
+  RGWRados::Object::Read read_op(&op_target);
+
+  int ret = read_attrs(read_op, y);
+  if (ret < 0)
+    return ret;
+
+  attrset = attrs.attrs;
+
+  attrset.erase(RGW_ATTR_ID_TAG);
+  attrset.erase(RGW_ATTR_TAIL_TAG);
+
+  return store->getRados()->copy_obj_data(rctx, dest_bucket->get_info(),
+					   dest_bucket->get_info().placement_rule, read_op,
+					   obj_size - 1, dest_obj, NULL, mtime, attrset, 0, real_time(), NULL,
+					   dpp, y);
+}
+
+int RGWRadosObject::delete_obj_attrs(RGWObjectCtx *rctx, const char *attr_name, optional_yield y)
+{
+  map <string, bufferlist> attrs;
+  map <string, bufferlist> rmattr;
+  bufferlist bl;
+
+  set_atomic(rctx);
+  rmattr[attr_name] = bl;
+  rgw_obj obj = get_obj();
+  return store->getRados()->set_attrs(rctx, bucket->get_info(), obj, attrs, &rmattr, y);
+}
+
+void RGWRadosObject::set_atomic(RGWObjectCtx *rctx) const
+{
+  rgw_obj obj = get_obj();
+  store->getRados()->set_atomic(rctx, obj);
+}
+
+void RGWRadosObject::set_prefetch_data(RGWObjectCtx *rctx)
+{
+  rgw_obj obj = get_obj();
+  store->getRados()->set_prefetch_data(rctx, obj);
+}
+
+void RGWRadosObject::gen_rand_obj_instance_name()
+{
+  store->getRados()->gen_rand_obj_instance_name(&key);
 }
 
 int RGWRadosStore::get_bucket(RGWUser& u, const rgw_bucket& b, RGWBucket** bucket)
@@ -279,11 +402,11 @@ int RGWRadosStore::get_bucket(RGWUser& u, const rgw_bucket& b, RGWBucket** bucke
 
   *bucket = nullptr;
 
-  bp = new RGWRadosBucket(this, u, b);
+  bp = new RGWRadosBucket(this, b, &u);
   if (!bp) {
     return -ENOMEM;
   }
-  ret = bp->get_bucket_info(null_yield);
+  ret = bp->get_bucket_info(NULL, null_yield);
   if (ret < 0) {
     delete bp;
     return ret;
@@ -291,6 +414,182 @@ int RGWRadosStore::get_bucket(RGWUser& u, const rgw_bucket& b, RGWBucket** bucke
 
   *bucket = bp;
   return 0;
+}
+
+static int decode_policy(CephContext *cct,
+                         bufferlist& bl,
+                         RGWAccessControlPolicy *policy)
+{
+  auto iter = bl.cbegin();
+  try {
+    policy->decode(iter);
+  } catch (buffer::error& err) {
+    ldout(cct, 0) << "ERROR: could not decode policy, caught buffer::error" << dendl;
+    return -EIO;
+  }
+  if (cct->_conf->subsys.should_gather<ceph_subsys_rgw, 15>()) {
+    ldout(cct, 15) << __func__ << " Read AccessControlPolicy";
+    RGWAccessControlPolicy_S3 *s3policy = static_cast<RGWAccessControlPolicy_S3 *>(policy);
+    s3policy->to_xml(*_dout);
+    *_dout << dendl;
+  }
+  return 0;
+}
+
+static int rgw_op_get_bucket_policy_from_attr(RGWRadosStore *store,
+				       RGWUser& user,
+				       map<string, bufferlist>& bucket_attrs,
+				       RGWAccessControlPolicy *policy)
+{
+  map<string, bufferlist>::iterator aiter = bucket_attrs.find(RGW_ATTR_ACL);
+
+  if (aiter != bucket_attrs.end()) {
+    int ret = decode_policy(store->ctx(), aiter->second, policy);
+    if (ret < 0)
+      return ret;
+  } else {
+    ldout(store->ctx(), 0) << "WARNING: couldn't find acl header for bucket, generating default" << dendl;
+    /* object exists, but policy is broken */
+    int r = user.get_by_id(null_yield);
+    if (r < 0)
+      return r;
+
+    policy->create_default(user.get_user(), user.get_display_name());
+  }
+  return 0;
+}
+
+int RGWRadosStore::forward_request_to_master(RGWUser *user, obj_version *objv,
+					     bufferlist& in_data,
+					     JSONParser *jp, req_info *info)
+{
+  if (!svc()->zone->get_master_conn()) {
+    ldout(ctx(), 0) << "rest connection is invalid" << dendl;
+    return -EINVAL;
+  }
+  ldout(ctx(), 0) << "sending request to master zonegroup" << dendl;
+  bufferlist response;
+  string uid_str = user->get_id().to_str();
+#define MAX_REST_RESPONSE (128 * 1024) // we expect a very small response
+  int ret = svc()->zone->get_master_conn()->forward(rgw_user(uid_str), *info,
+                                                    objv, MAX_REST_RESPONSE,
+						    &in_data, &response);
+  if (ret < 0)
+    return ret;
+
+  ldout(ctx(), 20) << "response: " << response.c_str() << dendl;
+  if (jp && !jp->parse(response.c_str(), response.length())) {
+    ldout(ctx(), 0) << "failed parsing response from master zonegroup" << dendl;
+    return -EINVAL;
+  }
+
+  return 0;
+}
+
+
+int RGWRadosStore::create_bucket(RGWUser& u, const rgw_bucket& b,
+				 const string& zonegroup_id,
+				 const rgw_placement_rule& placement_rule,
+				 const string& swift_ver_location,
+				 const RGWQuotaInfo * pquota_info,
+				 map<std::string, bufferlist>& attrs,
+				 RGWBucketInfo& info,
+				 obj_version *pobjv,
+				 obj_version *pep_objv,
+				 bool exclusive,
+				 bool *existed,
+				 req_info *req_info,
+				 RGWBucket** bucket_out)
+{
+  int ret;
+  bufferlist in_data;
+  RGWBucketInfo master_info;
+  rgw_bucket *pmaster_bucket;
+  uint32_t *pmaster_num_shards;
+  real_time creation_time;
+  RGWAccessControlPolicy old_policy(ctx());
+  RGWBucket *bucket;
+
+  *bucket_out = NULL;
+  /* If it exists, look it up; otherwise create it */
+  ret = get_bucket(u, b, &bucket);
+  if (ret < 0 && ret != -ENOENT)
+    return ret;
+
+  if (ret != -ENOENT) {
+    if (existed)
+      *existed = true;
+    int r = rgw_op_get_bucket_policy_from_attr(this, u, bucket->get_attrs().attrs,
+					       &old_policy);
+    if (r >= 0)  {
+      if (old_policy.get_owner().get_id().compare(u.get_id()) != 0) {
+	ret = -EEXIST;
+	return ret;
+      }
+    }
+  } else {
+    bucket = new RGWRadosBucket(this, b, &u);
+    if (existed)
+      *existed = false;
+    bucket->set_attrs(attrs);
+  }
+
+  if (!svc()->zone->is_meta_master()) {
+    JSONParser jp;
+    ret = forward_request_to_master(&u, NULL, in_data, &jp, req_info);
+    if (ret < 0) {
+      delete bucket;
+      return ret;
+    }
+
+    JSONDecoder::decode_json("entry_point_object_ver", *pep_objv, &jp);
+    JSONDecoder::decode_json("object_ver", *pobjv, &jp);
+    JSONDecoder::decode_json("bucket_info", master_info, &jp);
+    ldpp_dout(this, 20) << "parsed: objv.tag=" << pobjv->tag << " objv.ver=" << pobjv->ver << dendl;
+    //ldpp_dout(this, 20) << "got creation time: << " << master_info.creation_time << dendl;
+    pmaster_bucket= &master_info.bucket;
+    creation_time = master_info.creation_time;
+    pmaster_num_shards = &master_info.num_shards;
+    if (master_info.obj_lock_enabled()) {
+      info.flags = BUCKET_VERSIONED | BUCKET_OBJ_LOCK_ENABLED;
+    }
+  } else {
+    pmaster_bucket = NULL;
+    pmaster_num_shards = NULL;
+  }
+
+  std::string zid = zonegroup_id;
+  if (zid.empty()) {
+    zid = svc()->zone->get_zonegroup().get_id();
+  }
+
+  if (*existed) {
+    rgw_placement_rule selected_placement_rule;
+    ret = svc()->zone->select_bucket_placement(u.get_info(),
+					    zid, placement_rule,
+					    &selected_placement_rule, nullptr);
+    if (selected_placement_rule != info.placement_rule) {
+      ret = -EEXIST;
+      delete bucket;
+      return ret;
+    }
+  }
+
+  ret = getRados()->create_bucket(u.get_info(), bucket->get_bi(),
+				zid, placement_rule, swift_ver_location,
+                                pquota_info, attrs,
+                                info, pobjv, pep_objv, creation_time,
+                                pmaster_bucket, pmaster_num_shards, exclusive);
+  if (ret != 0) {
+    delete bucket;
+    return ret;
+  }
+
+  bucket->set_version(*pep_objv);
+
+  *bucket_out = bucket;
+
+  return ret;
 }
 
 } // namespace rgw::sal

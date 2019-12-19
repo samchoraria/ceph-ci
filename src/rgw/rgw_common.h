@@ -45,6 +45,8 @@ namespace ceph {
 
 namespace rgw::sal {
   class RGWUser;
+  class RGWBucket;
+  class RGWObject;
 }
 
 using ceph::crypto::MD5;
@@ -1628,11 +1630,11 @@ struct req_state : DoutPrefixProvider {
   string bucket_tenant;
   string bucket_name;
 
-  rgw_bucket bucket;
-  rgw_obj_key object;
+  rgw::sal::RGWBucket *bucket;
+  rgw::sal::RGWObject *object;
   string src_tenant_name;
   string src_bucket_name;
-  rgw_obj_key src_object;
+  rgw::sal::RGWObject* src_object;
   ACLOwner bucket_owner;
   ACLOwner owner;
 

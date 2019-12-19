@@ -124,9 +124,9 @@ RadosWriter::~RadosWriter()
 
   bool need_to_remove_head = false;
   std::optional<rgw_raw_obj> raw_head;
-  if (!head_obj.empty()) {
+  if (!head_obj->empty()) {
     raw_head.emplace();
-    store->getRados()->obj_to_raw(bucket_info.placement_rule, head_obj, &*raw_head);
+    store->getRados()->obj_to_raw(bucket_info.placement_rule, head_obj->get_obj(), &*raw_head);
   }
 
   /**
@@ -156,7 +156,7 @@ RadosWriter::~RadosWriter()
 
   if (need_to_remove_head) {
     ldpp_dout(dpp, 5) << "NOTE: we are going to process the head obj (" << *raw_head << ")" << dendl;
-    int r = store->getRados()->delete_obj(obj_ctx, bucket_info, head_obj, 0, 0);
+    int r = store->getRados()->delete_obj(obj_ctx, bucket_info, head_obj->get_obj(), 0, 0);
     if (r < 0 && r != -ENOENT) {
       ldpp_dout(dpp, 0) << "WARNING: failed to remove obj (" << *raw_head << "), leaked" << dendl;
     }
@@ -208,7 +208,7 @@ int AtomicObjectProcessor::prepare(optional_yield y)
   uint64_t alignment;
   rgw_pool head_pool;
 
-  if (!store->getRados()->get_obj_data_pool(bucket_info.placement_rule, head_obj, &head_pool)) {
+  if (!store->getRados()->get_obj_data_pool(bucket_info.placement_rule, head_obj->get_obj(), &head_pool)) {
     return -EIO;
   }
 
@@ -221,7 +221,7 @@ int AtomicObjectProcessor::prepare(optional_yield y)
 
   if (bucket_info.placement_rule != tail_placement_rule) {
     rgw_pool tail_pool;
-    if (!store->getRados()->get_obj_data_pool(tail_placement_rule, head_obj, &tail_pool)) {
+    if (!store->getRados()->get_obj_data_pool(tail_placement_rule, head_obj->get_obj(), &tail_pool)) {
       return -EIO;
     }
 
@@ -252,7 +252,7 @@ int AtomicObjectProcessor::prepare(optional_yield y)
   r = manifest_gen.create_begin(store->ctx(), &manifest,
                                 bucket_info.placement_rule,
                                 &tail_placement_rule,
-                                head_obj.bucket, head_obj);
+                                head_obj->get_bucket()->get_bi(), head_obj->get_obj());
   if (r < 0) {
     return r;
   }
@@ -293,9 +293,9 @@ int AtomicObjectProcessor::complete(size_t accounted_size,
     return r;
   }
 
-  obj_ctx.set_atomic(head_obj);
+  head_obj->set_atomic(&obj_ctx);
 
-  RGWRados::Object op_target(store->getRados(), bucket_info, obj_ctx, head_obj);
+  RGWRados::Object op_target(store->getRados(), bucket_info, obj_ctx, head_obj->get_obj());
 
   /* some object types shouldn't be versioned, e.g., multipart parts */
   op_target.set_versioning_disabled(!bucket_info.versioning_enabled());
@@ -385,8 +385,9 @@ int MultipartObjectProcessor::prepare_head()
   }
 
   rgw_raw_obj stripe_obj = manifest_gen.get_cur_obj(store->getRados());
-  RGWSI_Tier_RADOS::raw_obj_to_obj(head_obj.bucket, stripe_obj, &head_obj);
-  head_obj.index_hash_source = target_obj.key.name;
+  rgw_obj obj = head_obj->get_obj();
+  RGWSI_Tier_RADOS::raw_obj_to_obj(head_obj->get_bucket()->get_bi(), stripe_obj, &obj);
+  head_obj->set_hash_source(target_obj.key.name);
 
   r = writer.set_stripe_obj(stripe_obj);
   if (r < 0) {
@@ -429,7 +430,7 @@ int MultipartObjectProcessor::complete(size_t accounted_size,
     return r;
   }
 
-  RGWRados::Object op_target(store->getRados(), bucket_info, obj_ctx, head_obj);
+  RGWRados::Object op_target(store->getRados(), bucket_info, obj_ctx, head_obj->get_obj());
   op_target.set_versioning_disabled(true);
   RGWRados::Object::Write obj_op(&op_target);
 
@@ -513,7 +514,7 @@ int AppendObjectProcessor::process_first_chunk(bufferlist &&data, rgw::putobj::D
 int AppendObjectProcessor::prepare(optional_yield y)
 {
   RGWObjState *astate;
-  int r = store->getRados()->get_obj_state(&obj_ctx, bucket_info, head_obj, &astate, y);
+  int r = store->getRados()->get_obj_state(&obj_ctx, bucket_info, head_obj->get_obj(), &astate, y);
   if (r < 0) {
     return r;
   }
@@ -528,7 +529,7 @@ int AppendObjectProcessor::prepare(optional_yield y)
       //set the prefix
       char buf[33];
       gen_rand_alphanumeric(store->ctx(), buf, sizeof(buf) - 1);
-      string oid_prefix = head_obj.key.name;
+      string oid_prefix = head_obj->get_name();
       oid_prefix.append(".");
       oid_prefix.append(buf);
       oid_prefix.append("_");
@@ -569,7 +570,7 @@ int AppendObjectProcessor::prepare(optional_yield y)
   }
   manifest.set_multipart_part_rule(store->ctx()->_conf->rgw_obj_stripe_size, cur_part_num);
 
-  r = manifest_gen.create_begin(store->ctx(), &manifest, bucket_info.placement_rule, &tail_placement_rule, head_obj.bucket, head_obj);
+  r = manifest_gen.create_begin(store->ctx(), &manifest, bucket_info.placement_rule, &tail_placement_rule, head_obj->get_bucket()->get_bi(), head_obj->get_obj());
   if (r < 0) {
     return r;
   }
@@ -611,8 +612,8 @@ int AppendObjectProcessor::complete(size_t accounted_size, const string &etag, c
   if (r < 0) {
     return r;
   }
-  obj_ctx.set_atomic(head_obj);
-  RGWRados::Object op_target(store->getRados(), bucket_info, obj_ctx, head_obj);
+  head_obj->set_atomic(&obj_ctx);
+  RGWRados::Object op_target(store->getRados(), bucket_info, obj_ctx, head_obj->get_obj());
   //For Append obj, disable versioning
   op_target.set_versioning_disabled(true);
   RGWRados::Object::Write obj_op(&op_target);
