@@ -68,6 +68,15 @@ public:
                                            "Dump internal statistics for bluefs."
                                            "");
         ceph_assert(r == 0);
+        r = admin_socket->register_command("bluestore bluefs files list",
+                                           hook,
+                                           "List files currently in bluefs.");
+        ceph_assert(r == 0);
+        r = admin_socket->register_command("bluestore bluefs file get"
+					   " name=file,type=CephString",
+                                           hook,
+                                           "Get content of single bluefs file.");
+        ceph_assert(r == 0);	
       }
     }
     return hook;
@@ -84,6 +93,7 @@ private:
 	   Formatter *f,
 	   std::ostream& ss,
 	   bufferlist& out) override {
+    int r = 0;
     if (command == "bluestore bluefs available") {
       int64_t alloc_size = 0;
       cmd_getval(bluefs->cct, cmdmap, "alloc_size", alloc_size);
@@ -112,11 +122,64 @@ private:
     } else if (command == "bluestore bluefs stats") {
       bluefs->dump_block_extents(ss);
       bluefs->dump_volume_selector(ss);
+    } else if (command == "bluestore bluefs files list") {
+      std::lock_guard l(bluefs->lock);
+      f->open_array_section("files");
+      for (auto &d : bluefs->dir_map) {
+        std::string dir = d.first;
+        for (auto &r : d.second->file_map) {
+          f->open_object_section("file");
+          f->dump_string("name", (dir + "/" + r.first).c_str());
+	  f->dump_int("size", r.second->fnode.size);
+	  f->dump_int("refs", r.second->refs);
+          f->dump_int("locked", r.second->locked);
+          f->dump_int("deleted", r.second->deleted);
+          f->dump_int("readers", r.second->num_readers.load());
+          f->dump_int("writers", r.second->num_writers.load());
+          std::vector<size_t> sizes;
+          sizes.resize(bluefs->bdev.size());
+          for(auto& i : r.second->fnode.extents) {
+            sizes[i.bdev] += i.length;
+          }
+          for (size_t i=0; i<sizes.size(); i++) {
+            if (sizes[i]>0)
+              f->dump_string(("dev-"+to_string(i)).c_str(), to_string(sizes[i]).c_str());
+          }
+          f->close_section();
+        }
+      }
+      f->close_section();
+      f->flush(ss);
+    } else if (command == "bluestore bluefs file get") {
+      string file_name;
+      cmd_getval(g_ceph_context, cmdmap, "file", file_name);
+      FileRef file;
+      std::lock_guard l(bluefs->lock);
+      {
+        for (auto &d : bluefs->dir_map) {
+          std::string dir = d.first;
+          for (auto &r : d.second->file_map) {
+            if (file_name == dir + "/" + r.first) {
+              file = r.second;
+              break;
+            }
+          }
+        }
+      }
+      if (file) {
+        FileReader fr(file, bluefs->cct->_conf->bluefs_max_prefetch, false, false);
+        buffer::ptr p(file->fnode.size);
+        int r = bluefs->_read_random(&fr, 0, file->fnode.size, p.c_str());
+        p.set_length(r);
+        out.append(p);
+      } else {
+	r = -ENOENT;
+      }	
     } else {
       ss << "Invalid command" << std::endl;
-      return -ENOSYS;
+      r = -ENOSYS;
     }
-    return 0;
+    return r;
   }
 };
 
