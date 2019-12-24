@@ -19,8 +19,9 @@
 #include "include/types.h"
 #include "msg/Message.h"
 #include "common/DecayCounter.h"
+#include "messages/MMDSOp.h"
 
-class MHeartbeat : public Message {
+class MHeartbeat : public MMDSOp {
 private:
   mds_load_t load;
   __s32        beat = 0;
@@ -34,9 +35,9 @@ private:
   map<mds_rank_t, float>& get_import_map() { return import_map; }
 
 protected:
-  MHeartbeat() : Message(MSG_MDS_HEARTBEAT), load(DecayRate()) {}
+  MHeartbeat() : MMDSOp(MSG_MDS_HEARTBEAT), load(DecayRate()) {}
   MHeartbeat(mds_load_t& load, int beat)
-    : Message(MSG_MDS_HEARTBEAT),
+    : MMDSOp(MSG_MDS_HEARTBEAT),
       load(load),
       beat(beat)
   {}
