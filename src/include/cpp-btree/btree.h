@@ -140,13 +140,11 @@ struct common_params {
   // True if this is a multiset or multimap.
   using is_multi_container = std::integral_constant<bool, Multi>;
 
-  enum {
-    kTargetNodeSize = TargetNodeSize,
-    kValueSize = ValueSize,
-    // Available space for values.  This is largest for leaf nodes,
-    // which has overhead no fewer than two pointers.
-    kNodeValueSpace = TargetNodeSize - 2 * sizeof(void*),
-  };
+  constexpr static int kTargetNodeSize = TargetNodeSize;
+  constexpr static int kValueSize = ValueSize;
+  // Available space for values.  This is largest for leaf nodes,
+  // which has overhead no fewer than two pointers.
+  constexpr static int kNodeValueSpace = TargetNodeSize - 2 * sizeof(void*);
 
   // This is an integral type large enough to hold as many
   // ValueSize-values as will fit a node of TargetNodeSize bytes.
@@ -407,20 +405,18 @@ private:
                               : NodeTargetValues((begin + end) / 2 + 1, end);
   }
 
-  enum {
-    kValueSize = params_type::kValueSize,
-    kTargetNodeSize = params_type::kTargetNodeSize,
-    kNodeTargetValues = NodeTargetValues(0, params_type::kTargetNodeSize),
+  constexpr static int kValueSize = params_type::kValueSize;
+  constexpr static int kTargetNodeSize = params_type::kTargetNodeSize;
+  constexpr static int kNodeTargetValues = NodeTargetValues(0, kTargetNodeSize);
 
-    // We need a minimum of 3 values per internal node in order to perform
-    // splitting (1 value for the two nodes involved in the split and 1 value
-    // propagated to the parent as the delimiter for the split).
-    kNodeValues = kNodeTargetValues >= 3 ? kNodeTargetValues : 3,
+  // We need a minimum of 3 values per internal node in order to perform
+  // splitting (1 value for the two nodes involved in the split and 1 value
+  // propagated to the parent as the delimiter for the split).
+  constexpr static size_type kNodeValues = std::max(kNodeTargetValues, 3);
 
-    // The node is internal (i.e. is not a leaf node) if and only if `max_count`
-    // has this value.
-    kInternalNodeMaxCount = 0,
-  };
+  // The node is internal (i.e. is not a leaf node) if and only if `max_count`
+  // has this value.
+  constexpr static size_type kInternalNodeMaxCount = 0;
 
   struct base_fields {
     // A pointer to the node's parent.
@@ -894,11 +890,9 @@ class btree {
     return const_cast<EmptyNodeType *>(&empty_node);
   }
 
-  enum {
-    kNodeValues = node_type::kNodeValues,
-    kMinNodeValues = kNodeValues / 2,
-    kValueSize = node_type::kValueSize,
-  };
+  constexpr static int kNodeValues = node_type::kNodeValues;
+  constexpr static int kMinNodeValues = kNodeValues / 2;
+  constexpr static int kValueSize = node_type::kValueSize;
 
   // A helper class to get the empty base class optimization for 0-size
   // allocators. Base is allocator_type.
@@ -2093,7 +2087,7 @@ auto btree<P>::erase(iterator begin, iterator end)
       const size_type remaining_to_erase = size_ - target_size;
       const size_type remaining_in_node = begin.node->count() - begin.position;
       begin = erase_from_leaf_node(
-          begin, (std::min)(remaining_to_erase, remaining_in_node));
+          begin, std::min(remaining_to_erase, remaining_in_node));
     } else {
       begin = erase(begin);
     }
@@ -2425,7 +2419,7 @@ inline auto btree<P>::internal_emplace(iterator iter, Args &&... args)
       // size. Simply grow the size of the root node.
       assert(iter.node == root());
       iter.node =
-          new_leaf_root_node((std::min<int>)(kNodeValues, 2 * max_count));
+          new_leaf_root_node(std::min(kNodeValues, 2 * max_count));
       iter.node->swap(root(), mutable_allocator());
       delete_leaf_node(root());
       mutable_root() = iter.node;
