@@ -418,9 +418,11 @@ int KvStoreBench::test_teuthology_aio(next_gen_t distr,
       kvs->aio_get(kv.first, &cb_args->val, aio_callback_timed,
 	  cb_args, &cb_args->err);
       break;
+    default:
+      // shouldn't happen here
+      assert(false);
     }
 
-    delete cb_args;
   }
 
   op_avail.wait(l, [this] { return ops_in_flight <= 0; });
