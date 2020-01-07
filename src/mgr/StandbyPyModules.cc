@@ -77,27 +77,22 @@ void StandbyPyModules::shutdown()
 
 void StandbyPyModules::start_one(PyModuleRef py_module)
 {
-  std::lock_guard l(lock);
-  const auto name = py_module->get_name();
-
-  ceph_assert(modules.count(name) == 0);
-
-  modules[name].reset(new StandbyPyModule(state, py_module, clog));
-  auto standby_module = modules.at(name).get();
-
   // Send all python calls down a Finisher to avoid blocking
   // C++ code, and avoid any potential lock cycles.
-  finisher.queue(new LambdaContext([this, standby_module, name](int) {
-    int r = standby_module->load();
-    if (r != 0) {
+  finisher.queue(new LambdaContext([this, py_module=std::move(py_module)](int) {
+    const auto name = py_module->get_name();
+    auto standby_module = std::make_unique<StandbyPyModule>(state, py_module, clog);
+    if (int r = standby_module->load(); r != 0) {
       derr << "Failed to run module in standby mode ('" << name << "')"
            << dendl;
-      std::lock_guard l(lock);
-      modules.erase(name);
-    } else {
-      dout(4) << "Starting thread for " << name << dendl;
-      standby_module->thread.create(standby_module->get_thread_name());
+      return;
     }
+
+    std::lock_guard l(lock);
+    ceph_assert(modules.count(name) == 0);
+    auto it = modules.emplace(name, std::move(standby_module)).first;
+    dout(4) << "Starting thread for " << name << dendl;
+    it->second->thread.create(standby_module->get_thread_name());
   }));
 }
 
