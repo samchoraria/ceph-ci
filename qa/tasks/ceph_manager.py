@@ -28,7 +28,7 @@ import six
 try:
     from subprocess import DEVNULL # py3k
 except ImportError:
-    DEVNULL = open(os.devnull, 'r+')
+    DEVNULL = open(os.devnull, 'r+')  # type: ignore
 
 DEFAULT_CONF_PATH = '/etc/ceph/ceph.conf'
 
@@ -986,6 +986,7 @@ class OSDThrasher(Thrasher):
             # Allow successful completion so gevent doesn't see an exception.
             # The DaemonWatchdog will observe the error and tear down the test.
 
+    @staticmethod
     def log_exc(func):
         @wraps(func)
         def wrapper(self):
@@ -2094,13 +2095,13 @@ class CephManager:
                 ret[status] += 1
         return ret
 
-    @wait_for_pg_stats
+    @wait_for_pg_stats # type: ignore
     def with_pg_state(self, pool, pgnum, check):
         pgstr = self.get_pgid(pool, pgnum)
         stats = self.get_single_pg_stats(pgstr)
         assert(check(stats['state']))
 
-    @wait_for_pg_stats
+    @wait_for_pg_stats # type: ignore
     def with_pg(self, pool, pgnum, check):
         pgstr = self.get_pgid(pool, pgnum)
         stats = self.get_single_pg_stats(pgstr)
