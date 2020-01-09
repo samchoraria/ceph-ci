@@ -72,6 +72,10 @@ public:
                                            hook,
                                            "List files currently in bluefs.");
         ceph_assert(r == 0);
+        r = admin_socket->register_command("bluestore bluefs files spread",
+                                           hook,
+                                           "List files currently in bluefs.");
+        ceph_assert(r == 0);
         r = admin_socket->register_command("bluestore bluefs file get"
 					   " name=file,type=CephString",
                                            hook,
@@ -150,6 +154,25 @@ private:
           f->close_section();
         }
       }
+      f->close_section();
+     } else if (command == "bluestore bluefs files spread") {
+      std::lock_guard l(bluefs->lock);
+      std::vector<size_t> sizes;
+      sizes.resize(bluefs->bdev.size());
+      f->open_array_section("locations");
+      for (auto &d : bluefs->dir_map) {
+        std::string dir = d.first;
+        for (auto &r : d.second->file_map) {
+          for(auto& i : r.second->fnode.extents) {
+            sizes[i.bdev] += i.length;
+          }
+        }
+      }
+      for (size_t i=0; i<sizes.size(); i++) {
+        if (sizes[i]>0)
+          f->dump_string(("dev-"+to_string(i)).c_str(), to_string(sizes[i]).c_str());
+      }
+
       f->close_section();
       f->flush(ss);
     } else if (command == "bluestore bluefs file get") {
