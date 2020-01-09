@@ -130,18 +130,22 @@ private:
       out.append(dump.str());
     } else if (command == "bluestore bluefs files list") {
       std::lock_guard l(bluefs->lock);
+      std::set<uint64_t> seen_ino;
       f->open_array_section("files");
       for (auto &d : bluefs->dir_map) {
         std::string dir = d.first;
         for (auto &r : d.second->file_map) {
           f->open_object_section("file");
           f->dump_string("name", (dir + "/" + r.first).c_str());
-	  f->dump_int("size", r.second->fnode.size);
-	  f->dump_int("refs", r.second->refs);
+          f->dump_int("ino", r.second->fnode.ino);
+          seen_ino.emplace(r.second->fnode.ino);
+          f->dump_int("size", r.second->fnode.size);
+          f->dump_int("refs", r.second->refs);
           f->dump_int("locked", r.second->locked);
           f->dump_int("deleted", r.second->deleted);
           f->dump_int("readers", r.second->num_readers.load());
           f->dump_int("writers", r.second->num_writers.load());
+          f->dump_int("hint", (uint64_t)r.second->vselector_hint);
           std::vector<size_t> sizes;
           sizes.resize(bluefs->bdev.size());
           for(auto& i : r.second->fnode.extents) {
@@ -153,6 +157,29 @@ private:
           }
           f->close_section();
         }
+      }
+      for (auto &r : bluefs->file_map) {
+	if (seen_ino.count(r.second->fnode.ino) > 0)
+	  continue;
+        f->open_object_section("ifile");
+        f->dump_int("ino", r.second->fnode.ino);
+        f->dump_int("size", r.second->fnode.size);
+        f->dump_int("refs", r.second->refs);
+        f->dump_int("locked", r.second->locked);
+        f->dump_int("deleted", r.second->deleted);
+        f->dump_int("readers", r.second->num_readers.load());
+        f->dump_int("writers", r.second->num_writers.load());
+        f->dump_int("hint", (uint64_t)r.second->vselector_hint);
+        std::vector<size_t> sizes;
+        sizes.resize(bluefs->bdev.size());
+        for(auto& i : r.second->fnode.extents) {
+          sizes[i.bdev] += i.length;
+        }
+        for (size_t i=0; i<sizes.size(); i++) {
+          if (sizes[i]>0)
+            f->dump_string(("dev-"+to_string(i)).c_str(), to_string(sizes[i]).c_str());
+        }
+        f->close_section();
       }
       f->close_section();
      } else if (command == "bluestore bluefs files spread") {
@@ -174,7 +201,6 @@ private:
       }
 
       f->close_section();
-      f->flush(ss);
     } else if (command == "bluestore bluefs file get") {
       string file_name;
       cmd_getval(g_ceph_context, cmdmap, "file", file_name);
