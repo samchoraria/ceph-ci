@@ -66,18 +66,6 @@ log = logging.getLogger('rgw_multi.tests')
 num_buckets = 0
 run_prefix=''.join(random.choice(string.ascii_lowercase) for _ in range(6))
 
-def get_gateway_connection(gateway, credentials):
-    """ connect to the given gateway """
-    if gateway.connection is None:
-        gateway.connection = boto.connect_s3(
-                aws_access_key_id = credentials.access_key,
-                aws_secret_access_key = credentials.secret,
-                host = gateway.host,
-                port = gateway.port,
-                is_secure = False,
-                calling_format = boto.s3.connection.OrdinaryCallingFormat())
-    return gateway.connection
-
 def get_zone_connection(zone, credentials):
     """ connect to the zone's first gateway """
     if isinstance(credentials, list):
@@ -91,15 +79,6 @@ def mdlog_list(zone, period = None):
     (mdlog_json, _) = zone.cluster.admin(cmd, read_only=True)
     mdlog_json = mdlog_json.decode('utf-8')
     return json.loads(mdlog_json)
-
-def meta_sync_status(zone):
-    while True:
-        cmd = ['metadata', 'sync', 'status'] + zone.zone_args()
-        meta_sync_status_json, retcode = zone.cluster.admin(cmd, check_retcode=False, read_only=True)
-        if retcode == 0:
-            break
-        assert(retcode == 2) # ENOENT
-        time.sleep(5)
 
 def mdlog_autotrim(zone):
     zone.cluster.admin(['mdlog', 'autotrim'])

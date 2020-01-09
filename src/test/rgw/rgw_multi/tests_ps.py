@@ -1313,7 +1313,7 @@ def test_ps_s3_notification_push_amqp_on_master():
     [thr.join() for thr in client_threads] 
     
     time_diff = time.time() - start_time
-    print 'average time for deletion + amqp notification is: ' + str(time_diff*1000/number_of_objects) + ' milliseconds'
+    print('average time for deletion + amqp notification is: ' + str(time_diff*1000/number_of_objects) + ' milliseconds')
 
     print('wait for 5sec for the messages...')
     time.sleep(5)
@@ -1472,9 +1472,9 @@ def test_ps_s3_notification_push_kafka_on_master():
     [thr.join() for thr in client_threads] 
 
     time_diff = time.time() - start_time
-    print 'average time for creation + kafka notification is: ' + str(time_diff*1000/number_of_objects) + ' milliseconds'
+    print('average time for creation + kafka notification is: ' + str(time_diff*1000/number_of_objects) + ' milliseconds')
 
-    print 'wait for 5sec for the messages...'
+    print('wait for 5sec for the messages...')
     time.sleep(5)
     keys = list(bucket.list())
     receiver.verify_s3_events(keys, exact_match=True)
@@ -1489,9 +1489,9 @@ def test_ps_s3_notification_push_kafka_on_master():
     [thr.join() for thr in client_threads] 
     
     time_diff = time.time() - start_time
-    print 'average time for deletion + kafka notification is: ' + str(time_diff*1000/number_of_objects) + ' milliseconds'
+    print('average time for deletion + kafka notification is: ' + str(time_diff*1000/number_of_objects) + ' milliseconds')
 
-    print 'wait for 5sec for the messages...'
+    print('wait for 5sec for the messages...')
     time.sleep(5)
     receiver.verify_s3_events(keys, exact_match=True, deletions=True)
     
@@ -1573,7 +1573,7 @@ def test_ps_s3_notification_push_http_on_master():
     [thr.join() for thr in client_threads] 
     
     time_diff = time.time() - start_time
-    print 'average time for deletion + http notification is: ' + str(time_diff*1000/number_of_objects) + ' milliseconds'
+    print('average time for deletion + http notification is: ' + str(time_diff*1000/number_of_objects) + ' milliseconds')
 
     print('wait for 5sec for the messages...')
     time.sleep(5)
