@@ -4826,6 +4826,10 @@ int RGWRados::Object::Delete::delete_obj(optional_yield y)
   }
   uint64_t obj_accounted_size = state->accounted_size;
 
+  if(params.abortmp) {
+    obj_accounted_size = params.parts_accounted_size;
+  }
+
   if (!real_clock::is_zero(params.expiration_time)) {
     bufferlist bl;
     real_time delete_at;
