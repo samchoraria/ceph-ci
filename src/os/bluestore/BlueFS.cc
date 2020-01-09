@@ -120,8 +120,10 @@ private:
       f->dump_int("available_from_bluestore", extra_space);
       f->close_section();
     } else if (command == "bluestore bluefs stats") {
-      bluefs->dump_block_extents(ss);
-      bluefs->dump_volume_selector(ss);
+      stringstream dump;
+      bluefs->dump_block_extents(dump);
+      bluefs->dump_volume_selector(dump);
+      out.append(dump.str());
     } else if (command == "bluestore bluefs files list") {
       std::lock_guard l(bluefs->lock);
       f->open_array_section("files");
