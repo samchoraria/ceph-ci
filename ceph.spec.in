@@ -84,7 +84,9 @@
 %{!?python3_pkgversion: %global python3_pkgversion 3}
 %{!?python3_version_nodots: %global python3_version_nodots 3}
 %{!?python3_version: %global python3_version 3}
-
+%if 0%{?rhel} == 7
+%define __python %{__python3}
+%endif
 # unify libexec for all targets
 %global _libexecdir %{_exec_prefix}/lib
 
@@ -1272,6 +1274,7 @@ install -m 644 -D monitoring/prometheus/alerts/ceph_default_alerts.yml %{buildro
 %if 0%{?rhel} == 8
 %py_byte_compile %{__python3} %{buildroot}%{python3_sitelib}
 %endif
+rm -f %{buildroot}/%{_datadir}/ceph/__pycache__/*.pyc
 
 %clean
 rm -rf %{buildroot}
