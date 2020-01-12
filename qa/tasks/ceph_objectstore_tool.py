@@ -514,7 +514,7 @@ def test_objectstore(ctx, config, cli_remote, REP_POOL, REP_NAME, ec=False):
                 proc.wait()
                 if proc.exitstatus != 0:
                     log.error("Failure of --op info command with {ret}".
-                              format(proc.exitstatus))
+                              format(ret=proc.exitstatus))
                     ERRORS += 1
                     continue
                 info = proc.stdout.getvalue()
