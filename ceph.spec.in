@@ -1567,6 +1567,7 @@ fi
 %{_datadir}/ceph/mgr/test_orchestrator
 %{_datadir}/ceph/mgr/volumes
 %{_datadir}/ceph/mgr/zabbix
+%dir %{_datadir}/ceph/mgr/__pycache__
 %{_unitdir}/ceph-mgr@.service
 %{_unitdir}/ceph-mgr.target
 %attr(750,ceph,ceph) %dir %{_localstatedir}/lib/ceph/mgr
