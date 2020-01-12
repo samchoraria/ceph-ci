@@ -1272,6 +1272,7 @@ install -m 644 -D monitoring/prometheus/alerts/ceph_default_alerts.yml %{buildro
 %if 0%{?rhel} == 8
 %py_byte_compile %{__python3} %{buildroot}%{python3_sitelib}
 %endif
+rm -f %{buildroot}/%{_datadir}/ceph/__pycache__/*.pyc
 
 %clean
 rm -rf %{buildroot}
