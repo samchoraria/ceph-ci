@@ -53,6 +53,8 @@ using rgw::IAM::s3GetBucketLocation;
 using rgw::IAM::s3GetBucketLogging;
 using rgw::IAM::s3GetBucketNotification;
 using rgw::IAM::s3GetBucketPolicy;
+using rgw::IAM::s3GetBucketPolicyStatus;
+using rgw::IAM::s3GetBucketPublicAccessBlock;
 using rgw::IAM::s3GetBucketRequestPayment;
 using rgw::IAM::s3GetBucketTagging;
 using rgw::IAM::s3GetBucketVersioning;
@@ -66,6 +68,7 @@ using rgw::IAM::s3GetObjectTagging;
 using rgw::IAM::s3GetObjectVersion;
 using rgw::IAM::s3GetObjectVersionTagging;
 using rgw::IAM::s3GetObjectVersionTorrent;
+using rgw::IAM::s3GetPublicAccessBlock;
 using rgw::IAM::s3GetReplicationConfiguration;
 using rgw::IAM::s3ListAllMyBuckets;
 using rgw::IAM::s3ListBucket;
@@ -88,6 +91,7 @@ using rgw::IAM::iamCreateRole;
 using rgw::IAM::iamDeleteRole;
 using rgw::IAM::iamAll;
 using rgw::IAM::stsAll;
+using rgw::IAM::allCount;
 
 class FakeIdentity : public Identity {
   const Principal id;
@@ -373,6 +377,9 @@ TEST_F(PolicyTest, Parse3) {
   act2[s3GetBucketObjectLockConfiguration] = 1;
   act2[s3GetObjectRetention] = 1;
   act2[s3GetObjectLegalHold] = 1;
+  act2[s3GetBucketPolicyStatus] = 1;
+  act2[s3GetBucketPublicAccessBlock] = 1;
+  act2[s3GetPublicAccessBlock] = 1;
 
   EXPECT_EQ(p->statements[2].action, act2);
   EXPECT_EQ(p->statements[2].notaction, None);
@@ -439,6 +446,9 @@ TEST_F(PolicyTest, Eval3) {
   s3allow[s3GetBucketObjectLockConfiguration] = 1;
   s3allow[s3GetObjectRetention] = 1;
   s3allow[s3GetObjectLegalHold] = 1;
+  s3allow[s3GetBucketPolicyStatus] = 1;
+  s3allow[s3GetBucketPublicAccessBlock] = 1;
+  s3allow[s3GetPublicAccessBlock] = 1;
 
   EXPECT_EQ(p.eval(em, none, s3PutBucketPolicy,
 		   ARN(Partition::aws, Service::s3,
@@ -1203,10 +1213,14 @@ TEST(MatchPolicy, String)
   EXPECT_TRUE(match_policy("a:*", "a:b:c", flag)); // can span segments
 }
 
-static const Action_t s3AllValuet("1111111111111111111111111111111111111111111111111111111111111");
-static const Action_t iamAllValuet("111111111111100000000000000000000000000000000000000000000000000000000000000");
-static const Action_t stsAllValuet("1110000000000000000000000000000000000000000000000000000000000000000000000000000");
-static const Action_t allValuet("11111111111111111111111111111111111111111111111111111111111111111111111111111111");
+Action_t set_range_bits(std::uint64_t start, std::uint64_t end)
+{
+  Action_t result;
+  for (uint64_t i = start; i < end; i++) {
+    result.set(i);
+  }
+  return result;
+}
 
 using rgw::IAM::s3AllValue;
 using rgw::IAM::stsAllValue;
@@ -1214,8 +1228,8 @@ using rgw::IAM::allValue;
 using rgw::IAM::iamAllValue;
 TEST(set_cont_bits, iamconsts)
 {
-  EXPECT_EQ(s3AllValue, s3AllValuet);
-  EXPECT_EQ(iamAllValue, iamAllValuet);
-  EXPECT_EQ(stsAllValue, stsAllValuet);
-  EXPECT_EQ(allValue , allValuet);
+  EXPECT_EQ(s3AllValue, set_range_bits(0, s3All));
+  EXPECT_EQ(iamAllValue, set_range_bits(s3All+1, iamAll));
+  EXPECT_EQ(stsAllValue, set_range_bits(iamAll+1, stsAll));
+  EXPECT_EQ(allValue , set_range_bits(0, allCount));
 }
