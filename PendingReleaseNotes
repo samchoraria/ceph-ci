@@ -33,3 +33,6 @@
   named 'Records'. Note that this does not affect pulling bucket notification
   from a subscription in a 'pubsub' zone, as these are already wrapped inside
   that array.
+* Bucket notifications now support Kafka endpoints. This require librdkafka of version 0.9.2 and up.
+  Note that Ubuntu 16.04.6 LTS (Xenial Xerus) has an older version of librdkafka, and would
+￼ require an update to the library.
