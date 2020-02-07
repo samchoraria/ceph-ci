@@ -156,7 +156,7 @@ class OrchestratorCli(orchestrator.OrchestratorClientMixin, MgrModule):
         return self.get_module_option("orchestrator")
 
     @orchestrator._cli_write_command(
-        'orchestrator host add',
+        'orch host add',
         "name=host,type=CephString,req=true",
         'Add a host')
     def _add_host(self, host):
@@ -166,7 +166,7 @@ class OrchestratorCli(orchestrator.OrchestratorClientMixin, MgrModule):
         return HandleCommandResult(stdout=completion.result_str())
 
     @orchestrator._cli_write_command(
-        'orchestrator host rm',
+        'orch host rm',
         "name=host,type=CephString,req=true",
         'Remove a host')
     def _remove_host(self, host):
@@ -176,7 +176,7 @@ class OrchestratorCli(orchestrator.OrchestratorClientMixin, MgrModule):
         return HandleCommandResult(stdout=completion.result_str())
 
     @orchestrator._cli_read_command(
-        'orchestrator host ls',
+        'orch host ls',
         'name=format,type=CephChoices,strings=json|plain,req=false',
         'List hosts')
     def _get_hosts(self, format='plain'):
@@ -200,7 +200,7 @@ class OrchestratorCli(orchestrator.OrchestratorClientMixin, MgrModule):
         return HandleCommandResult(stdout=output)
 
     @orchestrator._cli_write_command(
-        'orchestrator host label add',
+        'orch host label add',
         'name=host,type=CephString '
         'name=label,type=CephString',
         'Add a host label')
@@ -211,7 +211,7 @@ class OrchestratorCli(orchestrator.OrchestratorClientMixin, MgrModule):
         return HandleCommandResult(stdout=completion.result_str())
 
     @orchestrator._cli_write_command(
-        'orchestrator host label rm',
+        'orch host label rm',
         'name=host,type=CephString '
         'name=label,type=CephString',
         'Add a host label')
@@ -222,7 +222,7 @@ class OrchestratorCli(orchestrator.OrchestratorClientMixin, MgrModule):
         return HandleCommandResult(stdout=completion.result_str())
 
     @orchestrator._cli_read_command(
-        'orchestrator device ls',
+        'orch device ls',
         "name=host,type=CephString,n=N,req=false "
         "name=format,type=CephChoices,strings=json|plain,req=false "
         "name=refresh,type=CephBool,req=false",
@@ -274,7 +274,7 @@ class OrchestratorCli(orchestrator.OrchestratorClientMixin, MgrModule):
             return HandleCommandResult(stdout='\n'.join(out))
 
     @orchestrator._cli_read_command(
-        'orchestrator service ls',
+        'orch service ls',
         "name=host,type=CephString,req=false "
         "name=svc_type,type=CephChoices,strings=mon|mgr|osd|mds|iscsi|nfs|rgw|rbd-mirror,req=false "
         "name=svc_id,type=CephString,req=false "
@@ -334,7 +334,7 @@ class OrchestratorCli(orchestrator.OrchestratorClientMixin, MgrModule):
             return HandleCommandResult(stdout=table.get_string())
 
     @orchestrator._cli_write_command(
-        'orchestrator osd create',
+        'orch osd create',
         "name=svc_arg,type=CephString,req=false",
         'Create an OSD service. Either --svc_arg=host:drives or -i <drive_group>')
     def _create_osd(self, svc_arg=None, inbuf=None):
@@ -343,8 +343,8 @@ class OrchestratorCli(orchestrator.OrchestratorClientMixin, MgrModule):
 
         usage = """
 Usage:
-  ceph orchestrator osd create -i <json_file/yaml_file>
-  ceph orchestrator osd create host:device1,device2,...
+  ceph orch osd create -i <json_file/yaml_file>
+  ceph orch osd create host:device1,device2,...
 """
 
         if inbuf:
@@ -374,7 +374,7 @@ Usage:
         return HandleCommandResult(stdout=completion.result_str())
 
     @orchestrator._cli_write_command(
-        'orchestrator osd rm',
+        'orch osd rm',
         "name=svc_id,type=CephString,n=N",
         'Remove OSD services')
     def _osd_rm(self, svc_id):
@@ -389,7 +389,7 @@ Usage:
         return HandleCommandResult(stdout=completion.result_str())
 
     @orchestrator._cli_write_command(
-        'orchestrator rbd-mirror add',
+        'orch rbd-mirror add',
         "name=num,type=CephInt,req=false "
         "name=hosts,type=CephString,n=N,req=false",
         'Create an rbd-mirror service')
@@ -403,7 +403,7 @@ Usage:
         return HandleCommandResult(stdout=completion.result_str())
 
     @orchestrator._cli_write_command(
-        'orchestrator rbd-mirror update',
+        'orch rbd-mirror update',
         "name=num,type=CephInt,req=false "
         "name=hosts,type=CephString,n=N,req=false "
         "name=label,type=CephString,req=false",
@@ -418,7 +418,7 @@ Usage:
         return HandleCommandResult(stdout=completion.result_str())
 
     @orchestrator._cli_write_command(
-        'orchestrator rbd-mirror rm',
+        'orch rbd-mirror rm',
         "name=name,type=CephString,req=false",
         'Remove rbd-mirror service or rbd-mirror service instance')
     def _rbd_mirror_rm(self, name=None):
@@ -428,7 +428,7 @@ Usage:
         return HandleCommandResult(stdout=completion.result_str())
 
     @orchestrator._cli_write_command(
-        'orchestrator mds add',
+        'orch mds add',
         "name=fs_name,type=CephString "
         "name=num,type=CephInt,req=false "
         "name=hosts,type=CephString,n=N,req=false",
@@ -443,7 +443,7 @@ Usage:
         return HandleCommandResult(stdout=completion.result_str())
 
     @orchestrator._cli_write_command(
-        'orchestrator mds update',
+        'orch mds update',
         "name=fs_name,type=CephString "
         "name=num,type=CephInt,req=false "
         "name=hosts,type=CephString,n=N,req=false "
@@ -463,7 +463,7 @@ Usage:
         return HandleCommandResult(stdout=completion.result_str())
 
     @orchestrator._cli_write_command(
-        'orchestrator mds rm',
+        'orch mds rm',
         "name=name,type=CephString",
         'Remove an MDS service (mds id or fs_name)')
     def _mds_rm(self, name):
@@ -473,7 +473,7 @@ Usage:
         return HandleCommandResult(stdout=completion.result_str())
 
     @orchestrator._cli_write_command(
-        'orchestrator rgw add',
+        'orch rgw add',
         'name=realm_name,type=CephString '
         'name=zone_name,type=CephString '
         'name=num,type=CephInt,req=false '
@@ -483,8 +483,8 @@ Usage:
     def _rgw_add(self, realm_name, zone_name, num=1, hosts=None, inbuf=None):
         usage = """
 Usage:
-  ceph orchestrator rgw add -i <json_file>
-  ceph orchestrator rgw add <realm_name> <zone_name>
+  ceph orch rgw add -i <json_file>
+  ceph orch rgw add <realm_name> <zone_name>
         """
         if inbuf:
             try:
@@ -503,7 +503,7 @@ Usage:
         return HandleCommandResult(stdout=completion.result_str())
 
     @orchestrator._cli_write_command(
-        'orchestrator rgw update',
+        'orch rgw update',
         'name=zone_name,type=CephString '
         'name=realm_name,type=CephString '
         'name=num,type=CephInt,req=false '
@@ -521,7 +521,7 @@ Usage:
         return HandleCommandResult(stdout=completion.result_str())
 
     @orchestrator._cli_write_command(
-        'orchestrator rgw rm',
+        'orch rgw rm',
         'name=realm_name,type=CephString '
         'name=zone_name,type=CephString',
         'Remove an RGW service')
@@ -533,7 +533,7 @@ Usage:
         return HandleCommandResult(stdout=completion.result_str())
 
     @orchestrator._cli_write_command(
-        'orchestrator nfs add',
+        'orch nfs add',
         "name=svc_arg,type=CephString "
         "name=pool,type=CephString "
         "name=namespace,type=CephString,req=false "
@@ -555,7 +555,7 @@ Usage:
         return HandleCommandResult(stdout=completion.result_str())
 
     @orchestrator._cli_write_command(
-        'orchestrator nfs update',
+        'orch nfs update',
         "name=svc_id,type=CephString "
         'name=num,type=CephInt,req=false '
         'name=hosts,type=CephString,n=N,req=false '
@@ -572,7 +572,7 @@ Usage:
         return HandleCommandResult(stdout=completion.result_str())
 
     @orchestrator._cli_write_command(
-        'orchestrator nfs rm',
+        'orch nfs rm',
         "name=svc_id,type=CephString",
         'Remove an NFS service')
     def _nfs_rm(self, svc_id):
@@ -582,7 +582,7 @@ Usage:
         return HandleCommandResult(stdout=completion.result_str())
 
     @orchestrator._cli_write_command(
-        'orchestrator service',
+        'orch service',
         "name=action,type=CephChoices,strings=start|stop|restart|redeploy|reconfig "
         "name=svc_type,type=CephString "
         "name=svc_name,type=CephString",
@@ -594,7 +594,7 @@ Usage:
         return HandleCommandResult(stdout=completion.result_str())
 
     @orchestrator._cli_write_command(
-        'orchestrator service-instance',
+        'orch service-instance',
         "name=action,type=CephChoices,strings=start|stop|restart|redeploy|reconfig "
         "name=svc_type,type=CephString "
         "name=svc_id,type=CephString",
@@ -606,7 +606,7 @@ Usage:
         return HandleCommandResult(stdout=completion.result_str())
 
     @orchestrator._cli_write_command(
-        'orchestrator mgr update',
+        'orch mgr update',
         "name=num,type=CephInt,req=false "
         "name=hosts,type=CephString,n=N,req=false "
         "name=label,type=CephString,req=false",
@@ -624,7 +624,7 @@ Usage:
         return HandleCommandResult(stdout=completion.result_str())
 
     @orchestrator._cli_write_command(
-        'orchestrator mon update',
+        'orch mon update',
         "name=num,type=CephInt,req=false "
         "name=hosts,type=CephString,n=N,req=false "
         "name=label,type=CephString,req=false",
@@ -644,7 +644,7 @@ Usage:
         return HandleCommandResult(stdout=completion.result_str())
 
     @orchestrator._cli_write_command(
-        'orchestrator set backend',
+        'orch set backend',
         "name=module_name,type=CephString,req=true",
         'Select orchestrator module backend')
     def _set_backend(self, module_name):
@@ -693,7 +693,7 @@ Usage:
         return HandleCommandResult(-errno.EINVAL, stderr="Module '{0}' not found".format(module_name))
 
     @orchestrator._cli_write_command(
-        'orchestrator cancel',
+        'orch cancel',
         desc='cancels ongoing operations')
     def _cancel(self):
         """
@@ -703,7 +703,7 @@ Usage:
         return HandleCommandResult()
 
     @orchestrator._cli_read_command(
-        'orchestrator status',
+        'orch status',
         desc='Report configured backend and its status')
     def _status(self):
         o = self._select_orchestrator()
