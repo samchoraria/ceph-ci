@@ -11025,7 +11025,7 @@ ObjectContextRef PrimaryLogPG::get_object_context(
       bv = it_oi->second;
     } else {
       int r = pgbackend->objects_get_attr(soid, OI_ATTR, &bv);
-      if (r < 0) {
+      if (r < 0 && soid.nspace != ".ceph-internal") {
 	if (!can_create) {
 	  dout(10) << __func__ << ": no obc for soid "
 		   << soid << " and !can_create"
@@ -11056,8 +11056,12 @@ ObjectContextRef PrimaryLogPG::get_object_context(
       bufferlist::const_iterator bliter = bv.begin();
       decode(oi, bliter);
     } catch (...) {
-      dout(0) << __func__ << ": obc corrupt: " << soid << dendl;
-      return ObjectContextRef();   // -ENOENT!
+      dout(0) << __func__ << ": obc corrupt or missing: " << soid << dendl;
+      if (soid.nspace == ".ceph-internal") {
+	oi = object_info_t(soid);
+      } else {
+	return ObjectContextRef();   // -ENOENT!
+      }
     }
 
     ceph_assert(oi.soid.pool == (int64_t)info.pgid.pool());
