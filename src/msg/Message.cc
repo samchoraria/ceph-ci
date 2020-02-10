@@ -193,6 +193,7 @@
 #include "messages/MMgrCommand.h"
 #include "messages/MMgrCommandReply.h"
 #include "messages/MServiceMap.h"
+#include "messages/MMgrBeaconReply.h"
 
 #include "messages/MLock.h"
 
@@ -849,6 +850,10 @@ Message *decode_message(CephContext *cct,
 
   case MSG_MGR_BEACON:
     m = make_message<MMgrBeacon>();
+    break;
+
+  case MSG_MGR_BEACON_REPLY:
+    m = make_message<MMgrBeaconReply>();
     break;
 
   case MSG_MON_MGR_REPORT:
