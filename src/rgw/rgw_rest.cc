@@ -1894,6 +1894,8 @@ int RGWHandler_REST::read_permissions(RGWOp* op_obj)
     /* is it a 'create bucket' request? */
     if (op_obj->get_type() == RGW_OP_CREATE_BUCKET)
       return 0;
+    if (op_obj->get_type() == RGW_OP_GET_OBJ) break;
+    
     only_bucket = true;
     break;
   case OP_DELETE:

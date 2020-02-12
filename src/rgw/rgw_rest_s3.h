@@ -873,6 +873,83 @@ static inline int valid_s3_bucket_name(const string& name, bool relaxed=false)
   return 0;
 }
 
+class s3select;
+class RGWS3Select : public RGWGetObj_ObjStore_S3
+{
+
+private:
+  s3select *s3select_syntax;
+  std::string m_last_line;
+  bool m_previous_line;
+
+public:
+  unsigned int chunk_number;
+  u_int64_t m_processed_bytes;
+
+  typedef enum
+  {
+    EVENT_TYPE,
+    CONTENT_TYPE,
+    MESSAGE_TYPE
+  } header_name_en_t;
+  static const char *header_name_str[3];
+
+  typedef enum
+  {
+    RECORDS,
+    OCTET_STREAM,
+    EVENT
+  } header_value_en_t;
+  static const char *header_value_str[3];
+
+  RGWS3Select();
+  virtual ~RGWS3Select();
+
+//encoding into big-endian
+#define ENCODE_NUMBER(dst, src, idx) \
+  {                                  \
+    auto s = src;                    \
+    if (sizeof(s) == 4)              \
+    {                                \
+      s = __builtin_bswap32(s);      \
+    }                                \
+    else                             \
+    {                                \
+      s = src >> 8 | src << 8;       \
+    };                               \
+    memcpy(&dst, &s, sizeof(s));     \
+    idx += sizeof(s);                \
+  }
+
+  std::string get_s3select_query()
+  {
+    return m_s3select_query;
+  }
+
+  int creare_header_records(char *buff);
+
+  //crc32 calculation align with python calculation
+  u_int32_t __crc32(u_int32_t crc, u_int8_t *p, int len)
+  {
+    crc = ~crc;
+    while (--len >= 0)
+    {
+      crc = crc ^ *p++;
+      for (int i = 8; --i >= 0;)
+      {
+        crc = (crc >> 1) ^ (0xedb88320 & -(crc & 1));
+      }
+    }
+    return ~crc;
+  }
+
+  int create_message(const char *payload, char *buff);
+
+  int run_s3select(char*query,char*input,size_t input_length,bool skip_first_line,bool skip_last_line,bool to_aggregate);
+  
+  virtual int send_response_data(bufferlist &bl, off_t ofs, off_t len);
+};
+
 
 namespace rgw::auth::s3 {
 

@@ -4516,6 +4516,9 @@ RGWOp *RGWHandler_REST_Obj_S3::op_post()
 
   if (s->info.args.exists("uploads"))
     return new RGWInitMultipart_ObjStore_S3;
+  
+  if (s->info.args.exists("select-type"))
+    return new RGWS3Select;
 
   return new RGWPostObj_ObjStore_S3;
 }
@@ -5281,6 +5284,7 @@ AWSGeneralAbstractor::get_auth_data_v4(const req_state* const s,
         case RGW_OP_PUT_BUCKET_PUBLIC_ACCESS_BLOCK:
         case RGW_OP_GET_BUCKET_PUBLIC_ACCESS_BLOCK:
         case RGW_OP_DELETE_BUCKET_PUBLIC_ACCESS_BLOCK:
+	case RGW_OP_GET_OBJ://s3select its post-method(payload contain the query) , the request is get-object
           break;
         default:
           dout(10) << "ERROR: AWS4 completion for this operation NOT IMPLEMENTED" << dendl;
@@ -5869,4 +5873,190 @@ bool rgw::auth::s3::S3AnonymousEngine::is_applicable(
   std::tie(version, route) = discover_aws_flavour(s->info);
 
   return route == AwsRoute::QUERY_STRING && version == AwsVersion::UNKNOWN;
+}
+
+
+const char *RGWS3Select::header_name_str[3] = {":event-type", ":content-type", ":message-type"};
+const char *RGWS3Select::header_value_str[3] = {"Records", "application/octet-stream", "event"};
+#include "s3select.h"
+
+RGWS3Select::RGWS3Select()
+{
+  set_get_data(true);
+  chunk_number = 0;
+  s3select_syntax = new s3select();
+  m_processed_bytes = 0;
+  m_previous_line = false;
+}
+
+RGWS3Select::~RGWS3Select()
+{
+  delete s3select_syntax;
+}
+
+int RGWS3Select::creare_header_records(char *buff)
+{
+  int i = 0;
+
+  //1
+  buff[i++] = (char)strlen(header_name_str[EVENT_TYPE]);
+  memcpy(&buff[i], header_name_str[EVENT_TYPE], strlen(header_name_str[EVENT_TYPE]));
+  i += strlen(header_name_str[EVENT_TYPE]);
+  buff[i++] = (char)7;
+  ENCODE_NUMBER(buff[i], (short)strlen(header_value_str[RECORDS]), i);
+  memcpy(&buff[i], header_value_str[RECORDS], strlen(header_value_str[RECORDS]));
+  i += strlen(header_value_str[RECORDS]);
+
+  //2
+  buff[i++] = (char)strlen(header_name_str[CONTENT_TYPE]);
+  memcpy(&buff[i], header_name_str[CONTENT_TYPE], strlen(header_name_str[CONTENT_TYPE]));
+  i += strlen(header_name_str[CONTENT_TYPE]);
+  buff[i++] = (char)7;
+  ENCODE_NUMBER(buff[i], (short)strlen(header_value_str[OCTET_STREAM]), i);
+  memcpy(&buff[i], header_value_str[OCTET_STREAM], strlen(header_value_str[OCTET_STREAM]));
+  i += strlen(header_value_str[OCTET_STREAM]);
+
+  //3
+  buff[i++] = (char)strlen(header_name_str[MESSAGE_TYPE]);
+  memcpy(&buff[i], header_name_str[MESSAGE_TYPE], strlen(header_name_str[MESSAGE_TYPE]));
+  i += strlen(header_name_str[MESSAGE_TYPE]);
+  buff[i++] = (char)7;
+  ENCODE_NUMBER(buff[i], (short)strlen(header_value_str[EVENT]), i);
+  memcpy(&buff[i], header_value_str[EVENT], strlen(header_value_str[EVENT]));
+  i += strlen(header_value_str[EVENT]);
+
+  return i;
+}
+
+int RGWS3Select::create_message(const char *payload, char *buff)
+{
+
+  u_int32_t total_byte_len = 0;
+  u_int32_t preload_crc = 0;
+  u_int32_t message_crc = 0;
+  int i = 0;
+
+  u_int32_t header_len = creare_header_records(buff + 12);
+
+  total_byte_len = strlen(payload) + header_len + 16;
+
+  ENCODE_NUMBER(buff[i], total_byte_len, i);
+  ENCODE_NUMBER(buff[i], header_len, i);
+  char crc_buff[8];
+  memcpy(&crc_buff[0], &total_byte_len, 4);
+  memcpy(&crc_buff[4], &header_len, 4);
+
+  preload_crc = __crc32(0, (u_int8_t *)buff, 8);
+  ENCODE_NUMBER(buff[i], preload_crc, i);
+
+  i += header_len;
+  memcpy(&buff[i], payload, strlen(payload));
+  i += strlen(payload);
+
+  message_crc = __crc32(0, (u_int8_t *)buff, i);
+  ENCODE_NUMBER(buff[i], message_crc, i);
+
+  return i;
+}
+
+int RGWS3Select::run_s3select(char*query,char*input,size_t input_length,bool skip_first_line,bool skip_last_line,bool to_aggregate)
+{
+  char * buff = 0;
+  std::string res;
+
+  csv_object xxx(s3select_syntax,query,input, input_length ,skip_first_line,skip_last_line , (m_processed_bytes >= s->obj_size) );
+  if (s3select_syntax->get_error_description().empty() == false)
+  {
+    //TODO create error messege 
+  } 
+
+  #define PAYLOAD_LINE "\n<Payload>\n<Records>\n<Payload>\n"
+  res.append(PAYLOAD_LINE);
+  xxx.run_s3select_on_object(res);
+
+  if (res.size() > strlen(PAYLOAD_LINE))
+  {
+    res.append("\n</Payload></Records></Payload>");
+
+    buff = (char *)malloc(res.size() + 1000);
+    int buff_len = create_message(res.c_str(), buff);
+
+    s->formatter->write_bin_data(buff, buff_len);
+    if (op_ret < 0)
+      return op_ret;
+  }
+  rgw_flush_formatter_and_reset(s, s->formatter);
+
+  if(buff) free(buff);
+
+  return 0;
+}
+
+int RGWS3Select::send_response_data(bufferlist &bl, off_t ofs, off_t len)
+{
+  if (len == 0)
+    return 0;
+
+  if (chunk_number == 0)
+  {
+    if (op_ret < 0)
+      set_req_state_err(s, op_ret);
+    dump_errno(s);
+  }
+  // Explicitly use chunked transfer encoding so that we can stream the result
+  // to the user without having to wait for the full length of it.
+  if (chunk_number == 0)
+    end_header(s, this, "application/xml", CHUNKED_TRANSFER_ENCODING);
+
+#define LINE_DELIMITER '\n' //TODO should be dynamic
+#define GT "&gt;"
+#define LT "&lt;"
+  if (m_s3select_query.find(GT) != std::string::npos)
+    boost::replace_all(m_s3select_query, GT, ">");
+  if (m_s3select_query.find(LT) != std::string::npos)
+    boost::replace_all(m_s3select_query, LT, "<");
+
+  size_t _qs = m_s3select_query.find("<Expression>", 0) + strlen("<Expression>");
+  size_t _qe = m_s3select_query.find("</Expression>", _qs);
+
+  std::string query = m_s3select_query.substr(_qs, _qe - _qs);
+
+  std::string res;
+  std::string tmp_buff;
+  std::string merge_line;
+  u_int32_t skip_last_bytes = 0;
+  bool skip_first_line = false;
+  m_processed_bytes += len;
+
+  if (m_previous_line)
+  { //if previous broken line exist , merge it to current chunk
+    char *p_obj_chunk = (char *)bl.c_str();
+    while (*p_obj_chunk != LINE_DELIMITER)
+      p_obj_chunk++;
+
+    tmp_buff.assign((char *)bl.c_str(), (char *)bl.c_str() + (p_obj_chunk - bl.c_str()));
+    merge_line = m_last_line + tmp_buff + LINE_DELIMITER;
+    m_previous_line = false;
+    skip_first_line = true;
+
+    run_s3select((char *)query.c_str(), (char *)merge_line.c_str(),strlen(merge_line.c_str()) , false, false, false);
+  }
+
+  if (bl.c_str()[len - 1] != LINE_DELIMITER)
+  { //in case of "broken" last line
+    char *p_obj_chunk = &(bl.c_str()[len - 1]);
+    while (*p_obj_chunk != LINE_DELIMITER)
+      p_obj_chunk--; //scan until end-of previous line in chunk
+
+    skip_last_bytes = (&(bl.c_str()[len - 1]) - p_obj_chunk);
+    m_last_line.assign(p_obj_chunk + 1, p_obj_chunk + 1 + skip_last_bytes); //save it for next chunk
+
+    m_previous_line = true;
+  }
+
+  run_s3select((char *)query.c_str(), (char *)bl.c_str(),len,skip_first_line, m_previous_line /*skip last line*/, (m_processed_bytes >= s->obj_size));
+
+  chunk_number++;
+
+  return 0;
 }
