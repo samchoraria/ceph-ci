@@ -654,18 +654,9 @@ private:
   int getNextRow(char **tokens) //TODO add delimiter
   {                             //purpose: simple csv parser, not handling escape rules
 
-    if(m_skip_last_line && line_index >= (m_csv_lines.size()-1)) {
-        std::cout << m_csv_lines[line_index] << std::endl;
-        return -1; //skipping last and broken line
-    }
-
-    //if(!m_skip_last_line && line_index >= (m_csv_lines.size()-1)) {
-    //    std::cout << m_csv_lines[line_index] << std::endl;
-    //    //return -1; //skipping last and broken line
-    //}
+    if(m_skip_last_line && line_index >= (m_csv_lines.size()-1)) return -1;
 
     if(line_index >= m_csv_lines.size()) return -1;
-    //if(m_csv_lines[line_index] == 0 ) return -1;
     if(m_csv_lines[line_index].empty()) return -1;
     
     m_total_processed_bytes += m_csv_lines[line_index].size()+1;
@@ -705,20 +696,6 @@ public:
 
     m_total_processed_bytes = (skip_first_line == true ? m_csv_lines[0].size() : 0);
     m_stream_length = stream_length;
-
-    struct timeval t1;
-    char fn[1023];
-
-    gettimeofday(&t1,0);
-    sprintf(fn,"csv_%ld_%ld",t1.tv_sec,t1.tv_usec);
-    FILE*fp=fopen(fn,"w");
-    size_t csv_stream_length = strlen(csv_stream);
-    size_t num_of_csv_line = m_csv_lines.size();
-    for(auto line : m_csv_lines)
-    {
-        fprintf(fp,"<%s><%ld><%ld><%ld><%ld>\n",line.c_str(),strlen(line.c_str()),stream_length,csv_stream_length,num_of_csv_line);
-    }
-    fclose(fp);
 
     if (m_where_clause)
       m_where_clause->traverse_and_apply(m_sa);
