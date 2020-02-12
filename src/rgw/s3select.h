@@ -650,6 +650,7 @@ private:
   bool m_skip_last_line;
   size_t m_total_processed_bytes;
   size_t m_stream_length;
+  std::string m_error_description;
 
   int getNextRow(char **tokens) //TODO add delimiter
   {                             //purpose: simple csv parser, not handling escape rules
@@ -729,6 +730,8 @@ public:
       }
   }
 
+std::string get_error_description(){return m_error_description;}
+
 virtual ~csv_object(){}
 
 public:
@@ -753,6 +756,12 @@ public:
                 }
 
           return number_of_tokens;
+        }
+
+        if ((*m_projections.begin())->is_set_last_call())
+        {
+            //should validate while query execution , no update upon nodes are marked with set_last_call
+            throw base_s3select_exception("on aggregation query , can not stream row data post do-aggregate call", base_s3select_exception::FATAL);
         }
 
         m_sa->update((const char **)row_tokens, number_of_tokens);
@@ -785,7 +794,7 @@ public:
     return number_of_tokens; //TODO wrong
   }
 
-  int run_s3select_on_object(std::string &o_result) //,s3select &s3select_syntax)
+  int run_s3select_on_object(std::string &o_result)
   {
 
       do
@@ -799,7 +808,8 @@ public:
           catch (base_s3select_exception &e)
           {
               std::cout << e.what() << std::endl;
-              if (e.severity() == base_s3select_exception::s3select_exp_en_t::NONE)
+              m_error_description = e.what();
+              if (e.severity() == base_s3select_exception::s3select_exp_en_t::FATAL)//abort query execution
                   return -1;
           }
 

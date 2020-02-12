@@ -5959,24 +5959,35 @@ int RGWS3Select::create_message(const char *payload, char *buff)
   return i;
 }
 
+#define PAYLOAD_LINE "\n<Payload>\n<Records>\n<Payload>\n"
+#define END_PAYLOAD_LINE "\n</Payload></Records></Payload>"
+
 int RGWS3Select::run_s3select(char*query,char*input,size_t input_length,bool skip_first_line,bool skip_last_line,bool to_aggregate)
 {
   char * buff = 0;
   std::string res;
+  int status = 0;
 
-  csv_object xxx(s3select_syntax,query,input, input_length ,skip_first_line,skip_last_line , (m_processed_bytes >= s->obj_size) );
+  csv_object s3_csv_object(s3select_syntax ,query ,input ,input_length ,skip_first_line ,skip_last_line ,to_aggregate );
   if (s3select_syntax->get_error_description().empty() == false)
   {
-    //TODO create error messege 
-  } 
-
-  #define PAYLOAD_LINE "\n<Payload>\n<Records>\n<Payload>\n"
-  res.append(PAYLOAD_LINE);
-  xxx.run_s3select_on_object(res);
+    res.append(PAYLOAD_LINE);
+    res.append(s3select_syntax->get_error_description());
+    status = -1;
+  }
+  else
+  {
+    res.append(PAYLOAD_LINE);
+    status = s3_csv_object.run_s3select_on_object(res);
+    if(status<0)
+    {
+      res.append(s3_csv_object.get_error_description());
+    }
+  }
 
   if (res.size() > strlen(PAYLOAD_LINE))
   {
-    res.append("\n</Payload></Records></Payload>");
+    res.append(END_PAYLOAD_LINE);
 
     buff = (char *)malloc(res.size() + 1000);
     int buff_len = create_message(res.c_str(), buff);
@@ -5989,7 +6000,7 @@ int RGWS3Select::run_s3select(char*query,char*input,size_t input_length,bool ski
 
   if(buff) free(buff);
 
-  return 0;
+  return status;
 }
 
 int RGWS3Select::send_response_data(bufferlist &bl, off_t ofs, off_t len)
@@ -6027,6 +6038,7 @@ int RGWS3Select::send_response_data(bufferlist &bl, off_t ofs, off_t len)
   u_int32_t skip_last_bytes = 0;
   bool skip_first_line = false;
   m_processed_bytes += len;
+  int status = 0;
 
   if (m_previous_line)
   { //if previous broken line exist , merge it to current chunk
@@ -6039,7 +6051,7 @@ int RGWS3Select::send_response_data(bufferlist &bl, off_t ofs, off_t len)
     m_previous_line = false;
     skip_first_line = true;
 
-    run_s3select((char *)query.c_str(), (char *)merge_line.c_str(),strlen(merge_line.c_str()) , false, false, false);
+    status = run_s3select((char *)query.c_str(), (char *)merge_line.c_str(), strlen(merge_line.c_str()), false, false, false);
   }
 
   if (bl.c_str()[len - 1] != LINE_DELIMITER)
@@ -6054,9 +6066,9 @@ int RGWS3Select::send_response_data(bufferlist &bl, off_t ofs, off_t len)
     m_previous_line = true;
   }
 
-  run_s3select((char *)query.c_str(), (char *)bl.c_str(),len,skip_first_line, m_previous_line /*skip last line*/, (m_processed_bytes >= s->obj_size));
+  status = run_s3select((char *)query.c_str(), (char *)bl.c_str(), len, skip_first_line, m_previous_line /*skip last line*/, (m_processed_bytes >= s->obj_size));
 
   chunk_number++;
 
-  return 0;
+  return status;
 }

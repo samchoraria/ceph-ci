@@ -341,6 +341,8 @@ class base_statement  {
             if(right()) right()->set_last_call();
         }
 
+        bool is_set_last_call(){return is_last_call;}
+
         virtual ~base_statement(){}
 
 };
