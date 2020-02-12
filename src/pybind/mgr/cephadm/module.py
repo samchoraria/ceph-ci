@@ -678,14 +678,19 @@ class CephadmOrchestrator(MgrModule, orchestrator.OrchestratorClientMixin):
         bad_hosts = []
         for host, v in self.inventory.items():
             self.log.debug(' checking %s' % host)
-            out, err, code = self._run_cephadm(host, 'client', 'check-host', [],
-                                               error_ok=True, no_fsid=True)
-            if code:
+            try:
+                out, err, code = self._run_cephadm(
+                    host, 'client', 'check-host', [],
+                    error_ok=True, no_fsid=True)
+                if code:
+                    self.log.debug(' host %s failed check' % host)
+                    if self.warn_on_failed_host_check:
+                        bad_hosts.append('host %s failed check: %s' % (host, err))
+                else:
+                    self.log.debug(' host %s ok' % host)
+            except Exception as e:
                 self.log.debug(' host %s failed check' % host)
-                if self.warn_on_failed_host_check:
-                    bad_hosts.append('host %s failed check: %s' % (host, err))
-            else:
-                self.log.debug(' host %s ok' % host)
+                bad_hosts.append('host %s failed check: %s' % (host, e))
         if 'CEPHADM_HOST_CHECK_FAILED' in self.health_checks:
             del self.health_checks['CEPHADM_HOST_CHECK_FAILED']
         if bad_hosts:
@@ -747,6 +752,12 @@ class CephadmOrchestrator(MgrModule, orchestrator.OrchestratorClientMixin):
                 }
         self.set_health_checks(self.health_checks)
 
+    def _serve_sleep(self):
+        sleep_interval = 600
+        self.log.debug('Sleeping for %d seconds', sleep_interval)
+        ret = self.event.wait(sleep_interval)
+        self.event.clear()
+
     def serve(self):
         # type: () -> None
         self.log.info("serve starting")
@@ -757,7 +768,23 @@ class CephadmOrchestrator(MgrModule, orchestrator.OrchestratorClientMixin):
             self.log.debug('refreshing services')
             completion = self._get_services(maybe_refresh=True)
             self._orchestrator_wait([completion])
-            orchestrator.raise_if_exception(completion)
+            # FIXME: this is a band-aid to avoid crashing the mgr, but what
+            # we really need to do here is raise health alerts for individual
+            # hosts that fail and continue with the ones that do not fail.
+            if completion.exception is not None:
+                self.log.error('failed to refresh services: %s' % completion.exception)
+                self.health_checks['CEPHADM_REFRESH_FAILED'] = {
+                    'severity': 'warning',
+                    'summary': 'failed to probe one or more hosts',
+                    'count': 1,
+                    'detail': [str(completion.exception)],
+                }
+                self.set_health_checks(self.health_checks)
+                self._serve_sleep()
+                continue
+            if 'CEPHADM_REFRESH_FAILED' in self.health_checks:
+                del self.health_checks['CEPHADM_REFRESH_FAILED']
+                self.set_health_checks(self.health_checks)
             services = completion.result
             self.log.debug('services %s' % services)
 
@@ -772,13 +799,11 @@ class CephadmOrchestrator(MgrModule, orchestrator.OrchestratorClientMixin):
                             time.sleep(1)
                         else:
                             break
-                    orchestrator.raise_if_exception(completion)
+                    if completion.exception is not None:
+                        self.log.error(str(completion.exception))
                 self.log.debug('did _do_upgrade')
             else:
-                sleep_interval = 600
-                self.log.debug('Sleeping for %d seconds', sleep_interval)
-                ret = self.event.wait(sleep_interval)
-                self.event.clear()
+                self._serve_sleep()
         self.log.info("serve exit")
 
     def config_notify(self):
@@ -802,6 +827,7 @@ class CephadmOrchestrator(MgrModule, orchestrator.OrchestratorClientMixin):
         pass
 
     def get_unique_name(self, host, existing, prefix=None, forcename=None):
+        # type: (str, List[orchestrator.ServiceDescription], Optional[str], Optional[str]) -> str
         """
         Generate a unique random service name
         """
@@ -1320,7 +1346,7 @@ class CephadmOrchestrator(MgrModule, orchestrator.OrchestratorClientMixin):
                     if '.' in d['name']:
                         sd.service_instance = '.'.join(d['name'].split('.')[1:])
                     elif d['name'] != '*':
-                        sd.service_instance = host  # e.g., crash
+                        sd.service_instance = host
                     if service_id and service_id != sd.service_instance:
                         continue
                     if service_name and not sd.service_instance.startswith(service_name + '.'):
@@ -1632,13 +1658,16 @@ class CephadmOrchestrator(MgrModule, orchestrator.OrchestratorClientMixin):
         if extra_config:
             config += extra_config
 
-        # crash_keyring
-        ret, crash_keyring, err = self.mon_command({
-            'prefix': 'auth get-or-create',
-            'entity': 'client.crash.%s' % host,
-            'caps': ['mon', 'profile crash',
-                     'mgr', 'profile crash'],
-        })
+        if daemon_type != 'crash':
+            # crash_keyring
+            ret, crash_keyring, err = self.mon_command({
+                'prefix': 'auth get-or-create',
+                'entity': 'client.crash.%s' % host,
+                'caps': ['mon', 'profile crash',
+                         'mgr', 'profile crash'],
+            })
+        else:
+            crash_keyring = None
 
         j = json.dumps({
             'config': config,
@@ -1756,7 +1785,7 @@ class CephadmOrchestrator(MgrModule, orchestrator.OrchestratorClientMixin):
                                    extra_config=extra_config)
 
     def update_mons(self, spec):
-        # type: (orchestrator.StatefulServiceSpec) -> orchestrator.Completion
+        # type: (orchestrator.ServiceSpec) -> orchestrator.Completion
         """
         Adjust the number of cluster managers.
         """
@@ -1768,7 +1797,7 @@ class CephadmOrchestrator(MgrModule, orchestrator.OrchestratorClientMixin):
         return self._update_mons(spec)
 
     def _update_mons(self, spec):
-        # type: (orchestrator.StatefulServiceSpec) -> orchestrator.Completion
+        # type: (orchestrator.ServiceSpec) -> orchestrator.Completion
         """
         Adjust the number of cluster monitors.
         """
@@ -1826,7 +1855,7 @@ class CephadmOrchestrator(MgrModule, orchestrator.OrchestratorClientMixin):
 
     @with_services('mgr')
     def update_mgrs(self, spec, services):
-        # type: (orchestrator.StatefulServiceSpec, List[orchestrator.ServiceDescription]) -> orchestrator.Completion
+        # type: (orchestrator.ServiceSpec, List[orchestrator.ServiceDescription]) -> orchestrator.Completion
         """
         Adjust the number of cluster managers.
         """
@@ -1903,9 +1932,11 @@ class CephadmOrchestrator(MgrModule, orchestrator.OrchestratorClientMixin):
             return c
 
     def add_mds(self, spec):
-        if not spec.placement.hosts or len(spec.placement.hosts) < spec.placement.count:
-            raise RuntimeError("must specify at least %d hosts" % spec.placement.count)
+        # type: (orchestrator.ServiceSpec) -> AsyncCompletion
+        if not spec.placement.hosts or spec.placement.count is None or len(spec.placement.hosts) < spec.placement.count:
+            raise RuntimeError("must specify at least %s hosts" % spec.placement.count)
         # ensure mds_join_fs is set for these daemons
+        assert spec.name
         ret, out, err = self.mon_command({
             'prefix': 'config set',
             'who': 'mds.' + spec.name,
@@ -1915,6 +1946,7 @@ class CephadmOrchestrator(MgrModule, orchestrator.OrchestratorClientMixin):
         return self._get_services('mds').then(lambda ds: self._add_mds(ds, spec))
 
     def _add_mds(self, daemons, spec):
+        # type: (List[orchestrator.ServiceDescription], orchestrator.ServiceSpec) -> AsyncCompletion
         args = []
         num_added = 0
         for host, _, name in spec.placement.hosts:
@@ -1933,7 +1965,9 @@ class CephadmOrchestrator(MgrModule, orchestrator.OrchestratorClientMixin):
         return self._create_mds(args)
 
     def update_mds(self, spec):
+        # type: (orchestrator.ServiceSpec) -> AsyncCompletion
         spec = NodeAssignment(spec=spec, get_hosts_func=self._get_hosts, service_type='mds').load()
+
         return self._update_service('mds', self.add_mds, spec)
 
     @async_map_completion
@@ -2265,19 +2299,19 @@ class NodeAssignment(object):
     """
 
     def __init__(self,
-                 spec=None,  # type: Optional[orchestrator.StatefulServiceSpec]
+                 spec=None,  # type: Optional[orchestrator.ServiceSpec]
                  scheduler=None,  # type: Optional[BaseScheduler]
                  get_hosts_func=None,  # type: Optional[Callable]
                  service_type=None,  # type: Optional[str]
                  ):
         assert spec and get_hosts_func and service_type
-        self.spec = spec  # type: orchestrator.StatefulServiceSpec
+        self.spec = spec  # type: orchestrator.ServiceSpec
         self.scheduler = scheduler if scheduler else SimpleScheduler(self.spec.placement)
         self.get_hosts_func = get_hosts_func
         self.service_type = service_type
 
     def load(self):
-        # type: () -> orchestrator.StatefulServiceSpec
+        # type: () -> orchestrator.ServiceSpec
         """
         Load nodes into the spec.placement.nodes container.
         """
