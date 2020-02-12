@@ -2186,6 +2186,7 @@ function test_mon_osd_pool_set()
   check_response 'not change the size'
   set -e
   ceph osd pool get pool_erasure erasure_code_profile
+  ceph osd pool rm pool_erasure pool_erasure --yes-i-really-really-mean-it
 
   for flag in nodelete nopgchange nosizechange write_fadvise_dontneed noscrub nodeep-scrub; do
       ceph osd pool set $TEST_POOL_GETSET $flag false
@@ -2673,7 +2674,9 @@ function test_mon_pool_application()
 
 function test_mon_tell_help_command()
 {
-  ceph tell mon.a help
+  ceph tell mon.a help | grep sync_force
+  ceph tell mon.a -h | grep sync_force
+  ceph tell mon.a config -h | grep 'config diff get'
 
   # wrong target
   expect_false ceph tell mon.zzz help
