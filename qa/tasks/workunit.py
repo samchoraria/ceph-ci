@@ -8,14 +8,15 @@ import re
 
 import six
 
-from util import get_remote_for_role
-from util.workunit import get_refspec_after_overrides
+from tasks.util import get_remote_for_role
+from tasks.util.workunit import get_refspec_after_overrides
 
 from teuthology import misc
 from teuthology.config import config as teuth_config
 from teuthology.orchestra.run import CommandFailedError
 from teuthology.parallel import parallel
 from teuthology.orchestra import run
+from teuthology.util.compat import stringify
 
 log = logging.getLogger(__name__)
 
@@ -364,7 +365,7 @@ def _run_tests(ctx, refspec, role, tests, env, basedir,
     )
 
     workunits_file = '{tdir}/workunits.list.{role}'.format(tdir=testdir, role=role)
-    workunits = sorted(misc.get_file(remote, workunits_file).split('\0'))
+    workunits = sorted(stringify(misc.get_file(remote, workunits_file)).split('\0'))
     assert workunits
 
     try:
