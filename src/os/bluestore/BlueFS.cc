@@ -110,8 +110,10 @@ private:
       f->dump_int("available_from_bluestore", extra_space);
       f->close_section();
     } else if (command == "bluestore bluefs stats") {
+      std::stringstream ss;
       bluefs->dump_block_extents(ss);
       bluefs->dump_volume_selector(ss);
+      out.append(ss);
     } else {
       ss << "Invalid command" << std::endl;
       return -ENOSYS;
