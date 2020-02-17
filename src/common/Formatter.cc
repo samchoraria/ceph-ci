@@ -75,7 +75,7 @@ FormatterAttrs::FormatterAttrs(const char *attr, ...)
   va_end(ap);
 }
 
-void Formatter::write_bin_data(char*, int){}
+void Formatter::write_bin_data(const char*, int){}
 
 Formatter::Formatter() { }
 
@@ -546,7 +546,7 @@ void XMLFormatter::write_raw_data(const char *data)
   m_ss << data;
 }
 
-void XMLFormatter::write_bin_data(char *buff, int buf_len)
+void XMLFormatter::write_bin_data(const char *buff, int buf_len)
 {
   std::stringbuf *pbuf = m_ss.rdbuf();
   pbuf->sputn(buff, buf_len);

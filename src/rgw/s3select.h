@@ -45,6 +45,9 @@ class s3select_projections {
 
 struct actionQ
 {
+// upon parser is accepting a token (lets say some number), 
+// it push it into dedicated queue, later those tokens are poped out to build some "higher" contruct (lets say 1 + 2)
+// those containers are used only for parsing phase and not for runtime.
 
     list<mulldiv_operation::muldiv_t> muldivQ;
     list<addsub_operation::addsub_op_t> addsubQ;
@@ -129,8 +132,7 @@ struct push_string : public base_action //TODO use define for defintion of actio
         a++;b--;// remove double quotes
         string token(a, b);
         
-        //strdup allocation should release only at the end of query-execution (class{runtime_allocator} not accessing those allocationr) 
-        variable *v = new variable(strdup( token.c_str() ),variable::var_t::COL_VALUE);
+        variable *v = new variable(token,variable::var_t::COL_VALUE);
 
         m_action->exprQ.push_back(v);
     }
@@ -144,7 +146,7 @@ struct push_variable : public base_action
     {
         string token(a, b);
 
-        variable *v = new variable(token.c_str());
+        variable *v = new variable(token);
 
         m_action->exprQ.push_back(v);
     }
@@ -370,9 +372,9 @@ struct push_column_pos : public base_action
         variable *v;
 
         if (token.compare("*") == 0 || token.compare("* ")==0) //TODO space should skip in boost::spirit
-            v = new variable(token.c_str(), variable::var_t::STAR_OPERATION);
+            v = new variable(token, variable::var_t::STAR_OPERATION);
          else 
-            v = new variable(token.c_str(), variable::var_t::POS);
+            v = new variable(token, variable::var_t::POS);
 
         m_action->exprQ.push_back(v);
     }
@@ -682,7 +684,7 @@ private:
   }
 
 public:
-  csv_object(s3select *s3_query,std::string query,char *csv_stream,size_t stream_length,bool skip_first_line,bool skip_last_line,bool do_aggregate) : base_s3object(s3_query->get_scratch_area())
+  csv_object(s3select *s3_query,std::string query,const char *csv_stream,size_t stream_length,bool skip_first_line,bool skip_last_line,bool do_aggregate) : base_s3object(s3_query->get_scratch_area())
   { 
 
     if (s3_query->parse_query(query.c_str()) <0) return;//TODO set error state/description 

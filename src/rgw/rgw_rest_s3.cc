@@ -4518,7 +4518,7 @@ RGWOp *RGWHandler_REST_Obj_S3::op_post()
     return new RGWInitMultipart_ObjStore_S3;
   
   if (s->info.args.exists("select-type"))
-    return new RGWS3Select;
+    return new RGWSelectObj_ObjStore_S3;
 
   return new RGWPostObj_ObjStore_S3;
 }
@@ -5876,25 +5876,33 @@ bool rgw::auth::s3::S3AnonymousEngine::is_applicable(
 }
 
 
-const char *RGWS3Select::header_name_str[3] = {":event-type", ":content-type", ":message-type"};
-const char *RGWS3Select::header_value_str[3] = {"Records", "application/octet-stream", "event"};
+const char *RGWSelectObj_ObjStore_S3::header_name_str[3] = {":event-type", ":content-type", ":message-type"};
+const char *RGWSelectObj_ObjStore_S3::header_value_str[3] = {"Records", "application/octet-stream", "event"};
 #include "s3select.h"
 
-RGWS3Select::RGWS3Select()
+RGWSelectObj_ObjStore_S3::RGWSelectObj_ObjStore_S3():s3select_syntax(new s3select()),m_previous_line(false),chunk_number(0),m_processed_bytes(0)
 {
   set_get_data(true);
-  chunk_number = 0;
-  s3select_syntax = new s3select();
-  m_processed_bytes = 0;
-  m_previous_line = false;
 }
 
-RGWS3Select::~RGWS3Select()
+RGWSelectObj_ObjStore_S3::~RGWSelectObj_ObjStore_S3()
 {
   delete s3select_syntax;
 }
 
-int RGWS3Select::creare_header_records(char *buff)
+void RGWSelectObj_ObjStore_S3::encode_short(char & buff, short s , int & i)
+{
+        short x = htons(s);
+        memcpy(&buff,&x,sizeof(s));i+=sizeof(s);
+}
+
+void RGWSelectObj_ObjStore_S3::encode_int(char & buff, u_int32_t s , int & i)
+{
+        u_int32_t x = htonl(s);
+        memcpy(&buff,&x,sizeof(s));i+=sizeof(s);
+}
+
+int RGWSelectObj_ObjStore_S3::creare_header_records(char *buff)
 {
   int i = 0;
 
@@ -5903,7 +5911,7 @@ int RGWS3Select::creare_header_records(char *buff)
   memcpy(&buff[i], header_name_str[EVENT_TYPE], strlen(header_name_str[EVENT_TYPE]));
   i += strlen(header_name_str[EVENT_TYPE]);
   buff[i++] = (char)7;
-  ENCODE_NUMBER(buff[i], (short)strlen(header_value_str[RECORDS]), i);
+  encode_short(buff[i], (short)strlen(header_value_str[RECORDS]), i);
   memcpy(&buff[i], header_value_str[RECORDS], strlen(header_value_str[RECORDS]));
   i += strlen(header_value_str[RECORDS]);
 
@@ -5912,7 +5920,7 @@ int RGWS3Select::creare_header_records(char *buff)
   memcpy(&buff[i], header_name_str[CONTENT_TYPE], strlen(header_name_str[CONTENT_TYPE]));
   i += strlen(header_name_str[CONTENT_TYPE]);
   buff[i++] = (char)7;
-  ENCODE_NUMBER(buff[i], (short)strlen(header_value_str[OCTET_STREAM]), i);
+  encode_short(buff[i], (short)strlen(header_value_str[OCTET_STREAM]), i);
   memcpy(&buff[i], header_value_str[OCTET_STREAM], strlen(header_value_str[OCTET_STREAM]));
   i += strlen(header_value_str[OCTET_STREAM]);
 
@@ -5921,14 +5929,14 @@ int RGWS3Select::creare_header_records(char *buff)
   memcpy(&buff[i], header_name_str[MESSAGE_TYPE], strlen(header_name_str[MESSAGE_TYPE]));
   i += strlen(header_name_str[MESSAGE_TYPE]);
   buff[i++] = (char)7;
-  ENCODE_NUMBER(buff[i], (short)strlen(header_value_str[EVENT]), i);
+  encode_short(buff[i], (short)strlen(header_value_str[EVENT]), i);
   memcpy(&buff[i], header_value_str[EVENT], strlen(header_value_str[EVENT]));
   i += strlen(header_value_str[EVENT]);
 
   return i;
 }
 
-int RGWS3Select::create_message(const char *payload, char *buff)
+int RGWSelectObj_ObjStore_S3::create_message(const char *payload, char *buff)
 {
 
   u_int32_t total_byte_len = 0;
@@ -5940,21 +5948,21 @@ int RGWS3Select::create_message(const char *payload, char *buff)
 
   total_byte_len = strlen(payload) + header_len + 16;
 
-  ENCODE_NUMBER(buff[i], total_byte_len, i);
-  ENCODE_NUMBER(buff[i], header_len, i);
+  encode_int(buff[i], total_byte_len, i);
+  encode_int(buff[i], header_len, i);
   char crc_buff[8];
   memcpy(&crc_buff[0], &total_byte_len, 4);
   memcpy(&crc_buff[4], &header_len, 4);
 
   preload_crc = __crc32(0, (u_int8_t *)buff, 8);
-  ENCODE_NUMBER(buff[i], preload_crc, i);
+  encode_int(buff[i], preload_crc, i);
 
   i += header_len;
   memcpy(&buff[i], payload, strlen(payload));
   i += strlen(payload);
 
   message_crc = __crc32(0, (u_int8_t *)buff, i);
-  ENCODE_NUMBER(buff[i], message_crc, i);
+  encode_int(buff[i], message_crc, i);
 
   return i;
 }
@@ -5962,7 +5970,7 @@ int RGWS3Select::create_message(const char *payload, char *buff)
 #define PAYLOAD_LINE "\n<Payload>\n<Records>\n<Payload>\n"
 #define END_PAYLOAD_LINE "\n</Payload></Records></Payload>"
 
-int RGWS3Select::run_s3select(char*query,char*input,size_t input_length,bool skip_first_line,bool skip_last_line,bool to_aggregate)
+int RGWSelectObj_ObjStore_S3::run_s3select(const char*query,const char*input,size_t input_length,bool skip_first_line,bool skip_last_line,bool to_aggregate)
 {
   char * buff = 0;
   std::string res;
@@ -6003,10 +6011,35 @@ int RGWS3Select::run_s3select(char*query,char*input,size_t input_length,bool ski
   return status;
 }
 
-int RGWS3Select::send_response_data(bufferlist &bl, off_t ofs, off_t len)
+int RGWSelectObj_ObjStore_S3::send_response_data(bufferlist &bl, off_t ofs, off_t len)
 {
   if (len == 0)
     return 0;
+
+  if (s->info.args.exists("select-type") && (chunk_number == 0))
+  {
+    //retrieve s3-select query from payload
+    bufferlist data;
+    int ret; 
+    int max_size = 4096;
+    std::tie(ret, data) = rgw_rest_read_all_input(s, max_size, false);
+    if (ret != 0)
+    {
+      ldout(s->cct, 10) << "s3-select query: failed to retrieve query; ret = " << ret << dendl;
+      return ret;
+    }
+
+    m_s3select_query = data.to_str();
+    if (m_s3select_query.length() > 0)
+    {
+      ldout(s->cct, 10) << "s3-select query: " << m_s3select_query << dendl;
+    }
+    else
+    {
+      ldout(s->cct, 10) << "s3-select query: failed to retrieve query;" << dendl;
+      return -1;
+    }
+  }
 
   if (chunk_number == 0)
   {
@@ -6051,7 +6084,7 @@ int RGWS3Select::send_response_data(bufferlist &bl, off_t ofs, off_t len)
     m_previous_line = false;
     skip_first_line = true;
 
-    status = run_s3select((char *)query.c_str(), (char *)merge_line.c_str(), strlen(merge_line.c_str()), false, false, false);
+    status = run_s3select(query.c_str(), merge_line.c_str(), strlen(merge_line.c_str()), false, false, false);
   }
 
   if (bl.c_str()[len - 1] != LINE_DELIMITER)
@@ -6066,7 +6099,7 @@ int RGWS3Select::send_response_data(bufferlist &bl, off_t ofs, off_t len)
     m_previous_line = true;
   }
 
-  status = run_s3select((char *)query.c_str(), (char *)bl.c_str(), len, skip_first_line, m_previous_line /*skip last line*/, (m_processed_bytes >= s->obj_size));
+  status = run_s3select(query.c_str(), bl.c_str(), len, skip_first_line, m_previous_line /*skip last line*/, (m_processed_bytes >= s->obj_size));
 
   chunk_number++;
 
