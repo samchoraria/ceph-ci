@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+#dummy change
 set -x
 
 git submodule update --init --recursive
