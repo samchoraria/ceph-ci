@@ -101,6 +101,14 @@ class RbdConfiguration(object):
                 with rbd.Image(ioctx, self._image_name) as image:
                     result = image.config_list()
             else:  # pool config
+                pg_status = CephService.get_pool_pg_status(self._pool_name)
+                if 'creating+incomplete' in pg_status:
+                    # If config_list would be called with ioctx if it's a bad pool,
+                    # the dashboard would stop working, waiting for the response
+                    # that would not happen.
+                    #
+                    # This is only a workaround for https://tracker.ceph.com/issues/43771
+                    return []
                 result = self._rbd.config_list(ioctx)
             return list(result)
 
