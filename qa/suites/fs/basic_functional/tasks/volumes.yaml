@@ -4,6 +4,8 @@ overrides:
       mgr:
         debug ms: 20
         debug mgr: 20
+        debug refs: 10
+        debug throttle: 20
     log-whitelist:
       - OSD full dropping all updates
       - OSD near full
