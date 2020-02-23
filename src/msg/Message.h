@@ -316,8 +316,39 @@ public:
     memset(&footer, 0, sizeof(footer));
   }
 
-  Message *get() {
+  Message *mget() {
     return static_cast<Message *>(RefCountedObject::get());
+  }
+  const RefCountedObject *get() const override {
+    int v = ++nref;
+    if (cct)
+      lsubdout(cct, refs, 1) << "Message(" << header.type << ")::get " << this << " "
+			     << (v - 1) << " -> " << v
+			     << dendl;
+    return this;
+  }
+  RefCountedObject *get() override {
+    int v = ++nref;
+    if (cct)
+      lsubdout(cct, refs, 1) << "Message(" << header.type << ")::get " << this << " "
+			     << (v - 1) << " -> " << v
+			     << dendl;
+    return this;
+  }
+  void put() const override {
+    CephContext *local_cct = cct;
+    int v = --nref;
+    if (local_cct)
+      lsubdout(local_cct, refs, 1) << "Message(" << header.type << ")::put " << this << " "
+				   << (v + 1) << " -> " << v
+				   << dendl;
+    if (v == 0) {
+      ANNOTATE_HAPPENS_AFTER(&nref);
+      ANNOTATE_HAPPENS_BEFORE_FORGET_ALL(&nref);
+      delete this;
+    } else {
+      ANNOTATE_HAPPENS_BEFORE(&nref);
+    }
   }
 
 protected:

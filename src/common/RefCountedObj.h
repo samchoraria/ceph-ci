@@ -26,7 +26,7 @@
 #include "include/ceph_assert.h"
 
 struct RefCountedObject {
-private:
+protected:
   mutable std::atomic<uint64_t> nref;
   CephContext *cct;
 public:
@@ -35,7 +35,7 @@ public:
     ceph_assert(nref == 0);
   }
   
-  const RefCountedObject *get() const {
+  virtual const RefCountedObject *get() const {
     int v = ++nref;
     if (cct)
       lsubdout(cct, refs, 1) << "RefCountedObject::get " << this << " "
@@ -43,7 +43,7 @@ public:
 			     << dendl;
     return this;
   }
-  RefCountedObject *get() {
+  virtual RefCountedObject *get() {
     int v = ++nref;
     if (cct)
       lsubdout(cct, refs, 1) << "RefCountedObject::get " << this << " "
@@ -51,7 +51,7 @@ public:
 			     << dendl;
     return this;
   }
-  void put() const {
+  virtual void put() const {
     CephContext *local_cct = cct;
     int v = --nref;
     if (local_cct)
