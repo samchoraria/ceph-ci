@@ -245,7 +245,7 @@ class Rbd(RESTController):
 @ApiController('/block/image/{image_spec}/snap', Scope.RBD_IMAGE)
 class RbdSnapshot(RESTController):
 
-    RESOURCE_ID = "snapshot_name"
+    RESOURCE_ID = "snapshot_name"  # type: ignore
 
     @RbdTask('snap/create',
              ['{image_spec}', '{snapshot_name}'], 2.0)
@@ -337,7 +337,7 @@ class RbdSnapshot(RESTController):
 
 @ApiController('/block/image/trash', Scope.RBD_IMAGE)
 class RbdTrash(RESTController):
-    RESOURCE_ID = "image_id_spec"
+    RESOURCE_ID = "image_id_spec"  # type: ignore
     rbd_inst = rbd.RBD()
 
     @ViewCache()

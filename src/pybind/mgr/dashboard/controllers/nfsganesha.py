@@ -111,7 +111,7 @@ class NFSGanesha(RESTController):
 @ApiController('/nfs-ganesha/export', Scope.NFS_GANESHA)
 @ControllerDoc(group="NFS-Ganesha")
 class NFSGaneshaExports(RESTController):
-    RESOURCE_ID = "cluster_id/export_id"
+    RESOURCE_ID = "cluster_id/export_id"  # type: ignore
 
     @EndpointDoc("List all NFS-Ganesha exports",
                  responses={200: [EXPORT_SCHEMA]})
