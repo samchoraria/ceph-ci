@@ -2,6 +2,7 @@
 #define __S3SELECT__
 
 #include <boost/spirit/include/classic_core.hpp>
+#include <boost/algorithm/string.hpp>
 #include <iostream>
 #include <string>
 #include <list>
@@ -13,6 +14,8 @@
 using namespace std;
 using namespace BOOST_SPIRIT_CLASSIC_NS;
 #define _DEBUG_TERM {string  token(a,b);std::cout << __FUNCTION__ << token << std::endl;}
+
+namespace s3selectEngine {
 
 /// AST builder
 
@@ -617,7 +620,6 @@ public:
     virtual ~base_s3object(){}
 };
 
-#include <boost/algorithm/string.hpp>
 
 class csv_object : public base_s3object
 {
@@ -817,5 +819,7 @@ public:
       return 0;
   }
 };
+
+};//namespace
 
 #endif 

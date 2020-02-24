@@ -10,6 +10,8 @@
 
 using namespace std;
 
+namespace s3selectEngine {
+
 class base_s3select_exception
 {
 
@@ -1280,5 +1282,7 @@ bool base_statement::is_binop_aggregate_and_column(base_statement *skip_expressi
 
     return false;
 }
+
+};
 
 #endif

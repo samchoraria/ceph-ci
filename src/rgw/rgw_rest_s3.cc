@@ -4518,7 +4518,7 @@ RGWOp *RGWHandler_REST_Obj_S3::op_post()
     return new RGWInitMultipart_ObjStore_S3;
   
   if (s->info.args.exists("select-type"))
-    return new RGWSelectObj_ObjStore_S3;
+    return new s3selectEngine::RGWSelectObj_ObjStore_S3;
 
   return new RGWPostObj_ObjStore_S3;
 }
@@ -5876,9 +5876,10 @@ bool rgw::auth::s3::S3AnonymousEngine::is_applicable(
 }
 
 
+#include "s3select.h"
+using namespace s3selectEngine;
 const char *RGWSelectObj_ObjStore_S3::header_name_str[3] = {":event-type", ":content-type", ":message-type"};
 const char *RGWSelectObj_ObjStore_S3::header_value_str[3] = {"Records", "application/octet-stream", "event"};
-#include "s3select.h"
 
 RGWSelectObj_ObjStore_S3::RGWSelectObj_ObjStore_S3():s3select_syntax(new s3select()),m_previous_line(false),chunk_number(0),m_processed_bytes(0)
 {
@@ -5887,6 +5888,7 @@ RGWSelectObj_ObjStore_S3::RGWSelectObj_ObjStore_S3():s3select_syntax(new s3selec
 
 RGWSelectObj_ObjStore_S3::~RGWSelectObj_ObjStore_S3()
 {
+   if(m_buff) {free(m_buff);m_buff=0;}
   delete s3select_syntax;
 }
 
@@ -5936,7 +5938,7 @@ int RGWSelectObj_ObjStore_S3::creare_header_records(char *buff)
   return i;
 }
 
-int RGWSelectObj_ObjStore_S3::create_message(const char *payload, char *buff)
+int RGWSelectObj_ObjStore_S3::create_message(const char *payload,char *buff)
 {
 
   u_int32_t total_byte_len = 0;
@@ -5972,7 +5974,6 @@ int RGWSelectObj_ObjStore_S3::create_message(const char *payload, char *buff)
 
 int RGWSelectObj_ObjStore_S3::run_s3select(const char*query,const char*input,size_t input_length,bool skip_first_line,bool skip_last_line,bool to_aggregate)
 {
-  char * buff = 0;
   std::string res;
   int status = 0;
 
@@ -5997,16 +5998,16 @@ int RGWSelectObj_ObjStore_S3::run_s3select(const char*query,const char*input,siz
   {
     res.append(END_PAYLOAD_LINE);
 
-    buff = (char *)malloc(res.size() + 1000);
-    int buff_len = create_message(res.c_str(), buff);
+    m_buff = (char *)malloc(res.size() + 1000);
+    int buff_len = create_message(res.c_str(), m_buff);
 
-    s->formatter->write_bin_data(buff, buff_len);
+    s->formatter->write_bin_data(m_buff, buff_len);
     if (op_ret < 0)
       return op_ret;
   }
   rgw_flush_formatter_and_reset(s, s->formatter);
 
-  if(buff) free(buff);
+  if(m_buff) {free(m_buff);m_buff=0;}
 
   return status;
 }

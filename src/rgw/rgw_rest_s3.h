@@ -873,6 +873,7 @@ static inline int valid_s3_bucket_name(const string& name, bool relaxed=false)
   return 0;
 }
 
+namespace s3selectEngine {
 class s3select;
 class RGWSelectObj_ObjStore_S3 : public RGWGetObj_ObjStore_S3
 {
@@ -882,6 +883,7 @@ private:
   std::string m_last_line;
   bool m_previous_line;
   std::string m_s3select_query;
+  char * m_buff;
 
 public:
   unsigned int chunk_number;
@@ -931,12 +933,12 @@ void encode_int(char & buff, u_int32_t s , int & i);
     return ~crc;
   }
 
-  int create_message(const char *payload, char *buff);
+  int create_message(const char *payload,char * buff);
 
   int run_s3select(const char*query,const char*input,size_t input_length,bool skip_first_line,bool skip_last_line,bool to_aggregate);
   
 };
-
+};
 
 namespace rgw::auth::s3 {
 
