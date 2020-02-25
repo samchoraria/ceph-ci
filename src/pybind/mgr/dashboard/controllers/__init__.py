@@ -24,6 +24,11 @@ from ..exceptions import ScopeNotValid, PermissionNotValid
 from ..services.auth import AuthManager, JwtManager
 from ..plugins import PLUGIN_MANAGER
 
+try:
+    from typing import Any, List
+except ImportError:
+    pass  # For typing only
+
 
 def EndpointDoc(description="", group="", parameters=None, responses=None):  # noqa: N802
     if not isinstance(description, str):
@@ -86,14 +91,14 @@ def EndpointDoc(description="", group="", parameters=None, responses=None):  # n
         return splitted
 
     def _split_list(data, nested):
-        splitted = []
+        splitted = []  # type: List[Any]
         for item in data:
             splitted.extend(_split_parameters(item, nested))
         return splitted
 
     # nested = True means parameters are inside a dict or array
     def _split_parameters(data, nested=False):
-        param_list = []
+        param_list = []  # type: List[Any]
         if isinstance(data, dict):
             param_list.extend(_split_dict(data, nested))
         elif isinstance(data, (list, tuple)):
@@ -286,7 +291,7 @@ def load_controllers():
     return controllers
 
 
-ENDPOINT_MAP = collections.defaultdict(list)
+ENDPOINT_MAP = collections.defaultdict(list)  # type: dict
 
 
 def generate_controller_routes(endpoint, mapper, base_url):
@@ -589,11 +594,11 @@ class BaseController(object):
     def __init__(self):
         logger = logging.getLogger('controller')
         logger.info('Initializing controller: %s -> %s',
-                    self.__class__.__name__, self._cp_path_)
+                    self.__class__.__name__, self._cp_path_)  # type: ignore
         super(BaseController, self).__init__()
 
     def _has_permissions(self, permissions, scope=None):
-        if not self._cp_config['tools.authenticate.on']:
+        if not self._cp_config['tools.authenticate.on']:  # type: ignore
             raise Exception("Cannot verify permission in non secured "
                             "controllers")
 
@@ -612,7 +617,7 @@ class BaseController(object):
     def get_path_param_names(cls, path_extension=None):
         if path_extension is None:
             path_extension = ""
-        full_path = cls._cp_path_[1:] + path_extension
+        full_path = cls._cp_path_[1:] + path_extension  # type: ignore
         path_params = []
         for step in full_path.split('/'):
             param = None
@@ -628,7 +633,7 @@ class BaseController(object):
 
     @classmethod
     def get_path(cls):
-        return cls._cp_path_
+        return cls._cp_path_  # type: ignore
 
     @classmethod
     def endpoints(cls):
@@ -786,10 +791,10 @@ class RESTController(BaseController):
                         path_params = ["{{{}}}".format(p) for p in res_id_params]
                         path += "/{}".format("/".join(path_params))
 
-                status = meth['status']
+                status = meth['status']  # type: ignore
                 method = meth['method']
                 if not sec_permissions:
-                    permission = cls._permission_map[method]
+                    permission = cls._permission_map[method]  # type: ignore
 
             elif hasattr(func, "_collection_method_"):
                 if func._collection_method_['path']:
@@ -800,7 +805,7 @@ class RESTController(BaseController):
                 method = func._collection_method_['method']
                 query_params = func._collection_method_['query_params']
                 if not sec_permissions:
-                    permission = cls._permission_map[method]
+                    permission = cls._permission_map[method]  # type: ignore
 
             elif hasattr(func, "_resource_method_"):
                 if not res_id_params:
@@ -816,7 +821,7 @@ class RESTController(BaseController):
                 method = func._resource_method_['method']
                 query_params = func._resource_method_['query_params']
                 if not sec_permissions:
-                    permission = cls._permission_map[method]
+                    permission = cls._permission_map[method]  # type: ignore
 
             else:
                 continue
