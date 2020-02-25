@@ -5881,7 +5881,7 @@ using namespace s3selectEngine;
 const char *RGWSelectObj_ObjStore_S3::header_name_str[3] = {":event-type", ":content-type", ":message-type"};
 const char *RGWSelectObj_ObjStore_S3::header_value_str[3] = {"Records", "application/octet-stream", "event"};
 
-RGWSelectObj_ObjStore_S3::RGWSelectObj_ObjStore_S3():s3select_syntax(new s3select()),m_previous_line(false),chunk_number(0),m_processed_bytes(0)
+RGWSelectObj_ObjStore_S3::RGWSelectObj_ObjStore_S3():s3select_syntax(new s3select()),m_previous_line(false),m_buff(0),chunk_number(0),m_processed_bytes(0)
 {
   set_get_data(true);
 }
