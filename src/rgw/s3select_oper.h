@@ -467,13 +467,13 @@ private:
 
 public:
     
-    //variable():m_var_type(NA),_name("#"){}
+    variable():m_var_type(var_t::NA),_name(""),column_pos(-1){}
 
-    variable(int64_t i) : m_var_type(var_t::COL_VALUE), _name("#"), column_pos(-1),var_value(i){}
+    variable(int64_t i) : m_var_type(var_t::COL_VALUE), column_pos(-1),var_value(i){}
 
     variable(double d) : m_var_type(var_t::COL_VALUE), _name("#"), column_pos(-1),var_value(d){}
 
-    variable(int i) : m_var_type(var_t::COL_VALUE), _name("#"), column_pos(-1),var_value(i){}
+    variable(int i) : m_var_type(var_t::COL_VALUE), column_pos(-1),var_value(i){}
 
     variable(const std::string & n) : m_var_type(var_t::VAR), _name(n), column_pos(-1){}
 
@@ -1108,6 +1108,7 @@ private:
     std::string name;
     base_function *m_func_impl;
     s3select_functions *m_s3select_functions;
+    variable m_result;
 
     void _resolve_name()
     {
@@ -1145,13 +1146,12 @@ public:
 
         _resolve_name();
 
-        variable result(0); //TODO create variable::NA
         if (is_last_call == false)
-            (*m_func_impl)(&arguments, &result);
+            (*m_func_impl)(&arguments, &m_result);
         else
-            (*m_func_impl).get_aggregate_result(&result);
+            (*m_func_impl).get_aggregate_result(&m_result);
 
-        return result.get_value();
+        return m_result.get_value();
     }
 
 
