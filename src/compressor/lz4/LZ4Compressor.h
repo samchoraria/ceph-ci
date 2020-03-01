@@ -45,6 +45,19 @@ class LZ4Compressor : public Compressor {
     LZ4_stream_t lz4_stream;
     LZ4_resetStream(&lz4_stream);
 
+    // older versions of liblz4 introduce bit errors when compressing
+    // fragmented buffers.  this was fixed in lz4 commit
+    // af127334670a5e7b710bbd6adb71aa7c3ef0cd72, which first
+    // appeared in v1.8.2.
+    //
+    // workaround: if we have chunks that aren't nice and big and
+    // page-aligned, rebuild first before compressing.
+    if ((!src.is_page_aligned() || !src.is_n_page_sized())) {
+      bufferlist new_src = src;
+      new_src.rebuild();
+      return compress(new_src, dst);
+    }
+
     auto p = src.begin();
     size_t left = src.length();
     int pos = 0;
