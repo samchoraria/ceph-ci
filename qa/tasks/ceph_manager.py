@@ -442,7 +442,7 @@ class OSDThrasher(Thrasher):
                                '--journal-path', JPATH.format(id=imp_osd),
                            ])
                            + " --op apply-layout-settings --pool " + pool).format(id=osd)
-                    output = imp_remote.sh(args=cmd, wait=True, check_status=False)
+                    output = imp_remote.sh(cmd, wait=True, check_status=False)
                     if 'Couldn\'t find pool' in output:
                         continue
                     if proc.exitstatus:
