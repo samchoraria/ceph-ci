@@ -4,12 +4,12 @@
 #ifndef CEPH_RBD_MIRROR_POOL_META_CACHE_H
 #define CEPH_RBD_MIRROR_POOL_META_CACHE_H
 
-#include "include/int_types.h"
-#include "common/ceph_mutex.h"
-#include "tools/rbd_mirror/Types.h"
 #include <map>
 
-struct CephContext;
+#include "common/ceph_mutex.h"
+#include "include/common_fwd.h"
+#include "include/int_types.h"
+#include "tools/rbd_mirror/Types.h"
 
 namespace rbd {
 namespace mirror {
