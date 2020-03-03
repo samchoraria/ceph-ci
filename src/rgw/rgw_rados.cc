@@ -8200,6 +8200,8 @@ int RGWRados::cls_bucket_list_ordered(RGWBucketInfo& bucket_info,
     ", list_versions=" << list_versions <<
     ", expansion_factor=" << expansion_factor << dendl;
 
+  m.clear();
+
   RGWSI_RADOS::Pool index_pool;
   // key   - oid (for different shards if there is any)
   // value - list result for the corresponding oid (shard), it is filled by
@@ -8451,6 +8453,7 @@ int RGWRados::cls_bucket_list_unordered(RGWBucketInfo& bucket_info,
     " start_after " << start_after.name << "[" << start_after.instance <<
     "] num_entries " << num_entries << dendl;
 
+  ent_list.clear();
   static MultipartMetaFilter multipart_meta_filter;
 
   *is_truncated = false;
