@@ -724,7 +724,7 @@ std::string get_error_description(){return m_error_description;}
 virtual ~csv_object(){}
 
 public:
-  int getMatchRow(std::list<string> &result) //TODO virtual ? getResult
+  int getMatchRow(string &result) //TODO virtual ? getResult
   {
     int number_of_tokens = 0;
     char *row_tokens[128]; //TODO typedef for it
@@ -741,7 +741,7 @@ public:
                 for (auto i : m_projections)
                 {
                     i->set_last_call();
-                    result.push_back((i->eval().to_string()));
+                    result.append( i->eval().to_string() );
                 }
 
           return number_of_tokens;
@@ -776,19 +776,21 @@ public:
 
       for (auto i : m_projections)
       {
-        result.push_back(i->eval().to_string());
+        result.append( i->eval().to_string() );
+        result.append(",");
       }
+      result.append("\n");
     }
 
     return number_of_tokens; //TODO wrong
   }
 
-  int run_s3select_on_object(std::string &o_result)
+  int run_s3select_on_object(std::string &result)
   {
 
       do
       {
-          std::list<string> result;
+
           int num = 0;
           try
           {
@@ -800,20 +802,6 @@ public:
               m_error_description = e.what();
               if (e.severity() == base_s3select_exception::s3select_exp_en_t::FATAL)//abort query execution
                   return -1;
-          }
-
-          for (std::list<string>::iterator it = result.begin(); it != result.end(); it++)
-          {
-              if (std::next(it) != result.end())
-              {
-                  o_result.append(*it);
-                  o_result.append(",");
-              }
-              else
-              {
-                  o_result.append(*it);
-                  o_result.append("\n");
-              }
           }
 
           if (num < 0)
