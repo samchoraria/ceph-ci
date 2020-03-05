@@ -883,7 +883,7 @@ private:
   std::string m_last_line;
   bool m_previous_line;
   std::string m_s3select_query;
-  char * m_buff;
+  std::string m_result;
 
 public:
   unsigned int chunk_number;
@@ -933,7 +933,7 @@ void encode_int(char & buff, u_int32_t s , int & i);
     return ~crc;
   }
 
-  int create_message(const char *payload,char * buff);
+  int create_message(char * buff , u_int32_t result_len,u_int32_t header_len);
 
   int run_s3select(const char*query,const char*input,size_t input_length,bool skip_first_line,bool skip_last_line,bool to_aggregate);
   

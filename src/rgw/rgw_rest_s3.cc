@@ -5881,14 +5881,13 @@ using namespace s3selectEngine;
 const char *RGWSelectObj_ObjStore_S3::header_name_str[3] = {":event-type", ":content-type", ":message-type"};
 const char *RGWSelectObj_ObjStore_S3::header_value_str[3] = {"Records", "application/octet-stream", "event"};
 
-RGWSelectObj_ObjStore_S3::RGWSelectObj_ObjStore_S3():s3select_syntax(new s3select()),m_previous_line(false),m_buff(0),chunk_number(0),m_processed_bytes(0)
+RGWSelectObj_ObjStore_S3::RGWSelectObj_ObjStore_S3():s3select_syntax(new s3select()),m_previous_line(false),chunk_number(0),m_processed_bytes(0)
 {
   set_get_data(true);
 }
 
 RGWSelectObj_ObjStore_S3::~RGWSelectObj_ObjStore_S3()
 {
-   if(m_buff) {free(m_buff);m_buff=0;}
   delete s3select_syntax;
 }
 
@@ -5938,30 +5937,22 @@ int RGWSelectObj_ObjStore_S3::creare_header_records(char *buff)
   return i;
 }
 
-int RGWSelectObj_ObjStore_S3::create_message(const char *payload,char *buff)
+int RGWSelectObj_ObjStore_S3::create_message(char * buff , u_int32_t result_len,u_int32_t header_len)
 {
-
   u_int32_t total_byte_len = 0;
   u_int32_t preload_crc = 0;
   u_int32_t message_crc = 0;
   int i = 0;
 
-  u_int32_t header_len = creare_header_records(buff + 12);
-
-  total_byte_len = strlen(payload) + header_len + 16;
+  total_byte_len = result_len + 16;
 
   encode_int(buff[i], total_byte_len, i);
   encode_int(buff[i], header_len, i);
-  char crc_buff[8];
-  memcpy(&crc_buff[0], &total_byte_len, 4);
-  memcpy(&crc_buff[4], &header_len, 4);
 
   preload_crc = __crc32(0, (u_int8_t *)buff, 8);
   encode_int(buff[i], preload_crc, i);
 
-  i += header_len;
-  memcpy(&buff[i], payload, strlen(payload));
-  i += strlen(payload);
+  i += result_len;
 
   message_crc = __crc32(0, (u_int8_t *)buff, i);
   encode_int(buff[i], message_crc, i);
@@ -5974,40 +5965,45 @@ int RGWSelectObj_ObjStore_S3::create_message(const char *payload,char *buff)
 
 int RGWSelectObj_ObjStore_S3::run_s3select(const char*query,const char*input,size_t input_length,bool skip_first_line,bool skip_last_line,bool to_aggregate)
 {
-  std::string res;
   int status = 0;
-
+  
+  m_result = "012345678901"; //12 positions for header-crc
+  char buff_header[1000];
+  int header_size = 0;
   csv_object s3_csv_object(s3select_syntax ,query ,input ,input_length ,skip_first_line ,skip_last_line ,to_aggregate );
+  
   if (s3select_syntax->get_error_description().empty() == false)
   {
-    res.append(PAYLOAD_LINE);
-    res.append(s3select_syntax->get_error_description());
+    m_result.append(PAYLOAD_LINE);
+    m_result.append(s3select_syntax->get_error_description());
     status = -1;
   }
   else
   {
-    res.append(PAYLOAD_LINE);
-    status = s3_csv_object.run_s3select_on_object(res);
+    header_size = creare_header_records(buff_header);
+
+    m_result.append(buff_header,header_size); 
+
+    m_result.append(PAYLOAD_LINE);
+
+    status = s3_csv_object.run_s3select_on_object(m_result);
     if(status<0)
     {
-      res.append(s3_csv_object.get_error_description());
+      m_result.append(s3_csv_object.get_error_description());
     }
   }
 
-  if (res.size() > strlen(PAYLOAD_LINE))
+  if (m_result.size() > strlen(PAYLOAD_LINE))
   {
-    res.append(END_PAYLOAD_LINE);
+    m_result.append(END_PAYLOAD_LINE);
 
-    m_buff = (char *)malloc(res.size() + 1000);
-    int buff_len = create_message(res.c_str(), m_buff);
+    int buff_len = create_message(m_result.data(), m_result.size() - 12, header_size);
 
-    s->formatter->write_bin_data(m_buff, buff_len);
+    s->formatter->write_bin_data(m_result.data(), buff_len);
     if (op_ret < 0)
       return op_ret;
   }
   rgw_flush_formatter_and_reset(s, s->formatter);
-
-  if(m_buff) {free(m_buff);m_buff=0;}
 
   return status;
 }
@@ -6066,7 +6062,6 @@ int RGWSelectObj_ObjStore_S3::send_response_data(bufferlist &bl, off_t ofs, off_
 
   std::string query = m_s3select_query.substr(_qs, _qe - _qs);
 
-  std::string res;
   std::string tmp_buff;
   std::string merge_line;
   u_int32_t skip_last_bytes = 0;
