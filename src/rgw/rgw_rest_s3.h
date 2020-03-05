@@ -9,6 +9,7 @@
 
 #include <boost/utility/string_view.hpp>
 #include <boost/container/static_vector.hpp>
+#include <boost/crc.hpp> 
 
 #include "common/sstring.hh"
 #include "rgw_op.h"
@@ -873,7 +874,8 @@ static inline int valid_s3_bucket_name(const string& name, bool relaxed=false)
   return 0;
 }
 
-namespace s3selectEngine {
+namespace s3selectEngine
+{
 class s3select;
 class RGWSelectObj_ObjStore_S3 : public RGWGetObj_ObjStore_S3
 {
@@ -911,34 +913,20 @@ public:
   virtual int send_response_data(bufferlist &bl, off_t ofs, off_t len) override;
 
 private:
+  void encode_short(char &buff, short s, int &i);
 
-void encode_short(char & buff, short s , int & i);
-
-void encode_int(char & buff, u_int32_t s , int & i);
+  void encode_int(char &buff, u_int32_t s, int &i);
 
   int creare_header_records(char *buff);
 
-  //crc32 calculation align with python calculation
-  u_int32_t __crc32(u_int32_t crc, u_int8_t *p, int len)
-  {
-    crc = ~crc;
-    while (--len >= 0)
-    {
-      crc = crc ^ *p++;
-      for (int i = 8; --i >= 0;)
-      {
-        crc = (crc >> 1) ^ (0xedb88320 & -(crc & 1));
-      }
-    }
-    return ~crc;
-  }
+  // the parameters are according to CRC-32 algorithm and its aligned with AWS-cli checksum
+  boost::crc_optimal<32, 0x04C11DB7, 0xFFFFFFFF, 0xFFFFFFFF, true, true> crc32;
 
-  int create_message(char * buff , u_int32_t result_len,u_int32_t header_len);
+  int create_message(char *buff, u_int32_t result_len, u_int32_t header_len);
 
-  int run_s3select(const char*query,const char*input,size_t input_length,bool skip_first_line,bool skip_last_line,bool to_aggregate);
-  
+  int run_s3select(const char *query, const char *input, size_t input_length, bool skip_first_line, bool skip_last_line, bool to_aggregate);
 };
-};
+}; // namespace s3selectEngine
 
 namespace rgw::auth::s3 {
 

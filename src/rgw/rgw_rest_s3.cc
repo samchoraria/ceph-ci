@@ -5949,12 +5949,16 @@ int RGWSelectObj_ObjStore_S3::create_message(char * buff , u_int32_t result_len,
   encode_int(buff[i], total_byte_len, i);
   encode_int(buff[i], header_len, i);
 
-  preload_crc = __crc32(0, (u_int8_t *)buff, 8);
+  crc32.reset();
+  crc32 = std::for_each( buff, buff + 8, crc32 );
+  preload_crc = crc32();
   encode_int(buff[i], preload_crc, i);
 
   i += result_len;
 
-  message_crc = __crc32(0, (u_int8_t *)buff, i);
+  crc32.reset();
+  crc32 = std::for_each( buff, buff + i, crc32 );
+  message_crc = crc32();
   encode_int(buff[i], message_crc, i);
 
   return i;
