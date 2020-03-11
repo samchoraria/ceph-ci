@@ -6097,8 +6097,7 @@ int OSDMonitor::prepare_pool_size(const unsigned pool_type,
       if (err == 0) {
 	*size = erasure_code->get_chunk_count();
 	*min_size =
-	  erasure_code->get_data_chunk_count() +
-	  MIN(1, erasure_code->get_coding_chunk_count() - 1);
+	  erasure_code->get_data_chunk_count();
 	assert(*min_size <= *size);
 	assert(*min_size >= erasure_code->get_data_chunk_count());
       }
