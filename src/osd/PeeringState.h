@@ -11,6 +11,9 @@
 #include <boost/statechart/transition.hpp>
 #include <boost/statechart/event_base.hpp>
 #include <string>
+#ifdef WITH_SEASTAR
+#include <seastar/core/future.hh>
+#endif
 #include <atomic>
 
 #include "include/ceph_assert.h"
@@ -410,6 +413,9 @@ public:
 
     // ============ On disk representation changes ==============
     virtual void rebuild_missing_set_with_deletes(PGLog &pglog) = 0;
+#ifdef WITH_SEASTAR
+    virtual seastar::future<> pre_state_reset(PGLog &pglog) = 0;
+#endif
 
     // ======================= Logging ==========================
     virtual PerfCounters &get_peering_perf() = 0;
@@ -1942,7 +1948,11 @@ public:
   }
 
   /// Updates peering state with new map
+#ifdef WITH_SEASTAR
+  seastar::future<> advance_map(
+#else
   void advance_map(
+#endif
     OSDMapRef osdmap,       ///< [in] new osdmap
     OSDMapRef lastmap,      ///< [in] prev osdmap
     vector<int>& newup,     ///< [in] new up set

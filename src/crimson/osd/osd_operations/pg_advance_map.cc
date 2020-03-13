@@ -69,7 +69,7 @@ seastar::future<> PGAdvanceMap::start()
 	[this](epoch_t next_epoch) {
 	  return osd.get_map(next_epoch).then(
 	    [this] (cached_map_t&& next_map) {
-	      pg->handle_advance_map(next_map, rctx);
+	      return pg->handle_advance_map(next_map, rctx);
 	    });
 	}).then([this] {
 	  pg->handle_activate_map(rctx);

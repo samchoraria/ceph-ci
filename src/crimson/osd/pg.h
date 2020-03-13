@@ -76,7 +76,8 @@ public:
      std::string&& name,
      cached_map_t osdmap,
      ShardServices &shard_services,
-     ec_profile_t profile);
+     ec_profile_t profile,
+     crimson::os::FuturizedStore* store);
 
   ~PG();
 
@@ -353,7 +354,6 @@ public:
   }
 
   void rebuild_missing_set_with_deletes(PGLog &pglog) final {
-    ceph_assert(0 == "Impossible for crimson");
   }
 
   PerfCounters &get_peering_perf() final {
@@ -426,9 +426,10 @@ public:
   void do_peering_event(
     PGPeeringEvent& evt, PeeringCtx &rctx);
 
-  void handle_advance_map(cached_map_t next_map, PeeringCtx &rctx);
+  seastar::future<> handle_advance_map(cached_map_t next_map, PeeringCtx &rctx);
   void handle_activate_map(PeeringCtx &rctx);
   void handle_initialize(PeeringCtx &rctx);
+  seastar::future<> pre_state_reset(PGLog& pglog);
 
   static std::pair<hobject_t, RWState::State> get_oid_and_lock(
     const MOSDOp &m,
@@ -529,6 +530,8 @@ private:
     void on_active();
     blocking_future<> wait();
   } wait_for_active_blocker;
+
+  crimson::os::FuturizedStore* store;
 
   friend std::ostream& operator<<(std::ostream&, const PG& pg);
   friend class ClientRequest;

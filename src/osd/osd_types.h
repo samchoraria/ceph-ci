@@ -4618,6 +4618,9 @@ public:
   const std::map<hobject_t, item> &get_items() const override {
     return missing;
   }
+  std::map<hobject_t, item> &take_items() {
+    return missing;
+  }
   const std::map<version_t, hobject_t> &get_rmissing() const override {
     return rmissing;
   }

@@ -1016,3 +1016,67 @@ void PGLog::rebuild_missing_set_with_deletes(
 
   set_missing_may_contain_deletes();
 }
+
+#ifdef WITH_SEASTAR
+seastar::future<> PGLog::rebuild_missing_set_with_deletes(
+  crimson::os::FuturizedStore *store,
+  crimson::os::CollectionRef ch,
+  const pg_info_t &info)
+{
+  return seastar::do_with(map<hobject_t, pg_missing_item>(),
+    [this, info, store, ch](auto& extra_missing) {
+    // save entries not generated from the current log (e.g. added due
+    // to repair, EIO handling, or divergent_priors).
+    for (auto& [oid, item] : missing.take_items()) {
+      if (!log.logged_object(oid)) {
+	extra_missing.emplace(oid, std::move(item));
+      }
+    }
+    missing.clear();
+    // go through the log and add items that are not present or older
+    // versions on disk, just as if we were reading the log + metadata
+    // off disk originally
+    return seastar::repeat([this, did = std::set<hobject_t>(),
+			    i = log.log.rbegin(), e = log.log.rend(),
+			    info, store, ch]() mutable {
+      if (i == e || i->version <= info.last_complete) {
+	return seastar::make_ready_future<seastar::stop_iteration>(
+		  seastar::stop_iteration::yes);
+      }
+      return [&] {
+	if (i->soid > info.last_backfill || i->is_error()) {
+	  return seastar::now();
+	}
+	if (auto [it, added] = did.emplace(i->soid); !added) {
+	  return seastar::now();
+	}
+	ghobject_t oid{i->soid, ghobject_t::NO_GEN, info.pgid.shard};
+	return store->get_attr(ch, oid, OI_ATTR).safe_then([this, &i](auto bp) {
+	  bufferlist bv;
+	  bv.push_back(bp);
+	  object_info_t oi(bv);
+	  if (oi.version < i->version) {
+	    missing.add(i->soid, i->version, oi.version, i->is_delete());
+	  }
+	  return seastar::now();
+	}, crimson::os::FuturizedStore::get_attr_errorator::all_same_way(
+	    [this, &i](auto e) {
+	    missing.add(i->soid, i->version, eversion_t(), i->is_delete());
+	    return seastar::now();
+	  })
+	);
+      }().then([&] {
+	++i;
+	return seastar::make_ready_future<seastar::stop_iteration>(
+		  seastar::stop_iteration::no);
+      });
+    }).then([this, &extra_missing] {
+      for (const auto& [oid, item] : extra_missing) {
+	missing.add(oid, item.need, item.have, item.is_delete());
+      }
+      set_missing_may_contain_deletes();
+      return seastar::make_ready_future<>();
+    });
+  });
+}
+#endif

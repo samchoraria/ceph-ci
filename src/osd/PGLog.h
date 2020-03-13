@@ -1717,6 +1717,10 @@ public:
       store, ch, info, log, missing, pgmeta_oid, dpp})->start();
   }
 
+  seastar::future<> rebuild_missing_set_with_deletes(
+    crimson::os::FuturizedStore *store,
+    crimson::os::CollectionRef ch,
+    const pg_info_t &info);
 #endif
 
 }; // struct PGLog

@@ -536,7 +536,8 @@ seastar::future<Ref<PG>> OSD::make_pg(cached_map_t create_map,
 	     std::move(name),
 	     create_map,
 	     shard_services,
-	     ec_profile});
+	     ec_profile,
+	     store.get()});
   });
 }
 

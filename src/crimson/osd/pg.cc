@@ -29,7 +29,6 @@
 
 #include "crimson/net/Connection.h"
 #include "crimson/net/Messenger.h"
-#include "crimson/os/cyanstore/cyan_store.h"
 #include "crimson/os/futurized_collection.h"
 #include "crimson/osd/exceptions.h"
 #include "crimson/osd/pg_meta.h"
@@ -82,7 +81,8 @@ PG::PG(
   std::string&& name,
   cached_map_t osdmap,
   ShardServices &shard_services,
-  ec_profile_t profile)
+  ec_profile_t profile,
+  crimson::os::FuturizedStore* store)
   : pgid{pgid},
     pg_whoami{pg_shard},
     coll_ref{coll_ref},
@@ -111,7 +111,8 @@ PG::PG(
       osdmap,
       this,
       this),
-    wait_for_active_blocker(this)
+    wait_for_active_blocker(this),
+    store(store)
 {
   peering_state.set_backend_predicates(
     new ReadablePredicate(pg_whoami),
@@ -425,7 +426,7 @@ void PG::do_peering_event(
   }
 }
 
-void PG::handle_advance_map(
+seastar::future<> PG::handle_advance_map(
   cached_map_t next_map, PeeringCtx &rctx)
 {
   vector<int> newup, newacting;
@@ -434,15 +435,35 @@ void PG::handle_advance_map(
     pgid.pgid,
     &newup, &up_primary,
     &newacting, &acting_primary);
-  peering_state.advance_map(
+  return peering_state.advance_map(
     next_map,
     peering_state.get_osdmap(),
     newup,
     up_primary,
     newacting,
     acting_primary,
-    rctx);
-  osdmap_gate.got_map(next_map->get_epoch());
+    rctx).then([this, next_map] {
+    osdmap_gate.got_map(next_map->get_epoch());
+    return seastar::make_ready_future<>();
+  });
+}
+
+seastar::future<> PG::pre_state_reset(PGLog& pglog)
+{
+  // FIXME: Since rebuilding missing set would involve I/Os,
+  // and in crimson, we don't expect PeeringState state shift
+  // to wait for any I/O, we do the rebuilding here, right
+  // before going to Reset::react(AdvMap). Maybe in the future,
+  // we should modify PeeringState::PeeringListener to make its
+  // method return an indication whether it required I/Os, and
+  // make PeeringState state shift take into account that returned
+  // indication.
+  if (!pglog.get_missing().may_include_deletes
+      && !peering_state.perform_deletes_during_peering()) {
+    return pglog.rebuild_missing_set_with_deletes(
+	    store, coll_ref, peering_state.get_info());
+  }
+  return seastar::make_ready_future<>();
 }
 
 void PG::handle_activate_map(PeeringCtx &rctx)
