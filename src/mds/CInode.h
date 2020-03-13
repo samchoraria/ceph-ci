@@ -315,6 +315,8 @@ class CInode : public MDSCacheObject, public InodeStoreBase, public Counter<CIno
   static const int STATE_QUEUEDEXPORTPIN	= (1<<17);
   static const int STATE_TRACKEDBYOFT		= (1<<18);  // tracked by open file table
   static const int STATE_DELAYEDEXPORTPIN	= (1<<19);
+  static const int STATE_DISTEPHEMERALPIN       = (1<<20);
+  static const int STATE_RANDEPHEMERALPIN       = (1<<21);
   // orphan inode needs notification of releasing reference
   static const int STATE_ORPHAN =	STATE_NOTIFYREF;
 
@@ -899,9 +901,31 @@ class CInode : public MDSCacheObject, public InodeStoreBase, public Counter<CIno
     return !projected_parent.empty();
   }
 
-  void maybe_export_pin(bool update=false);
+  mds_rank_t get_export_pin(bool inherit=true, bool ephemeral=true) const;
   void set_export_pin(mds_rank_t rank);
-  mds_rank_t get_export_pin(bool inherit=true) const;
+  void queue_export_pin(mds_rank_t target);
+  void maybe_export_pin(bool update=false);
+
+  void set_ephemeral_dist(bool yes);
+  void maybe_ephemeral_dist(bool update=false);
+  void maybe_ephemeral_dist_children(bool update=false);
+  void setxattr_ephemeral_dist(bool val=false);
+  bool is_ephemeral_dist() const {
+    return state_test(STATE_DISTEPHEMERALPIN);
+  }
+
+  double get_ephemeral_rand(bool inherit=true) const;
+  void set_ephemeral_rand(bool yes);
+  void maybe_ephemeral_rand();
+  void setxattr_ephemeral_rand(double prob=0.0);
+  bool is_ephemeral_rand() const {
+    return state_test(STATE_RANDEPHEMERALPIN);
+  }
+
+  bool is_ephemerally_pinned() const {
+    return state_test(STATE_DISTEPHEMERALPIN) ||
+           state_test(STATE_RANDEPHEMERALPIN);
+  }
   bool is_exportable(mds_rank_t dest) const;
 
   void print(ostream& out) override;

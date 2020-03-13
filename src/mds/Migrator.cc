@@ -3176,7 +3176,6 @@ void Migrator::import_finish(CDir *dir, bool notify, bool last)
   }
 }
 
-
 void Migrator::decode_import_inode(CDentry *dn, bufferlist::const_iterator& blp,
 				   mds_rank_t oldauth, LogSegment *ls,
 				   map<CInode*, map<client_t,Capability::Export> >& peer_exports,
@@ -3442,6 +3441,7 @@ void Migrator::decode_import_dir(bufferlist::const_iterator& blp,
 #endif
 
   dir->inode->maybe_export_pin();
+  dir->inode->maybe_ephemeral_dist();
 
   dout(7) << " done " << *dir << dendl;
   DECODE_FINISH(blp);
