@@ -877,6 +877,7 @@ static inline int valid_s3_bucket_name(const string& name, bool relaxed=false)
 namespace s3selectEngine
 {
 class s3select;
+class csv_object;
 class RGWSelectObj_ObjStore_S3 : public RGWGetObj_ObjStore_S3
 {
 
@@ -886,6 +887,7 @@ private:
   bool m_previous_line;
   std::string m_s3select_query;
   std::string m_result;
+  csv_object *m_s3_csv_object;
 
 public:
   unsigned int chunk_number;

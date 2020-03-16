@@ -5881,13 +5881,16 @@ using namespace s3selectEngine;
 const char *RGWSelectObj_ObjStore_S3::header_name_str[3] = {":event-type", ":content-type", ":message-type"};
 const char *RGWSelectObj_ObjStore_S3::header_value_str[3] = {"Records", "application/octet-stream", "event"};
 
-RGWSelectObj_ObjStore_S3::RGWSelectObj_ObjStore_S3():s3select_syntax(new s3select()),m_previous_line(false),chunk_number(0),m_processed_bytes(0)
+RGWSelectObj_ObjStore_S3::RGWSelectObj_ObjStore_S3():s3select_syntax(new s3select()),m_previous_line(false),m_s3_csv_object(0),chunk_number(0),m_processed_bytes(0)
 {
   set_get_data(true);
 }
 
 RGWSelectObj_ObjStore_S3::~RGWSelectObj_ObjStore_S3()
 {
+  if (m_s3_csv_object!=0)
+    delete m_s3_csv_object;
+
   delete s3select_syntax;
 }
 
@@ -5974,8 +5977,13 @@ int RGWSelectObj_ObjStore_S3::run_s3select(const char*query,const char*input,siz
   m_result = "012345678901"; //12 positions for header-crc
   char buff_header[1000];
   int header_size = 0;
-  csv_object s3_csv_object(s3select_syntax ,query ,input ,input_length ,skip_first_line ,skip_last_line ,to_aggregate );
-  
+  s3select_syntax->parse_query(query);
+
+  if (m_s3_csv_object==0)
+  {
+      m_s3_csv_object = new s3selectEngine::csv_object(s3select_syntax);
+  }
+
   if (s3select_syntax->get_error_description().empty() == false)
   {
     m_result.append(PAYLOAD_LINE);
@@ -5990,10 +5998,10 @@ int RGWSelectObj_ObjStore_S3::run_s3select(const char*query,const char*input,siz
 
     m_result.append(PAYLOAD_LINE);
 
-    status = s3_csv_object.run_s3select_on_object(m_result);
+    status = m_s3_csv_object->run_s3select_on_object(m_result,input ,input_length ,skip_first_line ,skip_last_line ,to_aggregate);
     if(status<0)
     {
-      m_result.append(s3_csv_object.get_error_description());
+      m_result.append(m_s3_csv_object->get_error_description());
     }
   }
 
