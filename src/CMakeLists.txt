@@ -428,6 +428,15 @@ endif()
 add_library(common STATIC ${ceph_common_objs})
 target_link_libraries(common ${ceph_common_deps})
 
+if(WITH_JAEGER)
+  include(IncludeJaeger)
+  find_package(yaml-cpp REQUIRED)
+  include_directories(${CMAKE_BINARY_DIR}/external/include)
+  # target_include_directories(opentracing::libopentracing
+  # jaegertracing::libjaegertracing)
+  # yaml-cpp::yaml-cpp)
+endif()
+
 add_library(ceph-common SHARED ${ceph_common_objs})
 target_link_libraries(ceph-common ${ceph_common_deps})
 # appease dpkg-shlibdeps
