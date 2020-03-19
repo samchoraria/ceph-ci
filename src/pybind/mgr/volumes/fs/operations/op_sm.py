@@ -1,6 +1,9 @@
 import errno
 
-from typing import Dict
+try:
+    from typing import Dict
+except ImportError:
+    pass
 
 from ..exception import OpSmException
 

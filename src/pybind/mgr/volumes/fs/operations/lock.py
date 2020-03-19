@@ -1,6 +1,9 @@
 from contextlib import contextmanager
 from threading import Lock
-from typing import Dict
+try:
+    from typing import Dict
+except ImportError:
+    pass
 
 # singleton design pattern taken from http://www.aleax.it/5ep.html
 
