@@ -1,2 +1,1 @@
 etc/grafana/dashboards/ceph-dashboard/*
-etc/prometheus/ceph/ceph_default_alerts.yml

@@ -1161,4 +1161,14 @@ Description: grafana dashboards for the ceph dashboard
  block and file system storage.
  .
  This package contains Grafana dashboards that are used by the Ceph Dashboard
- for monitoring and alerts.
+ for monitoring.
+
+Package: ceph-prometheus-alerts
+Architecture: all
+Description: prometheus alerts for the ceph dashboard
+ Ceph is a massively scalable, open-source, distributed
+ storage system that runs on commodity hardware and delivers object,
+ block and file system storage.
+ .
+ This package contains alerts used for prometheus to interact with the
+ Ceph Dashboard.
