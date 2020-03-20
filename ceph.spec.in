@@ -1106,14 +1106,12 @@ collecting data from Ceph Manager "prometheus" module and Prometheus
 project "node_exporter" module. The dashboards are designed to be
 integrated with the Ceph Manager Dashboard web UI.
 
-%if 0%{?suse_version}
 %package prometheus-alerts
 Summary:        Prometheus alerts for a Ceph deplyoment
 BuildArch:      noarch
 Group:          System/Monitoring
 %description prometheus-alerts
 This package provides Ceph’s default alerts for Prometheus.
-%endif
 
 #################################################################################
 # common
