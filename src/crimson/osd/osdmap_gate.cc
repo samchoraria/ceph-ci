@@ -42,6 +42,12 @@ blocking_future<epoch_t> OSDMapGate::wait_for_map(epoch_t epoch)
 }
 
 void OSDMapGate::got_map(epoch_t epoch) {
+  // As we changed PG::pg_advance_map to be asynchronous,
+  // there's a possibility that this method is called out
+  // of epoch order
+  if (current > epoch) {
+    return;
+  }
   current = epoch;
   auto first = waiting_peering.begin();
   auto last = waiting_peering.upper_bound(epoch);
