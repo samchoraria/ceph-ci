@@ -1325,7 +1325,7 @@ mkdir -p %{buildroot}%{_localstatedir}/lib/ceph/bootstrap-rbd-mirror
 # create __pycache__ directories and their contents
 %py3_compile %{buildroot}%{python3_sitelib}
 # prometheus alerts
-install -m 644 -D monitoring/prometheus/alerts/ceph_default_alerts.yml %{buildroot}/etc/prometheus/SUSE/default_rules/ceph_default_alerts.yml
+install -m 644 -D monitoring/prometheus/alerts/ceph_default_alerts.yml %{buildroot}/etc/prometheus/ceph/ceph_default_alerts.yml
 # hardlink duplicate files under /usr to save space
 %fdupes %{buildroot}%{_prefix}
 %endif
@@ -2340,12 +2340,8 @@ exit 0
 %doc monitoring/grafana/dashboards/README
 %doc monitoring/grafana/README.md
 
-%if 0%{?suse_version}
 %files prometheus-alerts
-%dir /etc/prometheus/SUSE/
-%dir /etc/prometheus/SUSE/default_rules/
-%config /etc/prometheus/SUSE/default_rules/ceph_default_alerts.yml
-%endif
-
+%dir /etc/prometheus/ceph/
+%config /etc/prometheus/ceph/ceph_default_alerts.yml
 
 %changelog
