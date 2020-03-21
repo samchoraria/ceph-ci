@@ -119,7 +119,6 @@ protected:
   const shard_id_t shard;
   CollectionRef coll;
   crimson::os::FuturizedStore* store;
-
 public:
   using load_metadata_ertr = crimson::errorator<
     crimson::ct_error::object_corrupted>;

@@ -403,13 +403,49 @@ void PeeringState::write_if_dirty(ObjectStore::Transaction& t)
   }
 }
 
+#ifdef WITH_SEASTAR
+seastar::future<> PeeringState::advance_map(
+#else
 void PeeringState::advance_map(
+#endif
   OSDMapRef osdmap, OSDMapRef lastmap,
   vector<int>& newup, int up_primary,
   vector<int>& newacting, int acting_primary,
   PeeringCtx &rctx)
 {
   ceph_assert(lastmap == osdmap_ref);
+#ifdef WITH_SEASTAR
+  return seastar::do_with(std::move(newup), std::move(newacting),
+    [this, up_primary, acting_primary, osdmap, lastmap, &rctx]
+    (auto& newup, auto& newacting) {
+    return [this, &newup, &newacting, up_primary, acting_primary,
+	    osdmap, lastmap, &rctx] {
+      if (should_restart_peering(up_primary, acting_primary,
+				 newup, newacting, lastmap,
+				 osdmap)) {
+	return pl->pre_state_reset(pg_log);
+      }
+      return seastar::make_ready_future<>();
+    }().then([this, osdmap, lastmap, &newup,
+	      &newacting, up_primary,
+	      acting_primary, &rctx]() mutable {
+      update_osdmap_ref(osdmap);
+      pool.update(cct, osdmap);
+
+      AdvMap evt(
+	osdmap, lastmap, newup, up_primary,
+	newacting, acting_primary);
+      handle_event(evt, &rctx);
+      if (pool.info.last_change == osdmap_ref->get_epoch()) {
+	pl->on_pool_change();
+      }
+      readable_interval = pool.get_readable_interval();
+      last_require_osd_release = osdmap->require_osd_release;
+      return seastar::make_ready_future<>();
+    });
+  });
+
+#else
   psdout(10) << "handle_advance_map "
 	    << newup << "/" << newacting
 	    << " -- " << up_primary << "/" << acting_primary
@@ -427,6 +463,7 @@ void PeeringState::advance_map(
   }
   readable_interval = pool.get_readable_interval();
   last_require_osd_release = osdmap->require_osd_release;
+#endif
 }
 
 void PeeringState::activate_map(PeeringCtx &rctx)
