@@ -2342,6 +2342,6 @@ exit 0
 %attr(0755,root,root) %dir %{_sysconfdir}/prometheus
 %endif
 %attr(0755,root,root) %dir %{_sysconfdir}/prometheus/ceph
-%config %{_syscongdir}/prometheus/ceph/ceph_default_alerts.yml
+%config %{_sysconfdir}/prometheus/ceph/ceph_default_alerts.yml
 
 %changelog
