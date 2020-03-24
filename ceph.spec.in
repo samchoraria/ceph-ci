@@ -161,7 +161,12 @@ BuildRequires:	gperftools-devel >= 2.6.1
 BuildRequires:	gperftools-devel >= 2.4
 %endif
 %endif
+%if 0%{?fedora} || 0%{?rhel}
 BuildRequires: json-devel
+%endif
+%if 0%{?suse_version}
+BuildRequires: nlohmann_json-devel
+%endif
 BuildRequires:	leveldb-devel > 1.2
 BuildRequires:	libaio-devel
 BuildRequires:	libblkid-devel >= 2.17

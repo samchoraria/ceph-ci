@@ -8,11 +8,18 @@ function(build_thrift)
 			 -DBUILD_PYTHON=OFF
 			 -DBUILD_TESTING=OFF
 			 -DBUILD_TUTORIALS=OFF
-			 -DCMAKE_FIND_ROOT_PATH=${CMAKE_BINARY_DIR}/boost
 			 -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/external
-			 -DBOOST_ROOT=${CMAKE_BINARY_DIR}/boost
-			 -DCMAKE_INSTALL_LIBDIR=${CMAKE_BINARY_DIR}/external/lib
-			 -DCMAKE_PREFIX_PATH=${CMAKE_BINARY_DIR}/external)
+			 -DCMAKE_INSTALL_LIBDIR=${CMAKE_BINARY_DIR}/external/lib)
+
+  if(EXISTS "/opt/ceph/include/boost/")
+    set(dependencies "")
+    list(APPEND thrift_CMAKE_ARGS -DBOOST_ROOT=/opt/ceph)
+    list(APPEND thrift_CMAKE_ARGS -DCMAKE_FIND_ROOT_PATH=${CMAKE_BINARY_DIR}/external)
+  else()
+    set(dependencies Boost)
+    list(APPEND thrift_CMAKE_ARGS  -DCMAKE_FIND_ROOT_PATH=${CMAKE_BINARY_DIR}/boost)
+    list(APPEND thrift_CMAKE_ARGS  -DCMAKE_PREFIX_PATH=${CMAKE_BINARY_DIR}/external)
+  endif()
 
   if(CMAKE_MAKE_PROGRAM MATCHES "make")
     # try to inherit command line arguments passed by parent "make" job
@@ -33,6 +40,6 @@ function(build_thrift)
     BINARY_DIR ${thrift_BINARY_DIR}
     BUILD_COMMAND ${make_cmd}
     INSTALL_COMMAND make install
-    DEPENDS Boost
+    DEPENDS ${dependencies}
     )
 endfunction()
