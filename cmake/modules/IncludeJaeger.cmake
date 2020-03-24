@@ -1,6 +1,6 @@
 include(BuildJaeger)
 include(BuildOpenTracing)
-find_package(yaml-cpp REQUIRED)
+
 include(ExternalProjectHelper)
 #include(BuildThrift)
 

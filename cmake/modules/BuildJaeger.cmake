@@ -17,29 +17,39 @@ function(build_jaeger)
 			-DBUILD_SHARED_LIBS=ON
 			-DHUNTER_ENABLED=OFF
 			-DBUILD_TESTING=OFF
-			-DBUILD_EXAMPLES=OFF
-			-DCMAKE_FIND_ROOT_PATH=${CMAKE_BINARY_DIR}/external
-			#-DCMAKE_PREFIX_PATH={CMAKE_BINARY_DIR}/external
+			-DJAEGERTRACING_BUILD_EXAMPLES=ON
+			-DCMAKE_PREFIX_PATH=${CMAKE_BINARY_DIR}/external
 			-DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/external
 			-DCMAKE_FIND_ROOT_PATH=${CMAKE_BINARY_DIR}/external
 			-DCMAKE_INSTALL_LIBDIR=${CMAKE_BINARY_DIR}/external/lib)
 
+  set(dependencies OpenTracing thrift)
   include(BuildOpenTracing)
   build_opentracing()
   include(Buildthrift)
   build_thrift()
+  find_package(yaml-cpp 0.6.0)
+  if(NOT yaml-cpp_FOUND)
+    include(Buildyaml-cpp)
+    build_yamlcpp()
+    set(yaml-cpp_LIBRARY
+      ${CMAKE_BINARY_DIR}/external/lib/${CMAKE_SHARED_LIBRARY_PREFIX}yaml-cpp${CMAKE_SHARED_LIBRARY_SUFFIX})
+    set(yaml-cpp_INCLUDE_DIRS ${CMAKE_BINARY_DIR}/external/include)
+    list(APPEND dependencies "yaml-cpp")
+  endif()
 
+  message(STATUS "DEPENDENCIES ${dependencies}")
   if(CMAKE_MAKE_PROGRAM MATCHES "make")
     # try to inherit command line arguments passed by parent "make" job
     set(make_cmd $(MAKE))
   else()
-    set(make_cmd ${CMAKE_COMMAND} --build <BINARY_DIR> --target Jaeger)
+    set(make_cmd ${CMAKE_COMMAND} --build <BINARY_DIR> --config $<CONFIG> --target Jaeger)
   endif()
 
   include(ExternalProject)
   ExternalProject_Add(Jaeger
     GIT_REPOSITORY https://github.com/ideepika/jaeger-client-cpp.git
-    GIT_TAG "fixes-issue-162"
+    GIT_TAG "hunter-disabled"
     UPDATE_COMMAND ""
     INSTALL_DIR "${CMAKE_BINARY_DIR}/external"
     DOWNLOAD_DIR ${Jaeger_DOWNLOAD_DIR}
@@ -49,6 +59,6 @@ function(build_jaeger)
     BINARY_DIR ${Jaeger_BINARY_DIR}
     BUILD_COMMAND ${make_cmd}
     INSTALL_COMMAND make install
-    DEPENDS OpenTracing thrift yaml-cpp::yaml-cpp
+    DEPENDS "${dependencies}"
     )
 endfunction()
