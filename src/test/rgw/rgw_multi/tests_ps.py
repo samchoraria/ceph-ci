@@ -8,7 +8,7 @@ import subprocess
 import socket
 import time
 import os
-from tasks.rgw_multi.tests import get_realm, \
+from .tests import get_realm, \
     ZonegroupConns, \
     zonegroup_meta_checkpoint, \
     zone_meta_checkpoint, \
@@ -19,14 +19,14 @@ from tasks.rgw_multi.tests import get_realm, \
     gen_bucket_name, \
     get_user, \
     get_tenant
-from tasks.rgw_multi.zone_ps import PSTopic, \
+from .zone_ps import PSTopic, \
     PSTopicS3, \
     PSNotification, \
     PSSubscription, \
     PSNotificationS3, \
     print_connection_info, \
     delete_all_s3_topics
-from tasks.rgw_multi.multisite import User
+from .multisite import User
 from nose import SkipTest
 from nose.tools import assert_not_equal, assert_equal
 
