@@ -19,16 +19,27 @@
 
 #include <boost/algorithm/string.hpp>
 
+std::vector<std::string> display_params = {
+  "chunk_count", "data_chunk_count", "coding_chunk_count"
+};
+
 void usage(const std::string message, ostream &out) {
   if (!message.empty()) {
     out << message << std::endl;
     out << "" << std::endl;
   }
-  out << "usage: ceph-erasure-code-tool encode <profile> <stripe_unit> <want_to_encode> <fname>" << std::endl;
+  out << "usage: ceph-erasure-code-tool test-plugin-exists <plugin>" << std::endl;
+  out << "       ceph-erasure-code-tool validate-profile <profile> [<display-param> ...]" << std::endl;
+  out << "       ceph-erasure-code-tool calc-chunk-size <profile> <object_size>" << std::endl;
+  out << "       ceph-erasure-code-tool encode <profile> <stripe_unit> <want_to_encode> <fname>" << std::endl;
   out << "       ceph-erasure-code-tool decode <profile> <stripe_unit> <want_to_decode> <fname>" << std::endl;
   out << "" << std::endl;
+  out << "  plugin          - plugin name" << std::endl;
   out << "  profile         - comma separated list of erasure-code profile settings" << std::endl;
   out << "                    example: plugin=jerasure,technique=reed_sol_van,k=3,m=2" << std::endl;
+  out << "  display-param   - parameter to display (display all if empty)" << std::endl;
+  out << "                    may be: " << display_params << std::endl;
+  out << "  object_size     - object size" << std::endl;
   out << "  stripe_unit     - stripe unit" << std::endl;
   out << "  want_to_encode  - comma separated list of shards to encode" << std::endl;
   out << "  want_to_decode  - comma separated list of shards to decode" << std::endl;
@@ -51,12 +62,29 @@ int main(int argc, const char **argv) {
     usage("", std::cout);
     return 0;
   }
-  if (args.size() < 5) {
+  if (args.size() < 2) {
     usage("not enought arguments", std::cerr);
     return 1;
   }
 
   std::string command = args[0];
+
+  if (command == "test-plugin-exists") {
+    ErasureCodePluginRegistry &instance = ErasureCodePluginRegistry::instance();
+    ErasureCodePlugin *plugin;
+    stringstream ss;
+
+    std::lock_guard l{instance.lock};
+    int r = instance.load(
+      args[1], g_conf().get_val<std::string>("erasure_code_dir"), &plugin, &ss);
+    std::cerr << ss.str() << endl;
+    return r;
+  }
+
+  if (args.size() < 2) {
+    usage("not enought arguments", std::cerr);
+    return 1;
+  }
 
   ceph::ErasureCodeProfile profile;
   std::vector<std::string> profile_str;
@@ -83,6 +111,59 @@ int main(int argc, const char **argv) {
     profile, &ec_impl, &ss);
   if (!ec_impl) {
     usage("invalid profile: " + ss.str(), std::cerr);
+    return 1;
+  }
+
+  if (command == "validate-profile") {
+    if (args.size() > 2) {
+      std::set<std::string> valid_params(display_params.begin(),
+                                         display_params.end());
+      display_params.clear();
+      for (size_t i = 2; i < args.size(); i++) {
+        if (!valid_params.count(args[i])) {
+          usage("invalid display param: " + std::string(args[i]), std::cerr);
+          return 1;
+        }
+        display_params.push_back(args[i]);
+      }
+    }
+
+    for (auto &param : display_params) {
+      if (display_params.size() > 1) {
+        std::cout << param << ": ";
+      }
+      if (param == "chunk_count") {
+        std::cout << ec_impl->get_chunk_count() << std::endl;
+      } else if (param == "data_chunk_count") {
+        std::cout << ec_impl->get_data_chunk_count() << std::endl;
+      } else if (param == "coding_chunk_count") {
+        std::cout << ec_impl->get_coding_chunk_count() << std::endl;
+      } else {
+        ceph_abort_msgf("unknown display_param: %s", param.c_str());
+      }
+    }
+
+    return 0;
+  }
+
+  if (command == "calc-chunk-size") {
+    if (args.size() < 3) {
+      usage("not enought arguments", std::cerr);
+      return 1;
+    }
+
+    uint64_t object_size = atoi(args[2]);
+    if (object_size <= 0) {
+      usage("invalid object size", std::cerr);
+      return 1;
+    }
+
+    std::cout << ec_impl->get_chunk_size(object_size) << std::endl;
+    return 0;
+  }
+
+  if (args.size() < 5) {
+    usage("not enought arguments", std::cerr);
     return 1;
   }
 

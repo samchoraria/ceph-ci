@@ -4,6 +4,18 @@ TMPDIR=/tmp/test_ceph-erasure-code-tool.$$
 mkdir $TMPDIR
 trap "rm -fr $TMPDIR" 0
 
+ceph-erasure-code-tool test-plugin-exists INVALID_PLUGIN && exit 1
+ceph-erasure-code-tool test-plugin-exists jerasure
+
+ceph-erasure-code-tool validate-profile \
+                       plugin=jerasure,technique=reed_sol_van,k=2,m=1
+
+test "$(ceph-erasure-code-tool validate-profile \
+          plugin=jerasure,technique=reed_sol_van,k=2,m=1 chunk_count)" = 3
+
+test "$(ceph-erasure-code-tool calc-chunk-size \
+          plugin=jerasure,technique=reed_sol_van,k=2,m=1 4194304)" = 2097152
+
 dd if="$(which ceph-erasure-code-tool)" of=$TMPDIR/data bs=770808 count=1
 cp $TMPDIR/data $TMPDIR/data.orig
 
