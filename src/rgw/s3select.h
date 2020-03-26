@@ -60,6 +60,7 @@ struct actionQ
     vector<base_statement *> exprQ;
     vector<base_statement *> funcQ;
     vector<base_statement *> condQ;
+    projection_alias alias_map;
     std::string from_clause;
     vector<std::string> schema_columns;
     s3select_projections  projections;
@@ -401,6 +402,26 @@ struct push_projection : public base_action
 };
 static push_projection g_push_projection;
 
+struct push_alias_projection : public base_action
+{
+    void operator()(const char *a,const char *b) const
+    {
+        string token(a, b);
+        //extract alias name
+        const char *p=(char*)b-1;while(*p != ' ')p--; 
+        std::string alias_name(p+1,b);
+        base_statement*  bs = m_action->exprQ.back();
+
+        //mapping alias name to base-statement
+        bool res = m_action->alias_map.insert_new_entry(alias_name,bs); 
+        //TODO if res==false than alias name is not uniq
+
+        m_action->projections.get()->push_back( bs );
+        m_action->exprQ.pop_back();
+    }
+
+};
+static push_alias_projection g_push_alias_projection;
 
 /// for the schema description "mini-parser"
 struct push_column : public base_action
@@ -487,6 +508,7 @@ struct s3select : public grammar<s3select>
         ATTACH_ACTION_Q(push_variable);
         ATTACH_ACTION_Q(push_column_pos);
         ATTACH_ACTION_Q(push_projection);
+        ATTACH_ACTION_Q(push_alias_projection);
         ATTACH_ACTION_Q(push_debug_1);
 
         error_description.clear();
@@ -530,6 +552,11 @@ struct s3select : public grammar<s3select>
         return &m_sca;
     }
 
+    projection_alias* get_aliases()
+    {
+        return &m_actionQ.alias_map;
+    }
+
     ~s3select(){}
 
 
@@ -543,7 +570,7 @@ struct s3select : public grammar<s3select>
             
             projections = projection_expression >> *( ',' >> projection_expression) ;
 
-            projection_expression = (arithmetic_expression >> str_p("as") >> alias_name) | (arithmetic_expression)[BOOST_BIND_ACTION(push_projection)]  ;
+            projection_expression = (arithmetic_expression >> str_p("as") >> alias_name)[BOOST_BIND_ACTION(push_alias_projection)] | (arithmetic_expression)[BOOST_BIND_ACTION(push_projection)]  ;
 
             alias_name = lexeme_d[(+alpha_p >> *digit_p)] ;
 
@@ -683,10 +710,10 @@ public:
         m_where_clause = m_s3_select->get_filter();
 
         if (m_where_clause)
-            m_where_clause->traverse_and_apply(m_sa);
+            m_where_clause->traverse_and_apply(m_sa,m_s3_select->get_aliases());
 
         for (auto p : m_projections)
-            p->traverse_and_apply(m_sa);
+            p->traverse_and_apply(m_sa,m_s3_select->get_aliases());
 
         for (auto e : m_projections) //TODO for tests only, should be in semantic
         {

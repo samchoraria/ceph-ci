@@ -160,7 +160,7 @@ public:
             if (!strcmp(iter.first.c_str(),n)) return iter.second;
         }
 
-        throw base_s3select_exception("column_name_not_in_schema");
+        return -1;
     }
 
     std::string_view get_column_value(int column_pos)
@@ -175,6 +175,46 @@ public:
     int get_num_of_columns(){
         return m_upper_bound;
     }
+};
+
+class base_statement;
+class projection_alias {
+//purpose: mapping between alias-name to base_statement*
+//those routines are *NOT* intensive, works once per query parse time.
+
+    private:
+        std::vector< pair<std::string,base_statement *> > alias_map;
+
+    public:
+        std::vector< pair<std::string,base_statement *> > * get()
+        {
+            return &alias_map;
+        }
+
+        bool insert_new_entry(std::string alias_name, base_statement* bs)
+        {//purpose: only unique alias names.
+
+            for(auto alias: alias_map)
+            {
+                if(alias.first.compare(alias_name) == 0)
+                    return false; //alias name already exist
+
+            }
+            pair<std::string,base_statement *> new_alias(alias_name,bs);
+            alias_map.push_back(new_alias);
+            
+            return true;
+        }
+
+        base_statement* search_alias(std::string alias_name)
+        {
+            for(auto alias: alias_map)
+            {
+                if(alias.first.compare(alias_name) == 0)
+                    return alias.second;//refernce to execution node
+            }
+            return 0;
+        }
 };
 
 struct binop_plus {
@@ -447,6 +487,7 @@ class base_statement {
     protected:
 
     scratch_area *m_scratch;
+    projection_alias *m_aliases;
     bool is_last_call; //valid only for aggregation functions
 
 	public:
@@ -455,14 +496,16 @@ class base_statement {
         virtual base_statement* left() {return 0;}
         virtual base_statement* right() {return 0;}       
 		virtual std::string print(int ident) =0;//TODO complete it, one option to use level parametr in interface , 
-        virtual bool semantic() =0;//done once , post syntax , traverse all nodes and validate semantics. 
-        virtual void traverse_and_apply(scratch_area *sa)
+        virtual bool semantic() =0;//done once , post syntax , traverse all nodes and validate semantics.
+
+        virtual void traverse_and_apply(scratch_area *sa,projection_alias *pa)
         {
             m_scratch = sa;
+            m_aliases = pa;
             if (left())
-                left()->traverse_and_apply(m_scratch);
+                left()->traverse_and_apply(m_scratch,m_aliases);
             if (right())
-                right()->traverse_and_apply(m_scratch);
+                right()->traverse_and_apply(m_scratch,m_aliases);
         }
 
         virtual bool is_aggregate(){return false;}
@@ -509,20 +552,20 @@ private:
     value var_value;
     std::string m_star_op_result;
     char m_star_op_result_charc[4096]; //TODO should be dynamic
-
+    base_statement* m_projection_alias;
 public:
     
-    variable():m_var_type(var_t::NA),_name(""),column_pos(-1){}
+    variable():m_var_type(var_t::NA),_name(""),column_pos(-1),m_projection_alias(0){}
 
-    variable(int64_t i) : m_var_type(var_t::COL_VALUE), column_pos(-1),var_value(i){}
+    variable(int64_t i) : m_var_type(var_t::COL_VALUE), column_pos(-1),var_value(i),m_projection_alias(0){}
 
-    variable(double d) : m_var_type(var_t::COL_VALUE), _name("#"), column_pos(-1),var_value(d){}
+    variable(double d) : m_var_type(var_t::COL_VALUE), _name("#"), column_pos(-1),var_value(d),m_projection_alias(0){}
 
-    variable(int i) : m_var_type(var_t::COL_VALUE), column_pos(-1),var_value(i){}
+    variable(int i) : m_var_type(var_t::COL_VALUE), column_pos(-1),var_value(i),m_projection_alias(0){}
 
-    variable(const std::string & n) : m_var_type(var_t::VAR), _name(n), column_pos(-1){}
+    variable(const std::string & n) : m_var_type(var_t::VAR), _name(n), column_pos(-1),m_projection_alias(0){}
 
-    variable(const std::string & n ,  var_t tp) : m_var_type(var_t::NA)
+    variable(const std::string & n ,  var_t tp) : m_var_type(var_t::NA),m_projection_alias(0)
     {
         if(tp == variable::var_t::POS)
         {
@@ -600,9 +643,24 @@ public:
         else if(m_var_type == var_t::STAR_OPERATION)
             return star_operation();
         else if (column_pos == -1)
-            column_pos = m_scratch->get_column_pos(_name.c_str()); //done once , for the first time
+        { //done once , for the first time
+            column_pos = m_scratch->get_column_pos(_name.c_str());
 
-        var_value = (char*)m_scratch->get_column_value(column_pos).data();//no allocation. returning pointer of allocated space 
+            if (column_pos == -1)
+            {//not belong to schema , should exist in aliases 
+                m_projection_alias = m_aliases->search_alias(_name.c_str());
+
+                if(m_projection_alias == 0)
+                    throw base_s3select_exception("alias or column not exist in schema",base_s3select_exception::s3select_exp_en_t::FATAL);
+		column_pos = -2; 
+            }
+        }
+
+        if(m_projection_alias)
+            var_value = m_projection_alias->eval();
+        else
+            var_value = (char*)m_scratch->get_column_value(column_pos).data();//no allocation. returning pointer of allocated space 
+
         return var_value;
     }
 
@@ -1193,12 +1251,13 @@ private:
     }
 
 public:
-    virtual void traverse_and_apply(scratch_area *sa)
+    virtual void traverse_and_apply(scratch_area *sa,projection_alias *pa)
     {
         m_scratch = sa;
+        m_aliases = pa;
         for (base_statement *ba : arguments)
         {
-            ba->traverse_and_apply(sa);
+            ba->traverse_and_apply(sa,pa);
         }
     }
 
