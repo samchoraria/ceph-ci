@@ -431,6 +431,10 @@ target_link_libraries(common ${ceph_common_deps})
 if(WITH_JAEGER)
   include(IncludeJaeger)
   include_directories(${CMAKE_BINARY_DIR}/external/include)
+  target_link_libraries(common
+    yaml-cpp::yaml-cpp
+    opentracing::libopentracing
+    jaegertracing::libjaegertracing)
   # target_include_directories(opentracing::libopentracing
   # jaegertracing::libjaegertracing)
   # yaml-cpp::yaml-cpp)
