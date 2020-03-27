@@ -1,7 +1,6 @@
 """
 Run rgw roundtrip message tests
 """
-from cStringIO import StringIO
 import base64
 import contextlib
 import logging
@@ -78,7 +77,7 @@ def _config_user(s3tests_conf, section, user):
     s3tests_conf[section].setdefault('user_id', user)
     s3tests_conf[section].setdefault('email', '{user}+test@test.test'.format(user=user))
     s3tests_conf[section].setdefault('display_name', 'Mr. {user}'.format(user=user))
-    s3tests_conf[section].setdefault('access_key', ''.join(random.choice(string.uppercase) for i in xrange(20)))
+    s3tests_conf[section].setdefault('access_key', ''.join(random.choice(string.uppercase) for i in range(20)))
     s3tests_conf[section].setdefault('secret_key', base64.b64encode(os.urandom(40)))
 
 @contextlib.contextmanager
@@ -174,17 +173,14 @@ def configure(ctx, config):
                 './bootstrap',
                 ],
             )
-        conf_fp = StringIO()
         conf = dict(
                         s3=s3tests_conf['s3'],
                         roundtrip=s3tests_conf['roundtrip'],
                     )
-        yaml.safe_dump(conf, conf_fp, default_flow_style=False)
         teuthology.write_file(
             remote=remote,
             path='{tdir}/archive/s3roundtrip.{client}.config.yaml'.format(tdir=testdir, client=client),
-            data=conf_fp.getvalue(),
-            )
+            data=yaml.safe_dump(conf, default_flow_style=False))
     yield
 
 
