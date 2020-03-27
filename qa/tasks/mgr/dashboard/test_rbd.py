@@ -844,15 +844,23 @@ class RbdTest(DashboardTestCase):
         time.sleep(1)
 
         self.purge_trash('rbd')
-        self.assertStatus(200)
+        self.assertStatus([200, 201])
 
         time.sleep(1)
 
         trash_not_expired = self.get_trash('rbd', id_not_expired)
         self.assertIsNotNone(trash_not_expired)
 
-        trash_expired = self.get_trash('rbd', id_expired)
-        self.assertIsNone(trash_expired)
+        # A wait loop to tolerate delayed-purge on busy cluster
+        retries = 6
+        while True:
+            trash_expired = self.get_trash('rbd', id_expired)
+            if retries > 0 and trash_expired is not None:
+                time.sleep(10)
+                retries -= 1
+            else:
+                self.assertIsNone(trash_expired)
+                break
 
     def test_list_namespaces(self):
         self.create_namespace('rbd', 'ns')
