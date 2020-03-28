@@ -8,7 +8,6 @@ import logging
 from teuthology import misc as teuthology
 from teuthology import contextutil
 from teuthology.orchestra import run
-from teuthology.orchestra.connection import split_user
 from teuthology.packaging import install_package
 from teuthology.packaging import remove_package
 
@@ -123,7 +122,7 @@ def setup_venv(ctx, config):
     for (client, _) in config.items():
         run_in_keystone_dir(ctx, client,
             [   'source',
-		'{tvdir}/bin/activate'.format(tvdir=get_toxvenv_dir(ctx)),
+                '{tvdir}/bin/activate'.format(tvdir=get_toxvenv_dir(ctx)),
                 run.Raw('&&'),
                 'tox', '-e', 'venv', '--notest'
             ])
@@ -133,7 +132,7 @@ def setup_venv(ctx, config):
     try:
         yield
     finally:
-	pass
+        pass
 
 @contextlib.contextmanager
 def configure_instance(ctx, config):
@@ -181,7 +180,6 @@ def run_keystone(ctx, config):
 
         # start the public endpoint
         client_public_with_id = 'keystone.public' + '.' + client_id
-        client_public_with_cluster = cluster_name + '.' + client_public_with_id
 
         public_host, public_port = ctx.keystone.public_endpoints[client]
         run_cmd = get_keystone_venved_cmd(ctx, 'keystone-wsgi-public',
