@@ -1,7 +1,7 @@
 """
 Test Swift API
 """
-from cStringIO import StringIO
+from io import BytesIO
 from configobj import ConfigObj
 import base64
 import contextlib
@@ -13,7 +13,6 @@ from teuthology import misc as teuthology
 from teuthology import contextutil
 from teuthology.config import config as teuth_config
 from teuthology.orchestra import run
-from teuthology.orchestra.connection import split_user
 
 log = logging.getLogger(__name__)
 
@@ -122,7 +121,7 @@ def configure(ctx, config):
     assert isinstance(config, dict)
     log.info('Configuring testswift...')
     testdir = teuthology.get_testdir(ctx)
-    for client, testswift_conf in config.iteritems():
+    for client, testswift_conf in config.items():
         (remote,) = ctx.cluster.only(client).remotes.keys()
         remote.run(
             args=[
@@ -132,7 +131,7 @@ def configure(ctx, config):
                 './bootstrap',
                 ],
             )
-        conf_fp = StringIO()
+        conf_fp = BytesIO()
         testswift_conf.write(conf_fp)
         teuthology.write_file(
             remote=remote,
