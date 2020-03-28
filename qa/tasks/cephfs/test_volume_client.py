@@ -279,7 +279,7 @@ vc.disconnect()
                 background.wait()
             except CommandFailedError:
                 # command failed with EBLACKLISTED?
-                if "transport endpoint shutdown" in background.stderr.getvalue():
+                if b"transport endpoint shutdown" in background.stderr.getvalue():
                     pass
                 else:
                     raise

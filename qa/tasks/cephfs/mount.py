@@ -666,7 +666,7 @@ class CephFSMount(object):
         try:
             p.wait()
         except CommandFailedError as e:
-            if e.exitstatus == 1 and "No such attribute" in p.stderr.getvalue():
+            if e.exitstatus == 1 and b"No such attribute" in p.stderr.getvalue():
                 return None
             else:
                 raise

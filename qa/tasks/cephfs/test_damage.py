@@ -330,7 +330,7 @@ class TestDamage(CephFSTestCase):
                 try:
                     proc.wait()
                 except CommandFailedError:
-                    stderr = proc.stderr.getvalue()
+                    stderr = proc.stderr.getvalue().decode()
                     log.info(stderr)
                     if "Read-only file system".lower() in stderr.lower():
                         pass
@@ -520,7 +520,7 @@ class TestDamage(CephFSTestCase):
         try:
             ran.wait()
         except CommandFailedError:
-            self.assertTrue("Input/output error" in ran.stderr.getvalue())
+            self.assertTrue(b"Input/output error" in ran.stderr.getvalue())
 
         # Check that an entry is created in the damage table
         damage = json.loads(
@@ -545,7 +545,7 @@ class TestDamage(CephFSTestCase):
         try:
             ran.wait()
         except CommandFailedError:
-            self.assertTrue("Input/output error" in ran.stderr.getvalue())
+            self.assertTrue(b"Input/output error" in ran.stderr.getvalue())
 
         # Check that an entry is created in the damage table
         damage = json.loads(
