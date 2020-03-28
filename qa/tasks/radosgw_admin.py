@@ -10,27 +10,25 @@ Rgw admin testing against a running instance
 #	python qa/tasks/radosgw_admin.py [USER] HOSTNAME
 #
 
-import copy
 import json
 import logging
 import time
 import datetime
-import Queue
+from six.moves import queue
 
 import sys
+import six
 
-from cStringIO import StringIO
+from io import BytesIO
 
 import boto.exception
 import boto.s3.connection
 import boto.s3.acl
-from boto.utils import RequestHook
 
 import httplib2
 
-import util.rgw as rgw_utils
 
-from util.rgw import rgwadmin, get_user_summary, get_user_successful_ops
+from tasks.util.rgw import rgwadmin, get_user_summary, get_user_successful_ops
 
 log = logging.getLogger(__name__)
 
@@ -134,7 +132,7 @@ class usage_acc:
             for b in e['buckets']:
                 c = b['categories']
                 if b['bucket'] == 'nosuchbucket':
-                    print "got here"
+                    print("got here")
                 try:
                     b2 = self.e2b(e2, b['bucket'], False)
                     if b2 != None:
@@ -189,7 +187,7 @@ class usage_acc:
                 x2 = s2['total']
             except Exception as ex:
                 r.append("malformed summary looking for totals for user "
-		    + e['user'] + " " + str(ex))
+                         + e['user'] + " " + str(ex))
                 break
             usage_acc_validate_fields(r, x, x2, "summary: totals for user" + e['user'])
         return r
@@ -198,14 +196,14 @@ def ignore_this_entry(cat, bucket, user, out, b_in, err):
     pass
 class requestlog_queue():
     def __init__(self, add):
-        self.q = Queue.Queue(1000)
+        self.q = queue.Queue(1000)
         self.adder = add
     def handle_request_data(self, request, response, error=False):
         now = datetime.datetime.now()
-	if error:
-	    pass
-	elif response.status < 200 or response.status >= 400:
-	    error = True
+        if error:
+            pass
+        elif response.status < 200 or response.status >= 400:
+            error = True
         self.q.put({'t': now, 'o': request, 'i': response, 'e': error})
     def clear(self):
         with self.q.mutex:
@@ -213,17 +211,17 @@ class requestlog_queue():
     def log_and_clear(self, cat, bucket, user, add_entry = None):
         while not self.q.empty():
             j = self.q.get()
-	    bytes_out = 0
+            bytes_out = 0
             if 'Content-Length' in j['o'].headers:
-		bytes_out = int(j['o'].headers['Content-Length'])
+                bytes_out = int(j['o'].headers['Content-Length'])
             bytes_in = 0
             if 'content-length' in j['i'].msg.dict:
-		bytes_in = int(j['i'].msg.dict['content-length'])
+                bytes_in = int(j['i'].msg.dict['content-length'])
             log.info('RL: %s %s %s bytes_out=%d bytes_in=%d failed=%r'
-		% (cat, bucket, user, bytes_out, bytes_in, j['e']))
-	    if add_entry == None:
-		add_entry = self.adder
-	    add_entry(cat, bucket, user, bytes_out, bytes_in, j['e'])
+                     % (cat, bucket, user, bytes_out, bytes_in, j['e']))
+            if add_entry == None:
+                add_entry = self.adder
+            add_entry(cat, bucket, user, bytes_out, bytes_in, j['e'])
 
 def create_presigned_url(conn, method, bucket_name, key_name, expiration):
     return conn.generate_url(expires_in=expiration,
@@ -235,7 +233,7 @@ def create_presigned_url(conn, method, bucket_name, key_name, expiration):
 
 def send_raw_http_request(conn, method, bucket_name, key_name, follow_redirects = False):
     url = create_presigned_url(conn, method, bucket_name, key_name, 3600)
-    print url
+    print(url)
     h = httplib2.Http()
     h.follow_redirects = follow_redirects
     return h.request(url, method)
@@ -288,7 +286,6 @@ def task(ctx, config):
     display_name1='Foo'
     display_name2='Fud'
     email='foo@foo.com'
-    email2='bar@bar.com'
     access_key='9te6NH5mcdcq0Tc5i8i1'
     secret_key='Ny4IOauQoL18Gp2zM7lC1vLmoawgqcYP/YGcWfXu'
     access_key2='p5YnriCv1nAtykxBrupQ'
@@ -904,7 +901,7 @@ def task(ctx, config):
     out['placement_pools'].append(rule)
 
     (err, out) = rgwadmin(ctx, client, ['zone', 'set'],
-        stdin=StringIO(json.dumps(out)),
+        stdin=BytesIO(six.ensure_binary(json.dumps(out))),
         check_status=True)
 
     (err, out) = rgwadmin(ctx, client, ['zone', 'get'])
@@ -912,30 +909,28 @@ def task(ctx, config):
     assert len(out['placement_pools']) == orig_placement_pools + 1
 
     zonecmd = ['zone', 'placement', 'rm',
-	'--rgw-zone', 'default',
-	'--placement-id', 'new-placement']
+               '--rgw-zone', 'default',
+               '--placement-id', 'new-placement']
 
     (err, out) = rgwadmin(ctx, client, zonecmd, check_status=True)
 
     # TESTCASE 'zonegroup-info', 'zonegroup', 'get', 'get zonegroup info', 'succeeds'
     (err, out) = rgwadmin(ctx, client, ['zonegroup', 'get'], check_status=True)
 
-import sys
-from tasks.radosgw_admin import task
 from teuthology.config import config
 from teuthology.orchestra import cluster, remote
 import argparse;
 
 def main():
     if len(sys.argv) == 3:
-	user = sys.argv[1] + "@"
-	host = sys.argv[2]
+        user = sys.argv[1] + "@"
+        host = sys.argv[2]
     elif len(sys.argv) == 2:
         user = ""
-	host = sys.argv[1]
+        host = sys.argv[1]
     else:
         sys.stderr.write("usage: radosgw_admin.py [user] host\n")
-	exit(1)
+        exit(1)
     client0 = remote.Remote(user + host)
     ctx = config
     ctx.cluster=cluster.Cluster(remotes=[(client0,
@@ -947,8 +942,8 @@ def main():
     ctx.rgw.role_endpoints = endpoints
     ctx.rgw.realm = None
     ctx.rgw.regions = {'region0': { 'api name': 'api1',
-	    'is master': True, 'master zone': 'r0z0',
-	    'zones': ['r0z0', 'r0z1'] }}
+                                    'is master': True, 'master zone': 'r0z0',
+	                            'zones': ['r0z0', 'r0z1'] }}
     ctx.rgw.config = {'ceph.client.rgw.%s' % host: {'system user': {'name': '%s-system-user' % host}}}
     task(config, None)
     exit()
