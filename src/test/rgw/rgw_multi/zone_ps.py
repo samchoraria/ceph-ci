@@ -1,12 +1,12 @@
 import logging
-import httplib
 import ssl
 import urllib
-import urlparse
 import hmac
 import hashlib
 import base64
 import xmltodict
+from six.moves import http_client
+from six.moves.urllib import parse as urlparse
 from time import gmtime, strftime
 from .multisite import Zone
 import boto3
@@ -72,7 +72,7 @@ def make_request(conn, method, resource, parameters=None, sign_parameters=False,
     headers = {'Authorization': 'AWS '+conn.aws_access_key_id+':'+signature,
                'Date': string_date,
                'Host': conn.host+':'+str(conn.port)}
-    http_conn = httplib.HTTPConnection(conn.host, conn.port)
+    http_conn = http_client.HTTPConnection(conn.host, conn.port)
     if log.getEffectiveLevel() <= 10:
         http_conn.set_debuglevel(5)
     http_conn.request(method, resource+url_params, NO_HTTP_BODY, headers)
@@ -145,10 +145,10 @@ def delete_all_s3_topics(zone, region):
 
         topics = client.list_topics()['Topics']
         for topic in topics:
-            print 'topic cleanup, deleting: ' + topic['TopicArn']
+            print('topic cleanup, deleting: ' + topic['TopicArn'])
             assert client.delete_topic(TopicArn=topic['TopicArn'])['ResponseMetadata']['HTTPStatusCode'] == 200
     except Exception as err:
-        print 'failed to do topic cleanup: ' + str(err)
+        print('failed to do topic cleanup: ' + str(err))
     
 
 class PSTopicS3:
@@ -194,10 +194,10 @@ class PSTopicS3:
                    'Host': self.conn.host+':'+str(self.conn.port),
                    'Content-Type': content_type}
         if self.conn.is_secure:
-            http_conn = httplib.HTTPSConnection(self.conn.host, self.conn.port, 
+            http_conn = http_client.HTTPSConnection(self.conn.host, self.conn.port,
                     context=ssl.create_default_context(cafile='./cert.pem'))
         else:
-            http_conn = httplib.HTTPConnection(self.conn.host, self.conn.port)
+            http_conn = http_client.HTTPConnection(self.conn.host, self.conn.port)
         http_conn.request(method, resource, body, headers)
         response = http_conn.getresponse()
         data = response.read()
@@ -236,10 +236,10 @@ class PSTopicS3:
                    'Host': self.conn.host+':'+str(self.conn.port),
                    'Content-Type': content_type}
         if self.conn.is_secure:
-            http_conn = httplib.HTTPSConnection(self.conn.host, self.conn.port, 
+            http_conn = http_client.HTTPSConnection(self.conn.host, self.conn.port,
                     context=ssl.create_default_context(cafile='./cert.pem'))
         else:
-            http_conn = httplib.HTTPConnection(self.conn.host, self.conn.port)
+            http_conn = http_client.HTTPConnection(self.conn.host, self.conn.port)
         http_conn.request(method, resource, body, headers)
         response = http_conn.getresponse()
         data = response.read()
