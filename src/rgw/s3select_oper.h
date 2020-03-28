@@ -29,12 +29,12 @@ private:
     s3select_exp_en_t m_severity;
 
 public:
-    const char *_msg;
-    base_s3select_exception(const char *n) : m_severity(s3select_exp_en_t::NONE) { _msg = n; }
-    base_s3select_exception(const char *n, s3select_exp_en_t severity) : m_severity(severity) { _msg = n; }
-    base_s3select_exception(std::string n, s3select_exp_en_t severity) : m_severity(severity) { _msg = n.c_str(); } 
+    std::string _msg;
+    base_s3select_exception(const char *n) : m_severity(s3select_exp_en_t::NONE) { _msg.assign(n); }
+    base_s3select_exception(const char *n, s3select_exp_en_t severity) : m_severity(severity) { _msg.assign(n); }
+    base_s3select_exception(std::string n, s3select_exp_en_t severity) : m_severity(severity) { _msg = n; } 
 
-    virtual const char *what() { return _msg; }
+    virtual const char *what() { return _msg.c_str(); }
 
     s3select_exp_en_t severity() { return m_severity; }
 
@@ -489,9 +489,12 @@ class base_statement {
     scratch_area *m_scratch;
     projection_alias *m_aliases;
     bool is_last_call; //valid only for aggregation functions
+    bool m_is_cache_result;
+    value m_alias_result;
+    base_statement* m_projection_alias;
 
 	public:
-        base_statement():m_scratch(0),is_last_call(false){}
+        base_statement():m_scratch(0),is_last_call(false),m_is_cache_result(false),m_projection_alias(0){}
         virtual value & eval() =0;
         virtual base_statement* left() {return 0;}
         virtual base_statement* right() {return 0;}       
@@ -526,6 +529,27 @@ class base_statement {
 
         bool is_set_last_call(){return is_last_call;}
 
+        void invalidate_cache_result()
+        {
+            m_is_cache_result = false;
+        }
+
+        bool is_result_cached()
+        {
+            return m_is_cache_result == true;
+        }
+
+        void set_result_cache(value & eval_result)
+        {
+            m_alias_result = eval_result;
+            m_is_cache_result = true;
+        }
+
+        value & get_result_cache()
+        {
+            return m_alias_result;
+        }
+
         virtual ~base_statement(){}
 
 };
@@ -552,20 +576,22 @@ private:
     value var_value;
     std::string m_star_op_result;
     char m_star_op_result_charc[4096]; //TODO should be dynamic
-    base_statement* m_projection_alias;
-public:
-    
-    variable():m_var_type(var_t::NA),_name(""),column_pos(-1),m_projection_alias(0){}
 
-    variable(int64_t i) : m_var_type(var_t::COL_VALUE), column_pos(-1),var_value(i),m_projection_alias(0){}
+    const int undefined_column_pos = -1;
+    const int column_alias = -2;
 
-    variable(double d) : m_var_type(var_t::COL_VALUE), _name("#"), column_pos(-1),var_value(d),m_projection_alias(0){}
+public:    
+    variable():m_var_type(var_t::NA),_name(""),column_pos(-1){}
 
-    variable(int i) : m_var_type(var_t::COL_VALUE), column_pos(-1),var_value(i),m_projection_alias(0){}
+    variable(int64_t i) : m_var_type(var_t::COL_VALUE), column_pos(-1),var_value(i){}
 
-    variable(const std::string & n) : m_var_type(var_t::VAR), _name(n), column_pos(-1),m_projection_alias(0){}
+    variable(double d) : m_var_type(var_t::COL_VALUE), _name("#"), column_pos(-1),var_value(d){}
 
-    variable(const std::string & n ,  var_t tp) : m_var_type(var_t::NA),m_projection_alias(0)
+    variable(int i) : m_var_type(var_t::COL_VALUE), column_pos(-1),var_value(i){}
+
+    variable(const std::string & n) : m_var_type(var_t::VAR), _name(n), column_pos(-1){}
+
+    variable(const std::string & n ,  var_t tp) : m_var_type(var_t::NA)
     {
         if(tp == variable::var_t::POS)
         {
@@ -642,22 +668,34 @@ public:
             return var_value;           // could be deciml / float / string ; its input stream
         else if(m_var_type == var_t::STAR_OPERATION)
             return star_operation();
-        else if (column_pos == -1)
+        else if (column_pos == undefined_column_pos)
         { //done once , for the first time
             column_pos = m_scratch->get_column_pos(_name.c_str());
 
-            if (column_pos == -1)
+            if (column_pos == undefined_column_pos)
             {//not belong to schema , should exist in aliases 
                 m_projection_alias = m_aliases->search_alias(_name.c_str());
 
+                //not enter this scope again
+                column_pos = column_alias;
                 if(m_projection_alias == 0)
-                    throw base_s3select_exception("alias or column not exist in schema",base_s3select_exception::s3select_exp_en_t::FATAL);
-		column_pos = -2; 
+                {
+                    throw base_s3select_exception(std::string("alias ")+_name+std::string(" or column not exist in schema"),base_s3select_exception::s3select_exp_en_t::FATAL);
+                }               
             }
+            
         }
 
-        if(m_projection_alias)
-            var_value = m_projection_alias->eval();
+        if (m_projection_alias)
+        {
+            if (m_projection_alias->is_result_cached() == false)
+            {
+                var_value = m_projection_alias->eval();
+                m_projection_alias->set_result_cache(var_value);
+            }
+            else
+                var_value = m_projection_alias->get_result_cache();        
+        }
         else
             var_value = (char*)m_scratch->get_column_value(column_pos).data();//no allocation. returning pointer of allocated space 
 
