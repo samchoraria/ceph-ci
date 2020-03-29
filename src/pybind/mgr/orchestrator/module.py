@@ -24,7 +24,8 @@ from mgr_module import MgrModule, HandleCommandResult
 from ._interface import OrchestratorClientMixin, DeviceLightLoc, _cli_read_command, \
     raise_if_exception, _cli_write_command, TrivialReadCompletion, OrchestratorError, \
     NoOrchestrator, OrchestratorValidationError, NFSServiceSpec, \
-    RGWSpec, InventoryFilter, InventoryHost, HostSpec, CLICommandMeta
+    RGWSpec, InventoryFilter, InventoryHost, HostSpec, CLICommandMeta, \
+    DaemonDescription
 
 def nice_delta(now, t, suffix=''):
     if t:
@@ -391,7 +392,7 @@ class OrchestratorCli(OrchestratorClientMixin, MgrModule):
                                        refresh=refresh)
         self._orchestrator_wait([completion])
         raise_if_exception(completion)
-        daemons = completion.result
+        daemons: List[DaemonDescription] = completion.result
 
         def ukn(s):
             return '<unknown>' if s is None else s
@@ -419,7 +420,9 @@ class OrchestratorCli(OrchestratorClientMixin, MgrModule):
                     1: 'running',
                     None: '<unknown>'
                 }[s.status]
-                if s.status == 1 and s.started:
+                if s.status_desc:
+                    status += f' ({s.status_desc})'
+                elif s.status == 1 and s.started:
                     status += ' (%s)' % to_pretty_timedelta(now - s.started)
 
                 table.add_row((
