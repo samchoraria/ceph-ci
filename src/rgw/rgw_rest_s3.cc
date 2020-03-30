@@ -5988,6 +5988,8 @@ int RGWSelectObj_ObjStore_S3::run_s3select(const char*query,const char*input,siz
   {
     m_result.append(PAYLOAD_LINE);
     m_result.append(s3select_syntax->get_error_description());
+    ldout(s->cct, 10) << "s3-select query: failed to prase query; {" << s3select_syntax->get_error_description() << "}"<< dendl;
+
     status = -1;
   }
   else
