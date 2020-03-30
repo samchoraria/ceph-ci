@@ -32,9 +32,10 @@ function(build_jaeger)
   if(NOT yaml-cpp_FOUND)
     include(Buildyaml-cpp)
     build_yamlcpp()
-    set(yaml-cpp_LIBRARY
-      ${CMAKE_BINARY_DIR}/external/lib/${CMAKE_SHARED_LIBRARY_PREFIX}yaml-cpp${CMAKE_SHARED_LIBRARY_SUFFIX})
-    set(yaml-cpp_INCLUDE_DIRS ${CMAKE_BINARY_DIR}/external/include)
+    add_library(yaml-cpp::yaml-cpp INTERFACE IMPORTED)
+    add_dependencies(yaml-cpp::yaml-cpp yaml-cpp)
+    set_library_properties_for_external_project(yaml-cpp::yaml-cpp
+      yaml-cpp)
     list(APPEND dependencies "yaml-cpp")
   endif()
 
