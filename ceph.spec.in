@@ -237,7 +237,7 @@ BuildRequires:	python%{python3_pkgversion}-pyOpenSSL
 %endif
 BuildRequires:	socat
 %endif
-BuildRequires:  yaml-cpp-devel
+BuildRequires:  yaml-cpp-devel >= 0.6.0 
 %if 0%{with seastar}
 BuildRequires:  c-ares-devel
 BuildRequires:  gnutls-devel
