@@ -22,12 +22,6 @@
 #define ARITHMETIC_RIGHT_SHIFT 1
 #include <yaml-cpp/yaml.h>
 #include <jaegertracing/Tracer.h>
-#include "common/debug.h"
-
-#define dout_context g_ceph_context
-#define dout_subsys ceph_subsys_osd
-#undef dout_prefix
-#define dout_prefix *_dout << "jaeger-osd "
 
 using namespace opentracing;
 
@@ -36,30 +30,16 @@ typedef std::unique_ptr<opentracing::Span> jspan;
 namespace JTracer {
 
   static void setUpTracer(const char* serviceToTrace) {
-    dout(3) << "cofiguring jaegertracing" << dendl;
-  /*   constexpr auto configYAML = R"cfg(
-	      disabled: false
-	      reporter:
-		logSpans: true
-	      sampler:
-		type: const
-		param: 1
-	      )cfg"; */
     static auto configYAML = YAML::LoadFile("../src/jaegertracing/config.yml");
-    dout(3) << "yaml parsed" << configYAML << dendl;
     static auto config = jaegertracing::Config::parse(configYAML);
-    dout(3) << "config created" << dendl;
     static auto tracer = jaegertracing::Tracer::make(
 	serviceToTrace, config, jaegertracing::logging::consoleLogger());
     opentracing::Tracer::InitGlobal(
 	std::static_pointer_cast<opentracing::Tracer>(tracer));
-
- dout(3) << "tracer_jaeger" << tracer << dendl;
   auto parent_span = tracer->StartSpan("parent");
   assert(parent_span);
 
   parent_span->Finish();
- dout(1) << "span_closed + tracer" << tracer << dendl;
   tracer->Close();
 }
 }
