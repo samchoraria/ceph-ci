@@ -12,6 +12,7 @@ function(build_jaeger)
   set(Jaeger_ROOT_DIR "${CMAKE_BINARY_DIR}/external")
   set(Jaeger_BINARY_DIR "${Jaeger_ROOT_DIR}/Jaeger")
   list(APPEND CMAKE_FIND_ROOT_PATH "${CMAKE_BINARY_DIR}/external")
+  list(APPEND CMAKE_FIND_ROOT_PATH "/opt/ceph")
 
   set(Jaeger_CMAKE_ARGS -DCMAKE_POSITION_INDEPENDENT_CODE=ON
 			-DBUILD_SHARED_LIBS=ON
