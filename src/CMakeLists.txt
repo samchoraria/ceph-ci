@@ -433,10 +433,9 @@ if(WITH_JAEGER)
   target_link_libraries(common
     yaml-cpp::yaml-cpp
     opentracing::libopentracing
+    thrift::libthrift
     jaegertracing::libjaegertracing)
-  # target_include_directories(opentracing::libopentracing
-  # jaegertracing::libjaegertracing)
-  # yaml-cpp::yaml-cpp)
+  SET(CMAKE_INSTALL_RPATH "${CMAKE_BINARY_DIR}/external/lib") 
 endif()
 
 add_library(ceph-common SHARED ${ceph_common_objs})

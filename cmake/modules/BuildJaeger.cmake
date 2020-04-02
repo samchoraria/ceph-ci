@@ -33,7 +33,7 @@ function(build_jaeger)
   if(NOT yaml-cpp_FOUND)
     include(Buildyaml-cpp)
     build_yamlcpp()
-    add_library(yaml-cpp::yaml-cpp INTERFACE IMPORTED)
+    add_library(yaml-cpp::yaml-cpp SHARED IMPORTED)
     add_dependencies(yaml-cpp::yaml-cpp yaml-cpp)
     set_library_properties_for_external_project(yaml-cpp::yaml-cpp
       yaml-cpp)
