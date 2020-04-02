@@ -7,6 +7,8 @@ function (set_library_properties_for_external_project _target _lib)
   file(MAKE_DIRECTORY "${_includepath}")
   set_target_properties(${_target} PROPERTIES
     INTERFACE_LINK_LIBRARIES "${_libpath}"
+    IMPORTED_LINK_INTERFACE_LANGUAGES "CXX"
+    IMPORTED_LOCATION "${_libpath}"
     INTERFACE_INCLUDE_DIRECTORIES "${_includepath}")
   #  set_property(TARGET ${_target} APPEND PROPERTY IMPORTED_LINK_INTERFACE_LIBRARIES "CXX")
   # Manually create the directory, it will be created as part of the build,
