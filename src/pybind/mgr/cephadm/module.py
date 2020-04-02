@@ -2078,15 +2078,18 @@ class CephadmOrchestrator(orchestrator.Orchestrator, MgrModule):
         return blink(locs)
 
     def get_osd_uuid_map(self, only_up=False):
-        # type: (bool) -> Dict[str,str]
+        # type: (bool) -> Dict[str, str]
         osd_map = self.get('osd_map')
         r = {}
         for o in osd_map['osds']:
             # only include OSDs that have ever started in this map.  this way
             # an interrupted osd create can be repeated and succeed the second
             # time around.
-            if not only_up or o['up_from'] > 0:
-                r[str(o['osd'])] = o['uuid']
+            osd_id = o.get('osd')
+            if osd_id is None:
+                raise OrchestratorError("Could not retrieve osd_id from osd_map")
+            if not only_up or (o['up_from'] > 0):
+                r[str(osd_id)] = o.get('uuid', '')
         return r
 
     @trivial_completion
@@ -2142,18 +2145,18 @@ class CephadmOrchestrator(orchestrator.Orchestrator, MgrModule):
             self.log.debug(f"Found inventory for host {inventory_for_host}")
             drive_selection = selector.DriveSelection(drive_group, inventory_for_host)
             self.log.debug(f"Found drive selection {drive_selection}")
-            cmd = translate.to_ceph_volume(drive_group, drive_selection, host).run()
+            cmd = translate.to_ceph_volume(drive_group, drive_selection, drive_group.osd_id_claims.get(host, [])).run()
             self.log.debug(f"translated to cmd {cmd}")
             if not cmd:
                 self.log.debug("No data_devices, skipping DriveGroup: {}".format(drive_group.service_name()))
                 continue
             self.log.info('Applying %s on host %s...' % (
                 drive_group.service_name(), host))
-            ret_msg = self._create_osd(host, cmd)
+            ret_msg = self._create_osd(host, cmd, drive_group.osd_id_claims.get(host, []))
             ret.append(ret_msg)
         return ", ".join(ret)
 
-    def _create_osd(self, host, cmd):
+    def _create_osd(self, host, cmd, replace_osd_ids=None):
 
         self._require_hosts(host)
 
@@ -2211,16 +2214,16 @@ class CephadmOrchestrator(orchestrator.Orchestrator, MgrModule):
                 if osd['tags']['ceph.cluster_fsid'] != fsid:
                     self.log.debug('mismatched fsid, skipping %s' % osd)
                     continue
-                if osd_id in before_osd_uuid_map:
-                    # this osd existed before we ran prepare
+                if osd_id in before_osd_uuid_map and osd_id not in replace_osd_ids:
+                    # if it exists but is part of the replacement operation, don't skip
                     continue
                 if osd_id not in osd_uuid_map:
                     self.log.debug('osd id %d does not exist in cluster' % osd_id)
                     continue
-                if osd_uuid_map[osd_id] != osd['tags']['ceph.osd_fsid']:
+                if osd_uuid_map.get(osd_id) != osd['tags']['ceph.osd_fsid']:
                     self.log.debug('mismatched osd uuid (cluster has %s, osd '
                                    'has %s)' % (
-                                       osd_uuid_map[osd_id],
+                                       osd_uuid_map.get(osd_id),
                                        osd['tags']['ceph.osd_fsid']))
                     continue
 
@@ -2311,7 +2314,7 @@ class CephadmOrchestrator(orchestrator.Orchestrator, MgrModule):
             if daemon_type == 'osd':
                 if not osd_uuid_map:
                     osd_uuid_map = self.get_osd_uuid_map()
-                osd_uuid = osd_uuid_map.get(daemon_id, None)
+                osd_uuid = osd_uuid_map.get(daemon_id)
                 if not osd_uuid:
                     raise OrchestratorError('osd.%d not in osdmap' % daemon_id)
                 extra_args.extend(['--osd-fsid', osd_uuid])
