@@ -33,8 +33,11 @@
 #include "include/neorados/RADOS.hpp"
 #include "include/buffer.h"
 
+#include "common/allocate_unique.h"
+#include "common/async/bind_handler.h"
 #include "common/async/bind_like.h"
 #include "common/async/completion.h"
+#include "common/async/forward_handler.h"
 
 #include "common/dout.h"
 
@@ -170,68 +173,50 @@ class FIFO {
 
   std::string generate_tag() const;
 
+  template <typename T>
+  struct ExecDecodeCB {
+    bs::error_code ec;
+    T result;
+    void operator()(bs::error_code e, const cb::list& r) {
+      if (e) {
+        ec = e;
+        return;
+      }
+      try {
+        auto p = r.begin();
+        using ceph::decode;
+        decode(result, p);
+      } catch (const cb::error& err) {
+        ec = err.code();
+      }
+    }
+  };
+
   template<typename Handler>
   class MetaReader {
-    ba::executor executor;
     Handler handler;
-    bool parsed = false;
-    bool called = false;
-    bs::error_code ec;
-    fifo::op::get_meta_reply reply;
-    std::mutex m;
-
-    void handle(std::unique_lock<std::mutex>& l) {
-      if (!(parsed && called))
-	return;
-
-      auto e = ba::get_associated_executor(handler, executor);
-      auto p = [ec = ec, handler = std::move(handler),
-		reply = std::move(reply)]() mutable {
-		 std::move(handler)(ec,
-				    std::move(reply.info),
-				    std::move(reply.part_header_size),
-				    std::move(reply.part_entry_overhead));
-	       };
-
-      l.unlock();
-      typename std::allocator_traits<
-	typename ba::associated_allocator<Handler>::type>
-	::template rebind_alloc<MetaReader> a(
-	  ba::get_associated_allocator(handler));
-      a.destroy(this);
-      a.deallocate(this, 1);
-
-      ba::post(e, std::move(p));
-    }
-
+    using allocator_type = boost::asio::associated_allocator_t<Handler>;
+    using decoder_type = ExecDecodeCB<fifo::op::get_meta_reply>;
+    using decoder_ptr = ceph::allocated_unique_ptr<decoder_type, allocator_type>;
+    decoder_ptr decoder;
   public:
-    void operator ()(bs::error_code parse_ec, const cb::list& bl) {
-      std::unique_lock l(m);
-      parsed = true;
-      if (!ec)
-	ec = parse_ec;
+    MetaReader(Handler&& handler, decoder_ptr&& decoder)
+      : handler(std::move(handler)), decoder(std::move(decoder)) {}
 
-      auto iter = bl.cbegin();
-      if (!ec) try {
-	  decode(reply, iter);
-	} catch (const cb::error& err) {
-	  ec = err.code();
-	}
-      handle(l);
+    void operator ()(bs::error_code ec) {
+      if (!ec) {
+        ec = decoder->ec;
+      }
+      auto reply = std::move(decoder->result);
+      decoder.reset(); // free handler-allocated memory before dispatching
+
+      auto p = ca::bind_handler(std::move(handler),
+				ec,
+				std::move(reply.info),
+				std::move(reply.part_header_size),
+				std::move(reply.part_entry_overhead));
+      std::move(p)();
     }
-
-    void operator ()(bs::error_code called_ec) {
-      std::unique_lock l(m);
-      called = true;
-      // called_ec is the most salient if it exists.
-      if (called_ec)
-	ec = called_ec;
-      handle(l);
-    }
-
-
-    MetaReader(ba::executor executor, Handler&& handler)
-      : executor(executor), handler(std::move(handler)) {}
   };
 
   template<typename Handler>
@@ -249,18 +234,13 @@ class FIFO {
     ReadOp op;
 
     auto a = ba::get_associated_allocator(handler);
-    typename std::allocator_traits<
-      typename ba::associated_allocator<Handler>::type>
-      ::template rebind_alloc<MetaReader<Handler>> allocator(a);
-    auto m = allocator.allocate(1);
-    allocator.construct(m, executor.value_or(r->get_executor()),
-			std::move(handler));
+    auto reply = allocate_unique<ExecDecodeCB<fifo::op::get_meta_reply>>(a);
 
-    auto e = ba::get_associated_executor(handler,
-					 executor.value_or(r->get_executor()));
-    op.exec(fifo::op::CLASS, fifo::op::GET_META, in, std::ref(*m));
+    auto e = ba::get_associated_executor(handler);
+    op.exec(fifo::op::CLASS, fifo::op::GET_META, in, std::ref(*reply));
     r->execute(oid, ioc, std::move(op), nullptr,
-	       ca::bind_ea(e, a, std::ref(*m)));
+	       ca::bind_ea(e, a, MetaReader<Handler>{std::move(handler),
+	                                             std::move(reply)}));
   };
 
   template<typename Handler>
