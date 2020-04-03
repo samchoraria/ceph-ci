@@ -259,6 +259,10 @@ if (WITH_BLKIN)
   add_subdirectory(blkin/blkin-lib)
 endif(WITH_BLKIN)
 
+if(WITH_JAEGER)
+  include(IncludeJaeger)
+endif()
+
 # Common infrastructure
 configure_file(
   ${CMAKE_SOURCE_DIR}/src/ceph_ver.h.in.cmake
@@ -406,6 +410,14 @@ if(WITH_DPDK)
   list(APPEND ceph_common_deps common_async_dpdk)
 endif()
 
+if(WITH_JAEGER)
+  list(APPEND ceph_common_deps
+  yaml-cpp::yaml-cpp
+  opentracing::libopentracing
+  thrift::libthrift
+  jaegertracing::libjaegertracing)
+endif()
+
 if(WIN32)
   list(APPEND ceph_common_deps ws2_32 mswsock)
   list(APPEND ceph_common_deps dlfcn_win32)
@@ -427,17 +439,6 @@ endif()
 
 add_library(common STATIC ${ceph_common_objs})
 target_link_libraries(common ${ceph_common_deps})
-
-if(WITH_JAEGER)
-  include(IncludeJaeger)
-  include_directories(${CMAKE_BINARY_DIR}/external/include)
-  target_link_libraries(common
-    yaml-cpp::yaml-cpp
-    opentracing::libopentracing
-    thrift::libthrift
-    jaegertracing::libjaegertracing)
-  SET(CMAKE_INSTALL_RPATH "${CMAKE_BINARY_DIR}/external/lib") 
-endif()
 
 add_library(ceph-common SHARED ${ceph_common_objs})
 target_link_libraries(ceph-common ${ceph_common_deps})
