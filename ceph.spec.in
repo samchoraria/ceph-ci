@@ -159,6 +159,7 @@ BuildRequires:	gperftools-devel >= 2.6.1
 %endif
 %if 0%{?suse_version}
 BuildRequires:	gperftools-devel >= 2.4
+BuildRequires:  git	
 %endif
 %endif
 %if 0%{?fedora} || 0%{?rhel}
