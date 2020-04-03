@@ -73,6 +73,7 @@ elif [ -n "$CEPH_ROOT" ]; then
     [ -z "$CEPH_ADM" ] && CEPH_ADM=$CEPH_BIN/ceph
     [ -z "$INIT_CEPH" ] && INIT_CEPH=$CEPH_BIN/init-ceph
     [ -z "$CEPH_LIB" ] && CEPH_LIB=$CEPH_BUILD_DIR/lib
+    [ -z "$CEPH_EXT_LIB" ] && CEPH_EXT_LIB=$CEPH_BUILD_DIR/external/lib
     [ -z "$OBJCLASS_PATH" ] && OBJCLASS_PATH=$CEPH_LIB
     [ -z "$EC_PATH" ] && EC_PATH=$CEPH_LIB
     [ -z "$CEPH_PYTHON_COMMON" ] && CEPH_PYTHON_COMMON=$CEPH_ROOT/src/python-common
