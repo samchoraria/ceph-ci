@@ -379,8 +379,7 @@ class TestDataScan(CephFSTestCase):
         log.info(str(self.mds_cluster.status()))
 
         # Mount a client
-        self.mount_a.mount()
-        self.mount_a.wait_until_mounted()
+        self.mount_a.mount_wait()
 
         # See that the files are present and correct
         errors = workload.validate()
@@ -469,8 +468,7 @@ class TestDataScan(CephFSTestCase):
         # Start filesystem back up, observe that the file appears to be gone in an `ls`
         self.fs.mds_restart()
         self.fs.wait_for_daemons()
-        self.mount_a.mount()
-        self.mount_a.wait_until_mounted()
+        self.mount_a.mount_wait()
         files = self.mount_a.run_shell(["ls", "subdir/"]).stdout.getvalue().strip().split("\n")
         self.assertListEqual(sorted(files), sorted(list(set(file_names) - set([victim_dentry]))))
 
@@ -489,8 +487,7 @@ class TestDataScan(CephFSTestCase):
         # and points to the correct file data.
         self.fs.mds_restart()
         self.fs.wait_for_daemons()
-        self.mount_a.mount()
-        self.mount_a.wait_until_mounted()
+        self.mount_a.mount_wait()
         out = self.mount_a.run_shell(["cat", "subdir/{0}".format(victim_dentry)]).stdout.getvalue().strip()
         self.assertEqual(out, victim_dentry)
 
@@ -591,8 +588,7 @@ class TestDataScan(CephFSTestCase):
         self.fs.mds_restart()
         self.fs.wait_for_daemons()
 
-        self.mount_a.mount()
-        self.mount_a.wait_until_mounted()
+        self.mount_a.mount_wait()
 
         # link count was adjusted?
         file1_nlink = self.mount_a.path_to_nlink("testdir1/file1")
