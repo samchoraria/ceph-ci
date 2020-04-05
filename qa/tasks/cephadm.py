@@ -1,8 +1,6 @@
 """
 Ceph cluster task, deployed via cephadm orchestrator
 """
-from io import BytesIO
-
 import argparse
 import configobj
 import contextlib
@@ -12,6 +10,7 @@ import json
 import re
 import uuid
 
+from six import StringIO
 from tarfile import ReadError
 from tasks.ceph_manager import CephManager
 from teuthology import misc as teuthology
@@ -189,7 +188,7 @@ def ceph_log(ctx, config):
                 run.Raw('|'), 'head', '-n', '1',
             ])
             r = ctx.ceph[cluster_name].bootstrap_remote.run(
-                stdout=BytesIO(),
+                stdout=StringIO(),
                 args=args,
             )
             stdout = r.stdout.getvalue()
@@ -305,7 +304,7 @@ def ceph_bootstrap(ctx, config):
     try:
         # write seed config
         log.info('Writing seed config...')
-        conf_fp = BytesIO()
+        conf_fp = StringIO()
         seed_config = build_initial_config(ctx, config)
         seed_config.write(conf_fp)
         teuthology.write_file(
@@ -429,7 +428,7 @@ def ceph_bootstrap(ctx, config):
             ])
             r = _shell(ctx, cluster_name, remote,
                        ['ceph', 'orch', 'host', 'ls', '--format=json'],
-                       stdout=BytesIO())
+                       stdout=StringIO())
             hosts = [node['hostname'] for node in json.loads(r.stdout.getvalue())]
             assert remote.shortname in hosts
 
@@ -501,7 +500,7 @@ def ceph_mons(ctx, config):
                             args=[
                                 'ceph', 'mon', 'dump', '-f', 'json',
                             ],
-                            stdout=BytesIO(),
+                            stdout=StringIO(),
                         )
                         j = json.loads(r.stdout.getvalue())
                         if len(j['mons']) == num_mons:
@@ -516,7 +515,7 @@ def ceph_mons(ctx, config):
             args=[
                 'ceph', 'config', 'generate-minimal-conf',
             ],
-            stdout=BytesIO(),
+            stdout=StringIO(),
         )
         ctx.ceph[cluster_name].config_file = r.stdout.getvalue()
 
@@ -756,7 +755,7 @@ def ceph_clients(ctx, config):
                     'mds', 'allow *',
                     'mgr', 'allow *',
                 ],
-                stdout=BytesIO(),
+                stdout=StringIO(),
             )
             keyring = r.stdout.getvalue()
             teuthology.sudo_write_file(
