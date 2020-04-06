@@ -98,7 +98,7 @@ class usage_acc:
     def update(self, c, cat, user, out, b_in, err):
         x = self.c2x(c, cat)
         usage_acc_update2(x, out, b_in, err)
-        if not err and cat == 'create_bucket' and not x.has_key('owner'):
+        if not err and cat == 'create_bucket' and 'owner' not in x:
             x['owner'] = user
     def make_entry(self, cat, bucket, user, out, b_in, err):
         if cat == 'create_bucket' and err:
@@ -116,7 +116,7 @@ class usage_acc:
     def get_usage(self):
         return self.results
     def compare_results(self, results):
-        if not results.has_key('entries') or not results.has_key('summary'):
+        if 'entries' not in results or 'summary' not in results:
             return ['Missing entries or summary']
         r = []
         for e in self.results['entries']:
@@ -215,8 +215,9 @@ class requestlog_queue():
             if 'Content-Length' in j['o'].headers:
                 bytes_out = int(j['o'].headers['Content-Length'])
             bytes_in = 0
-            if 'content-length' in j['i'].msg.dict:
-                bytes_in = int(j['i'].msg.dict['content-length'])
+            msg = j['i'].msg if six.PY3 else j['i'].msg.dict
+            if 'content-length'in msg:
+                bytes_in = int(msg['content-length'])
             log.info('RL: %s %s %s bytes_out=%d bytes_in=%d failed=%r'
                      % (cat, bucket, user, bytes_out, bytes_in, j['e']))
             if add_entry == None:
@@ -272,7 +273,7 @@ def task(ctx, config):
     clients_from_config = config.keys()
 
     # choose first client as default
-    client = clients_from_config[0]
+    client = next(iter(clients_from_config))
 
     # once the client is chosen, pull the host name and  assigned port out of
     # the role_endpoints that were assigned by the rgw task
