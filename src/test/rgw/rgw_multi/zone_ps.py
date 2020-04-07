@@ -85,6 +85,10 @@ def make_request(conn, method, resource, parameters=None, sign_parameters=False,
     signature = base64.b64encode(hmac.new(conn.aws_secret_access_key.encode('utf-8'),
                                           string_to_sign.encode('utf-8'),
                                           hashlib.sha1).digest()).decode('ascii')
+    print('access_key', conn.aws_access_key_id)
+    print('signature', signature)
+    print('conn.host', conn.host)
+    print('conn.port', conn.port)
     headers = {'Authorization': 'AWS '+conn.aws_access_key_id+':'+signature,
                'Date': string_date,
                'Host': conn.host+':'+str(conn.port)}
