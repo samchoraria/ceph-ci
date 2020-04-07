@@ -23,8 +23,9 @@ function(build_jaeger)
 			-DCMAKE_PREFIX_PATH=${CMAKE_BINARY_DIR}/external
 			-DOpenTracing_DIR=${CMAKE_BINARY_DIR}/external
 			-DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/external
+			-DTHRIFT_HOME=${CMAKE_BINARY_DIR}/external
 			-DCMAKE_FIND_ROOT_PATH=${CMAKE_BINARY_DIR}/external
-			-DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE_BOTH
+			-DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE_BOTH=TRUE
 			-DCMAKE_INSTALL_LIBDIR=${CMAKE_BINARY_DIR}/external/lib)
 
   set(dependencies OpenTracing thrift)
