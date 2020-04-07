@@ -1844,7 +1844,7 @@ class CephManager:
                                                                   self.cluster))]
         return {'in': in_osds, 'out': out_osds, 'up': up_osds,
                 'down': down_osds, 'dead': dead_osds, 'live': live_osds,
-                'raw': osd_lines}
+                'raw': list(osd_lines)}
 
     def get_num_pgs(self):
         """
