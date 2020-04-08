@@ -11,9 +11,6 @@ function(build_jaeger)
   set(Jaeger_SOURCE_DIR "${CMAKE_SOURCE_DIR}/src/jaegertracing/jaeger-client-cpp")
   set(Jaeger_ROOT_DIR "${CMAKE_BINARY_DIR}/external")
   set(Jaeger_BINARY_DIR "${Jaeger_ROOT_DIR}/Jaeger")
-  list(APPEND CMAKE_FIND_ROOT_PATH "${CMAKE_BINARY_DIR}/external")
-  list(APPEND CMAKE_FIND_ROOT_PATH "/opt/ceph")
-  set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)
 
   set(Jaeger_CMAKE_ARGS -DCMAKE_POSITION_INDEPENDENT_CODE=ON
 			-DBUILD_SHARED_LIBS=ON
@@ -21,11 +18,12 @@ function(build_jaeger)
 			-DBUILD_TESTING=OFF
 			-DJAEGERTRACING_BUILD_EXAMPLES=OFF
 			-DCMAKE_PREFIX_PATH=${CMAKE_BINARY_DIR}/external
-			-DOpenTracing_DIR=${CMAKE_BINARY_DIR}/external
+			-DOpenTracing_DIR=${CMAKE_SOURCE_DIR}/src/jaegertracing/opentracing-cpp
 			-DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/external
 			-DTHRIFT_HOME=${CMAKE_BINARY_DIR}/external
-			-DCMAKE_FIND_ROOT_PATH=${CMAKE_BINARY_DIR}/external
-			-DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE_BOTH=TRUE
+			-DCMAKE_FIND_ROOT_PATH=${CMAKE_SOURCE_DIR}/debian/tmp${CMAKE_BINARY_DIR}/external
+			-DCMAKE_SYSROOT=${CMAKE_BINARY_DIR}/external
+		        -DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE_BOTH=TRUE
 			-DCMAKE_INSTALL_LIBDIR=${CMAKE_BINARY_DIR}/external/lib)
 
   set(dependencies OpenTracing thrift)
