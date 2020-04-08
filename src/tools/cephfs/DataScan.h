@@ -220,7 +220,7 @@ class MetadataDriver : public RecoveryDriver, public MetadataTool
 
     int inject_linkage(
         inodeno_t dir_ino, const std::string &dname,
-        const frag_t fragment, const InodeStore &inode, snapid_t dnfirst=CEPH_NOSNAP);
+        const frag_t fragment, const InodeStore &inode, snapid_t dnfirst=2);
 
     int inject_with_backtrace(
         const inode_backtrace_t &bt,
