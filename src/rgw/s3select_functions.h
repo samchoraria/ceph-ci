@@ -3,26 +3,32 @@
 
 
 #include "s3select_oper.h"
-
+#define BOOST_BIND_ACTION_PARAM( push_name ,param ) boost::bind( &push_name::operator(), g_ ## push_name , _1 ,_2, param)
 namespace s3selectEngine {
 
-enum class s3select_func_En_t {ADD,SUM,MIN,MAX,COUNT,TO_INT,TO_FLOAT,SUBSTR};
-
-class base_function 
+struct push_2dig
 {
+    void operator()(const char *a,const char *b,uint32_t * n) const
+        {
+                *n = ((char)(*a) - 48) *10 + ((char)*(a+1)-48) ;
+        }
 
-protected:
-    bool aggregate;
-
-public:
-    //TODO bool semantic() validate number of argument and type
-    virtual bool operator()(std::vector<base_statement *> *args, variable *result) = 0;
-    base_function() : aggregate(false) {}
-    bool is_aggregate() { return aggregate == true; }
-    virtual void get_aggregate_result(variable *) {}
-
-    virtual ~base_function(){}
 };
+static push_2dig g_push_2dig;
+
+struct push_4dig
+{
+    void operator()(const char *a,const char *b,uint32_t * n) const
+        {
+                *n = ((char)(*a) - 48) *1000 + ((char)*(a+1)-48)*100 + ((char)*(a+2)-48)*10  + ((char)*(a+3)-48);
+        }
+
+};
+static push_4dig g_push_4dig;
+
+enum class s3select_func_En_t {ADD,SUM,MIN,MAX,COUNT,TO_INT,TO_FLOAT,TO_TIMESTAMP,SUBSTR,EXTRACT,DATE_ADD,DATE_DIFF};
+
+
 
 class s3select_functions : public __clt_allocator {
 
@@ -41,6 +47,10 @@ class s3select_functions : public __clt_allocator {
             m_functions_library.insert(std::pair<std::string,s3select_func_En_t>("int",s3select_func_En_t::TO_INT) );
             m_functions_library.insert(std::pair<std::string,s3select_func_En_t>("float",s3select_func_En_t::TO_FLOAT) );
             m_functions_library.insert(std::pair<std::string,s3select_func_En_t>("substr",s3select_func_En_t::SUBSTR) );
+            m_functions_library.insert(std::pair<std::string,s3select_func_En_t>("timestamp",s3select_func_En_t::TO_TIMESTAMP) );
+            m_functions_library.insert(std::pair<std::string,s3select_func_En_t>("extract",s3select_func_En_t::EXTRACT) );
+            m_functions_library.insert(std::pair<std::string,s3select_func_En_t>("dateadd",s3select_func_En_t::DATE_ADD) );
+            m_functions_library.insert(std::pair<std::string,s3select_func_En_t>("datediff",s3select_func_En_t::DATE_DIFF) );
         }
 
     public:
@@ -290,6 +300,256 @@ struct _fn_to_float : public base_function{
     
 };
 
+struct _fn_to_timestamp : public base_function
+{
+    bsc::rule<> separator = bsc::ch_p(":") | bsc::ch_p("-");
+
+    uint32_t yr = 1700, mo = 1, dy = 1;
+    bsc::rule<> dig4 = bsc::lexeme_d[bsc::digit_p >> bsc::digit_p >> bsc::digit_p >> bsc::digit_p];
+    bsc::rule<> dig2 = bsc::lexeme_d[bsc::digit_p >> bsc::digit_p];
+ 
+    bsc::rule<> d_yyyymmdd_dig = ((dig4[BOOST_BIND_ACTION_PARAM(push_4dig, &yr)]) >> *(separator) 
+                                            >> (dig2[BOOST_BIND_ACTION_PARAM(push_2dig, &mo)]) >> *(separator) 
+                                            >> (dig2[BOOST_BIND_ACTION_PARAM(push_2dig, &dy)]) >> *(separator));
+
+    uint32_t hr = 0, mn = 0, sc = 0;
+    bsc::rule<> d_time_dig = ((dig2[BOOST_BIND_ACTION_PARAM(push_2dig, &hr)]) >> *(separator) 
+                                                >> (dig2[BOOST_BIND_ACTION_PARAM(push_2dig, &mn)]) >> *(separator) 
+                                                >> (dig2[BOOST_BIND_ACTION_PARAM(push_2dig, &sc)]) >> *(separator));
+
+    boost::posix_time::ptime new_ptime;
+
+    value v_str;
+
+
+    bool datetime_validation()
+    {//TODO temporary , should check for leap year
+
+        if(yr<1700 || yr>2050) return false;
+        if (mo<1 || mo>12) return false;
+        if (dy<1 || dy>31) return false;
+        if (hr>23) return false;
+        if (dy>59) return false;
+        if (sc>59) return false;
+
+        return true;
+    }
+
+    bool operator()(std::vector<base_statement *> *args, variable *result)
+    {
+
+        hr = 0;
+        mn = 0;
+        sc = 0;
+
+        std::vector<base_statement *>::iterator iter = args->begin();
+        int args_size = args->size();
+
+        if (args_size < 1)
+            throw base_s3select_exception("to_timestamp should have one parameter");
+
+        base_statement *str = *iter;
+
+        v_str = str->eval();
+
+        if (v_str.type != value::value_En_t::STRING)
+            throw base_s3select_exception("to_timestamp first argument must be string"); //can skip current row
+
+        bsc::parse_info<> info_dig = bsc::parse(v_str.str(), d_yyyymmdd_dig >> *(separator) >> d_time_dig);
+
+        if(datetime_validation()==false or !info_dig.full)
+            throw base_s3select_exception("input date-time is illegal");
+        
+        new_ptime = boost::posix_time::ptime(boost::gregorian::date(yr,mo,dy),
+                            boost::posix_time::hours(hr) + boost::posix_time::minutes(mn) + boost::posix_time::seconds(sc));
+
+        result->set_value(&new_ptime);
+
+        return true;
+    }
+
+};
+
+struct _fn_extact_from_timestamp : public base_function {
+
+    boost::posix_time::ptime new_ptime;
+
+    value val_date_part;
+
+    bool operator()(std::vector<base_statement *> *args, variable *result)
+    {
+        std::vector<base_statement *>::iterator iter = args->begin();
+        int args_size = args->size();
+
+        if (args_size < 2)
+            throw base_s3select_exception("to_timestamp should have 2 parameters");
+
+        base_statement *date_part = *iter;
+
+        val_date_part = date_part->eval();//TODO could be done once?
+
+        if(val_date_part.is_string()== false)
+            throw base_s3select_exception("first parameter should be string");
+
+        iter++;
+
+        base_statement *ts = *iter;
+
+        if(ts->eval().is_timestamp()== false)
+            throw base_s3select_exception("second parameter is not timestamp");
+
+        new_ptime = *ts->eval().timestamp();
+
+        if( strcmp(val_date_part.str(),"year")==0 )
+            {
+                result->set_value( (int64_t)new_ptime.date().year() );
+            }
+        else
+        if( strcmp(val_date_part.str(),"month")==0 )
+            {
+                result->set_value( (int64_t)new_ptime.date().month() );
+            }
+        else
+        if( strcmp(val_date_part.str(),"day")==0 )
+            {
+                result->set_value( (int64_t)new_ptime.date().day_of_year() );
+            }
+        else
+        if( strcmp(val_date_part.str(),"week")==0 )
+            {
+                result->set_value( (int64_t)new_ptime.date().week_number() );
+            }
+        else            
+            throw base_s3select_exception(std::string( val_date_part.str() + std::string("  is not supported ") ).c_str() );
+
+        return true;
+    }
+
+};
+
+struct _fn_diff_timestamp : public base_function {
+
+    value val_date_part;
+    value val_dt1;
+    value val_dt2;
+
+    bool operator()(std::vector<base_statement *> *args, variable *result)
+    {
+        std::vector<base_statement *>::iterator iter = args->begin();
+        int args_size = args->size();
+
+        if (args_size < 3)
+            throw base_s3select_exception("datediff need 3 parameters");
+
+        base_statement *date_part = *iter;
+
+        val_date_part = date_part->eval();
+
+        iter++;
+        base_statement *dt1_param = *iter;
+        val_dt1 = dt1_param->eval();
+        if (val_dt1.is_timestamp() == false)
+            throw base_s3select_exception("second parameter should be timestamp");
+
+        iter++;
+        base_statement *dt2_param = *iter;
+        val_dt2 = dt2_param->eval();
+        if (val_dt2.is_timestamp() == false)
+            throw base_s3select_exception("third parameter should be timestamp");
+
+        if (strcmp(val_date_part.str(), "year") == 0)
+        {
+            int64_t yr = val_dt2.timestamp()->date().year() - val_dt1.timestamp()->date().year() ;
+            result->set_value( yr );
+        } else
+        if (strcmp(val_date_part.str(), "month") == 0)
+        {
+            int64_t yr = val_dt2.timestamp()->date().year() - val_dt1.timestamp()->date().year() ;
+            int64_t mon = val_dt2.timestamp()->date().month() - val_dt1.timestamp()->date().month() ;
+
+            result->set_value( yr*12 + mon );
+        }else
+        if (strcmp(val_date_part.str(), "day") == 0)
+        {
+            boost::gregorian::date_period dp = 
+                boost::gregorian::date_period( val_dt1.timestamp()->date(), val_dt2.timestamp()->date());
+            result->set_value( dp.length().days() );
+        }
+        else        
+        if (strcmp(val_date_part.str(), "hours") == 0)
+        {
+            boost::posix_time::time_duration td_res = (*val_dt2.timestamp() - *val_dt1.timestamp());
+            result->set_value( td_res.hours());
+        }else
+            throw base_s3select_exception("first parameter should be string: year,month,hours,day");
+
+
+        return true;
+    }
+};
+
+struct _fn_add_to_timestamp : public base_function {
+
+    boost::posix_time::ptime new_ptime;
+
+    value val_date_part;
+    value val_quantity;
+    value val_timestamp;
+
+    bool operator()(std::vector<base_statement *> *args, variable *result)
+    {
+        std::vector<base_statement *>::iterator iter = args->begin();
+        int args_size = args->size();
+
+        if (args_size < 3)
+            throw base_s3select_exception("add_to_timestamp should have 3 parameters");
+
+        base_statement *date_part = *iter;
+        val_date_part = date_part->eval();//TODO could be done once?
+
+        if(val_date_part.is_string()== false)
+            throw base_s3select_exception("first parameter should be string");
+
+        iter++;
+        base_statement *quan = *iter;
+        val_quantity = quan->eval();
+
+        if (val_quantity.is_number() == false)
+            throw base_s3select_exception("second parameter should be number");//TODO what about double?
+
+        iter++;
+        base_statement *ts = *iter;
+        val_timestamp = ts->eval();
+
+        if(val_timestamp.is_timestamp() == false)
+            throw base_s3select_exception("third parameter should be time-stamp");
+
+        new_ptime = *val_timestamp.timestamp();
+
+        if( strcmp(val_date_part.str(),"year")==0 )
+            {
+                new_ptime += boost::gregorian::years( val_quantity.i64() );
+                result->set_value( &new_ptime );
+            }
+        else
+        if( strcmp(val_date_part.str(),"month")==0 )
+            {
+                new_ptime += boost::gregorian::months( val_quantity.i64() );
+                result->set_value( &new_ptime );              
+            }
+        else
+        if( strcmp(val_date_part.str(),"day")==0 )
+            {
+                new_ptime += boost::gregorian::days( val_quantity.i64() );
+                result->set_value( &new_ptime );              
+            }
+        else throw base_s3select_exception( std::string(val_date_part.str() + std::string(" is not supported for add")).c_str());
+            
+        return true;
+    }
+
+};
+
 struct _fn_substr : public base_function{
 
     char buff[4096];// this buffer is persist for the query life time, it use for the results per row(only for the specific function call)
@@ -416,6 +676,22 @@ base_function *s3select_functions::create(std::string fn_name)
 
     case s3select_func_En_t::SUBSTR:
         return S3SELECT_NEW(_fn_substr);
+        break;
+
+    case s3select_func_En_t::TO_TIMESTAMP:
+        return S3SELECT_NEW(_fn_to_timestamp);
+        break;
+
+    case s3select_func_En_t::EXTRACT:
+        return S3SELECT_NEW(_fn_extact_from_timestamp);
+        break;
+
+    case s3select_func_En_t::DATE_ADD:
+        return S3SELECT_NEW(_fn_add_to_timestamp);
+        break;
+
+    case s3select_func_En_t::DATE_DIFF:
+        return S3SELECT_NEW(_fn_diff_timestamp);
         break;
 
     default:

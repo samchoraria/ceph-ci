@@ -16,6 +16,7 @@
 #include <boost/algorithm/string/replace.hpp>
 #include <boost/utility/string_view.hpp>
 #include <boost/tokenizer.hpp>
+#include "s3select.h"
 
 #include <liboath/oath.h>
 
