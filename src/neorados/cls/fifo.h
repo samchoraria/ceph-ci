@@ -164,6 +164,14 @@ class FIFO {
 
   std::optional<marker> to_marker(std::string_view s);
 
+  template<typename Handler, typename T>
+  static void assoc_delete(const Handler& handler, T* t) {
+    typename std::allocator_traits<typename ba::associated_allocator<Handler>::type>
+      ::template rebind_alloc<T> a(
+	ba::get_associated_allocator(handler));
+    a.destroy(t);
+    a.deallocate(t, 1);
+  }
 
   FIFO(RADOS& r,
        IOContext ioc,
@@ -234,13 +242,14 @@ class FIFO {
     ReadOp op;
 
     auto a = ba::get_associated_allocator(handler);
-    auto reply = allocate_unique<ExecDecodeCB<fifo::op::get_meta_reply>>(a);
+    auto reply =
+      ceph::allocate_unique<ExecDecodeCB<fifo::op::get_meta_reply>>(a);
 
     auto e = ba::get_associated_executor(handler);
     op.exec(fifo::op::CLASS, fifo::op::GET_META, in, std::ref(*reply));
     r->execute(oid, ioc, std::move(op), nullptr,
-	       ca::bind_ea(e, a, MetaReader<Handler>{std::move(handler),
-	                                             std::move(reply)}));
+	       ca::bind_ea(e, a, MetaReader(std::move(handler),
+					    std::move(reply))));
   };
 
   template<typename Handler>
@@ -330,13 +339,11 @@ class FIFO {
 
   template<typename Handler>
   auto _process_journal(Handler&& handler /* error_code */) {
-    typename std::allocator_traits<typename ba::associated_allocator<Handler>::type>
-      ::template rebind_alloc<JournalProcessor<Handler>> allocator(
-	ba::get_associated_allocator(handler));
-
-    auto j = allocator.allocate(1);
-    allocator.construct(j, this, std::move(handler));
-    j->process();
+    auto a = ba::get_associated_allocator(std::ref(handler));
+    auto j = ceph::allocate_unique<JournalProcessor<Handler>>(
+      a, this, std::move(handler));
+    auto p = j.release();
+    p->process();
   }
 
   template<typename Handler>
@@ -523,59 +530,43 @@ class FIFO {
 				   new_head_num)));
   }
 
+  template<typename T>
+  struct ExecHandleCB {
+    bs::error_code ec;
+    T result;
+    void operator()(bs::error_code e, const T& t) {
+      if (e) {
+        ec = e;
+        return;
+      }
+      result = t;
+    }
+  };
+
   template<typename Handler>
   class EntryPusher {
-    FIFO* f;
     Handler handler;
-    bool parsed = false;
-    bool called = false;
-    bs::error_code ec;
-    int reply = 0;
-    std::mutex m;
-
-    void handle(std::unique_lock<std::mutex>& l) {
-      if (!(parsed && called))
-	return;
-
-      auto e = ba::get_associated_executor(handler, f->get_executor());
-      auto p = [ec = ec, handler = std::move(handler),
-		reply = std::move(reply)]() mutable {
-		 std::move(handler)(ec, reply);
-	       };
-
-      l.unlock();
-      typename std::allocator_traits<typename ba::associated_allocator<Handler>::type>
-	::template rebind_alloc<EntryPusher> a(
-	  ba::get_associated_allocator(handler));
-      a.destroy(this);
-      a.deallocate(this, 1);
-
-      ba::post(e, std::move(p));
-    }
+    using allocator_type = boost::asio::associated_allocator_t<Handler>;
+    using decoder_type = ExecHandleCB<int>;
+    using decoder_ptr = ceph::allocated_unique_ptr<decoder_type, allocator_type>;
+    decoder_ptr decoder;
 
   public:
-    void operator ()(bs::error_code parse_ec, int r) {
-      std::unique_lock l(m);
-      parsed = true;
-      if (!ec)
-	ec = parse_ec;
+
+    EntryPusher(Handler&& handler, decoder_ptr&& decoder)
+      : handler(std::move(handler)), decoder(std::move(decoder)) {}
+
+    void operator ()(bs::error_code ec) {
       if (!ec) {
-	reply = r;
+        ec = decoder->ec;
       }
-      handle(l);
-    }
+      auto reply = std::move(decoder->result);
+      decoder.reset(); // free handler-allocated memory before dispatching
 
-    void operator ()(bs::error_code called_ec) {
-      std::unique_lock l(m);
-      called = true;
-      // called_ec is the most salient if it exists.
-      if (called_ec)
-	ec = called_ec;
-      handle(l);
+      auto p = ca::bind_handler(std::move(handler),
+				ec, std::move(reply));
+      std::move(p)();
     }
-
-    EntryPusher(FIFO* f, Handler&& handler)
-      : f(f), handler(std::move(handler)) {}
   };
 
   template<typename Handler>
@@ -589,16 +580,13 @@ class FIFO {
     l.unlock();
 
     auto a = ba::get_associated_allocator(handler);
-    typename std::allocator_traits<
-      typename ba::associated_allocator<Handler>::type>
-      ::template rebind_alloc<EntryPusher<Handler>> allocator(a);
-    auto p = allocator.allocate(1);
-    allocator.construct(p, this, std::move(handler));
+    auto reply = ceph::allocate_unique<ExecHandleCB<int>>(a);
 
     auto e = ba::get_associated_executor(handler, get_executor());
-    push_part(op, tag, data_bufs, std::ref(*p));
+    push_part(op, tag, data_bufs, std::ref(*reply));
     return r->execute(oid, ioc, std::move(op),
-		      ca::bind_ea(e, a, std::ref(*p)));
+		      ca::bind_ea(e, a, EntryPusher(std::move(handler),
+						    std::move(reply))));
   }
 
   template<typename CT>
@@ -608,7 +596,8 @@ class FIFO {
 		 CT&& ct) {
     WriteOp op;
     cls::fifo::trim_part(op, tag, ofs);
-    return r->execute(info.part_oid(part_num), ioc, std::move(op), ct);
+    return r->execute(info.part_oid(part_num), ioc, std::move(op),
+		      std::forward<CT>(ct));
   }
 
 
@@ -635,7 +624,7 @@ public:
 	[&r, ioc, oid, executor, handler = std::move(init.completion_handler)]
 	(bs::error_code ec, fifo::info info,
 	 std::uint32_t size, std::uint32_t over) mutable {
-	  auto f = std::unique_ptr<FIFO>(
+	  std::unique_ptr<FIFO> f(
 	    new FIFO(r, ioc, oid, executor.value_or(r.get_executor())));
 	  f->info = info;
 	  f->part_header_size = size;
@@ -697,7 +686,7 @@ public:
 	      [&r, ioc, executor, oid, handler = std::move(handler)]
 	      (bs::error_code ec, fifo::info info,
 	       std::uint32_t size, std::uint32_t over) mutable {
-		auto f = std::unique_ptr<FIFO>(
+		std::unique_ptr<FIFO> f(
 		  new FIFO(r, ioc, oid, executor.value_or(r.get_executor())));
 		f->info = info;
 		f->part_header_size = size;
@@ -937,12 +926,7 @@ public:
       auto m = more;
       auto r = std::move(result);
 
-      typename std::allocator_traits<typename ba::associated_allocator<Handler>::type>
-	::template rebind_alloc<Lister> a(
-	  ba::get_associated_allocator(handler));
-      a.destroy(this);
-      a.deallocate(this, 1);
-
+      FIFO::assoc_delete(h, this);
       std::move(h)(ec, std::move(r), m);
     }
 
@@ -990,7 +974,9 @@ public:
 	  nullptr,
 	  ca::bind_ea(
 	    e, a,
-	    [this, part_oid](bs::error_code ec) mutable {
+	    [t = std::unique_ptr<Lister>(this), this,
+	     part_oid](bs::error_code ec) mutable {
+	      t.release();
 	      if (ec == bs::errc::no_such_file_or_directory) {
 		auto e = ba::get_associated_executor(handler,
 						     f->get_executor());
@@ -1093,14 +1079,11 @@ public:
     }
 
     using handler_type = decltype(init.completion_handler);
-    typename std::allocator_traits<typename ba::associated_allocator<handler_type>::type>
-      ::template rebind_alloc<Lister<handler_type>> allocator(
-	ba::get_associated_allocator(init.completion_handler));
-
-    auto ls = allocator.allocate(1);
-    allocator.construct(ls, this, part_num, ofs, max_entries,
-			std::move(init.completion_handler));
-    ls->list();
+    auto a = ba::get_associated_allocator(init.completion_handler);
+    auto ls = ceph::allocate_unique<Lister<handler_type>>(
+      a, this, part_num, ofs, max_entries,
+      std::move(init.completion_handler));
+    ls.release()->list();
     return init.result.get();
   }
 
@@ -1116,15 +1099,9 @@ public:
     void handle(bs::error_code ec) {
       auto h = std::move(handler);
 
-      typename std::allocator_traits<typename ba::associated_allocator<Handler>::type>
-	::template rebind_alloc<Trimmer> a(
-	  ba::get_associated_allocator(handler));
-      a.destroy(this);
-      a.deallocate(this, 1);
-
+      FIFO::assoc_delete(h, this);
       return std::move(h)(ec);
     }
-
 
     void update() {
       std::unique_lock l(f->m);
@@ -1137,7 +1114,9 @@ public:
 	objv,
 	ca::bind_ea(
 	  e, a,
-	  [this](bs::error_code ec, bool canceled) mutable {
+	  [this, t = std::unique_ptr<Trimmer>(this)](bs::error_code ec,
+						     bool canceled) mutable {
+	    t.release();
 	    if (canceled)
 	      if (i >= MAX_RACE_RETRIES) {
 		ldout(f->r->cct(), 0)
@@ -1179,7 +1158,9 @@ public:
 	  pn, max_part_size, std::nullopt,
 	  ca::bind_ea(
 	    e, a,
-	    [this](bs::error_code ec) mutable {
+	    [t = std::unique_ptr<Trimmer>(this),
+	     this](bs::error_code ec) mutable {
+	      t.release();
 	      if (ec && ec != bs::errc::no_such_file_or_directory) {
 		ldout(f->r->cct(), 0)
 		  << __func__ << "(): ERROR: trim_part() on part="
@@ -1198,7 +1179,9 @@ public:
 	part_num, ofs, std::nullopt,
 	ca::bind_ea(
 	  e, a,
-	  [this](bs::error_code ec) mutable {
+	  [t = std::unique_ptr<Trimmer>(this),
+	    this](bs::error_code ec) mutable {
+	    t.release();
 	    if (ec && ec != bs::errc::no_such_file_or_directory) {
 	      ldout(f->r->cct(), 0)
 		<< __func__ << "(): ERROR: trim_part() on part=" << part_num
@@ -1230,75 +1213,36 @@ public:
       return init.result.get();
     } else {
       using handler_type = decltype(init.completion_handler);
-      typename std::allocator_traits<
-	typename ba::associated_allocator<handler_type>::type>
-	::template rebind_alloc<Trimmer<handler_type>> allocator(
-	  ba::get_associated_allocator(init.completion_handler));
-      auto t = allocator.allocate(1);
-      allocator.construct(t, this, m->num, m->ofs,
-			  std::move(init.completion_handler));
-      t->trim();
+      auto a = ba::get_associated_allocator(init.completion_handler);
+      auto t = ceph::allocate_unique<Trimmer<handler_type>>(
+	a, this, m->num, m->ofs, std::move(init.completion_handler));
+      t.release()->trim();
     }
     return init.result.get();
   }
 
   template<typename Handler>
   class PartInfoGetter {
-    FIFO* f;
     Handler handler;
-    bool parsed = false;
-    bool called = false;
-    bs::error_code ec;
-    fifo::op::get_part_info_reply reply;
-    std::mutex m;
-
-    void handle(std::unique_lock<std::mutex>& l) {
-      if (!(parsed && called))
-	return;
-
-      auto e = ba::get_associated_executor(handler, f->get_executor());
-      auto p = [ec = ec, handler = std::move(handler),
-		reply = std::move(reply)]() mutable {
-		 std::move(handler)(ec, std::move(reply.header));
-	       };
-
-      l.unlock();
-      typename std::allocator_traits<typename ba::associated_allocator<Handler>::type>
-	::template rebind_alloc<PartInfoGetter> a(
-	  ba::get_associated_allocator(handler));
-      a.destroy(this);
-      a.deallocate(this, 1);
-
-      ba::post(e, std::move(p));
-    }
-
+    using allocator_type = boost::asio::associated_allocator_t<Handler>;
+    using decoder_type = ExecDecodeCB<fifo::op::get_part_info_reply>;
+    using decoder_ptr = ceph::allocated_unique_ptr<decoder_type, allocator_type>;
+    decoder_ptr decoder;
   public:
-    void operator ()(bs::error_code parse_ec, const cb::list& bl) {
-      std::unique_lock l(m);
-      parsed = true;
-      if (!ec)
-	ec = parse_ec;
+    PartInfoGetter(Handler&& handler, decoder_ptr&& decoder)
+      : handler(std::move(handler)), decoder(std::move(decoder)) {}
 
-      auto iter = bl.cbegin();
-      if (!ec) try {
-	  decode(reply, iter);
-	} catch (const cb::error& err) {
-	  ec = err.code();
-	}
-      handle(l);
+    void operator ()(bs::error_code ec) {
+      if (!ec) {
+        ec = decoder->ec;
+      }
+      auto reply = std::move(decoder->result);
+      decoder.reset(); // free handler-allocated memory before dispatching
+
+      auto p = ca::bind_handler(std::move(handler),
+				ec, std::move(reply.header));
+      std::move(p)();
     }
-
-    void operator ()(bs::error_code called_ec) {
-      std::unique_lock l(m);
-      called = true;
-      // called_ec is the most salient if it exists.
-      if (called_ec)
-	ec = called_ec;
-      handle(l);
-    }
-
-    PartInfoGetter(FIFO* f, Handler&& handler)
-      : f(f), handler(std::move(handler)) {}
   };
 
   template<typename CT>
@@ -1313,21 +1257,18 @@ public:
     auto e = ba::get_associated_executor(init.completion_handler,
 					 get_executor());
     auto a = ba::get_associated_allocator(init.completion_handler);
-    typename std::allocator_traits<
-      typename ba::associated_allocator<
-	decltype(init.completion_handler)>::type>
-      ::template rebind_alloc<PartInfoGetter<
-	decltype(init.completion_handler)>> allocator(a);
-    auto g = allocator.allocate(1);
-    allocator.construct(g, this, std::move(init.completion_handler));
+    auto reply = ceph::allocate_unique<
+      ExecDecodeCB<fifo::op::get_part_info_reply>>(a);
 
     op.exec(fifo::op::CLASS, fifo::op::GET_PART_INFO, in,
-	    std::ref(*g));
+	    std::ref(*reply));
     std::unique_lock l(m);
     auto part_oid = info.part_oid(part_num);
     l.unlock();
     r->execute(part_oid, ioc, std::move(op), nullptr,
-	       ca::bind_ea(e, a, std::ref(*g)));
+	       ca::bind_ea(e, a,
+			   PartInfoGetter(std::move(init.completion_handler),
+					  std::move(reply))));
     return init.result.get();
   }
 
@@ -1362,7 +1303,7 @@ private:
     auto oid = fifo->info.part_oid(part_num);
     l.unlock();
     return fifo->r->execute(oid, fifo->ioc,
-			    std::move(op), ct);
+			    std::move(op), std::forward<CT>(ct));
   }
 
   template<typename CT>
@@ -1373,11 +1314,11 @@ private:
     auto oid = fifo->info.part_oid(part_num);
     l.unlock();
     return fifo->r->execute(oid, fifo->ioc,
-			    std::move(op), ct);
+			    std::move(op), std::forward<CT>(ct));
   }
 
   template<typename PP>
-  auto process_journal_entry(const fifo::journal_entry& entry,
+  void process_journal_entry(const fifo::journal_entry& entry,
 			     PP&& pp) {
     switch (entry.op) {
     case fifo::journal_entry::Op::unknown:
@@ -1386,7 +1327,7 @@ private:
       break;
 
     case fifo::journal_entry::Op::create:
-      create_part(entry.part_num, entry.part_tag, std::forward<PP>(pp));
+      create_part(entry.part_num, entry.part_tag, std::move(pp));
       return;
       break;
     case fifo::journal_entry::Op::set_head:
@@ -1397,7 +1338,7 @@ private:
       return;
       break;
     case fifo::journal_entry::Op::remove:
-      remove_part(entry.part_num, entry.part_tag, std::forward<PP>(pp));
+      remove_part(entry.part_num, entry.part_tag, std::move(pp));
       return;
       break;
     }
@@ -1411,7 +1352,9 @@ private:
     return
       ca::bind_ea(
 	e, a,
-	[this, entry](bs::error_code ec) mutable {
+	[t = std::unique_ptr<JournalProcessor>(this), this,
+	 entry](bs::error_code ec) mutable {
+	  t.release();
 	  if (entry.op == fifo::journal_entry::Op::remove &&
 	      ec == bs::errc::no_such_file_or_directory)
 	    ec.clear();
@@ -1455,12 +1398,14 @@ private:
   }
 
   struct JournalPostprocessor {
-    JournalProcessor* j;
+    std::unique_ptr<JournalProcessor> j_;
     bool first;
     void operator ()(bs::error_code ec, bool canceled) {
       std::optional<int64_t> tail_part_num;
       std::optional<int64_t> head_part_num;
       std::optional<int64_t> max_part_num;
+
+      auto j = j_.release();
 
       if (!first && !ec && !canceled) {
 	j->handle({});
@@ -1528,7 +1473,7 @@ private:
     }
 
     JournalPostprocessor(JournalProcessor* j, bool first)
-      : j(j), first(first) {}
+      : j_(j), first(first) {}
   };
 
   void postprocess() {
@@ -1541,12 +1486,7 @@ private:
 
   void handle(bs::error_code ec) {
     auto h = std::move(handler);
-    typename std::allocator_traits<typename ba::associated_allocator<Handler>::type>
-      ::template rebind_alloc<JournalProcessor> a(
-	ba::get_associated_allocator(handler));
-
-    a.destroy(this);
-    a.deallocate(this, 1);
+    FIFO::assoc_delete(h, this);
     std::move(h)(ec);
     return;
   }
