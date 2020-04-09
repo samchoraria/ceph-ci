@@ -177,7 +177,6 @@ BuildRequires: libevent-devel
 BuildRequires:	pkgconfig(libudev)
 BuildRequires:	libnl3-devel
 BuildRequires:	liboath-devel
-BuildRequires:	libstdc++-devel-8.3.1-4.5.el8.x86_64
 BuildRequires:	libtool
 BuildRequires:	libxml2-devel
 BuildRequires:	make
