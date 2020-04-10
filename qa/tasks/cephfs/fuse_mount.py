@@ -66,11 +66,7 @@ class FuseMount(CephFSMount):
             daemon_signal,
         ]
 
-        fuse_cmd = ['nsenter',
-                    '--net=/var/run/netns/{0}'.format(self.netns_name),
-                    'ceph-fuse',
-                    "-f"
-                    ]
+        fuse_cmd = ['ceph-fuse', "-f"]
 
         if mount_path is not None:
             fuse_cmd += ["--client_mountpoint={0}".format(mount_path)]
@@ -95,6 +91,10 @@ class FuseMount(CephFSMount):
                 self.client_config.get('valgrind'),
             )
             cwd = None # misc.get_valgrind_args chdir for us
+
+        netns_prefix = ['nsenter',
+                        '--net=/var/run/netns/{0}'.format(self.netns_name)]
+        fuse_cmd = netns_prefix + fuse_cmd
 
         run_cmd.extend(fuse_cmd)
 
