@@ -218,12 +218,9 @@ class FIFO {
       auto reply = std::move(decoder->result);
       decoder.reset(); // free handler-allocated memory before dispatching
 
-      auto p = ca::bind_handler(std::move(handler),
-				ec,
-				std::move(reply.info),
-				std::move(reply.part_header_size),
-				std::move(reply.part_entry_overhead));
-      std::move(p)();
+      std::move(handler)(ec, std::move(reply.info),
+			 std::move(reply.part_header_size),
+			 std::move(reply.part_entry_overhead));
     }
   };
 
@@ -266,15 +263,15 @@ class FIFO {
 						std::uint64_t phs,
 						std::uint64_t peo) mutable {
 		   std::unique_lock l(m);
+		   if (ec) {
+		     l.unlock();
+		     std::move(handler)(ec);
+		     return;
+		   }
 		   // We have a newer version already!
 		   if (!info.version.same_or_later(this->info.version)) {
 		     l.unlock();
 		     std::move(handler)(bs::error_code{});
-		     return;
-		   }
-		   if (ec) {
-		     l.unlock();
-		     std::move(handler)(ec);
 		     return;
 		   }
 		   this->info = std::move(info);
@@ -563,9 +560,7 @@ class FIFO {
       auto reply = std::move(decoder->result);
       decoder.reset(); // free handler-allocated memory before dispatching
 
-      auto p = ca::bind_handler(std::move(handler),
-				ec, std::move(reply));
-      std::move(p)();
+      std::move(handler)(ec, std::move(reply));
     }
   };
 
@@ -875,9 +870,13 @@ public:
     auto max_entry_size = info.params.max_entry_size;
     auto need_new_head = info.need_new_head();
     l.unlock();
+    auto e = ba::get_associated_executor(init.completion_handler,
+					 get_executor());
+    auto a = ba::get_associated_allocator(init.completion_handler);
     if (data_bufs.empty() ) {
       // Can't fail if you don't try.
-      std::move(init.completion_handler)({});
+      e.post(ca::bind_handler(std::move(init.completion_handler),
+				  bs::error_code{}), a);
       return init.result.get();
     }
 
@@ -887,14 +886,12 @@ public:
 	ldout(r->cct(), 10) << __func__ << "(): entry too large: "
 			    << bl.length() << " > "
 			    << info.params.max_entry_size << dendl;
-	std::move(init.completion_handler)(errc::entry_too_large);
+	e.post(ca::bind_handler(std::move(init.completion_handler),
+				    errc::entry_too_large), a);
 	return init.result.get();
       }
     }
 
-    auto e = ba::get_associated_executor(init.completion_handler,
-					 get_executor());
-    auto a = ba::get_associated_allocator(init.completion_handler);
     auto p = ca::bind_ea(e, a,
 			 Pusher(this, {data_bufs.begin(), data_bufs.end()},
 				  {}, 0, std::move(init.completion_handler)));
@@ -902,7 +899,7 @@ public:
     if (need_new_head) {
       _prepare_new_head(std::move(p));
     } else {
-      std::move(p)(bs::error_code{});
+      e.dispatch(std::move(p), a);
     }
     return init.result.get();
   }
@@ -1063,6 +1060,8 @@ public:
     std::int64_t part_num = info.tail_part_num;
     l.unlock();
     std::uint64_t ofs = 0;
+    auto a = ba::get_associated_allocator(init.completion_handler);
+    auto e = ba::get_associated_executor(init.completion_handler);
 
     if (markstr) {
       auto marker = to_marker(*markstr);
@@ -1070,8 +1069,9 @@ public:
 	ldout(r->cct(), 0) << __func__
 			   << "(): failed to parse marker (" << *markstr
 			   << ")" << dendl;
-	std::move(init.completion_handler)(errc::invalid_marker,
-					   {}, false);
+	e.post(ca::bind_handler(std::move(init.completion_handler),
+				errc::invalid_marker,
+				std::vector<list_entry>{}, false), a);
 	return init.result.get();
       }
       part_num = marker->num;
@@ -1079,7 +1079,6 @@ public:
     }
 
     using handler_type = decltype(init.completion_handler);
-    auto a = ba::get_associated_allocator(init.completion_handler);
     auto ls = ceph::allocate_unique<Lister<handler_type>>(
       a, this, part_num, ofs, max_entries,
       std::move(init.completion_handler));
@@ -1148,12 +1147,12 @@ public:
     }
 
     void trim() {
+      auto a = ba::get_associated_allocator(handler);
+      auto e = ba::get_associated_executor(handler, f->get_executor());
       if (pn < part_num) {
 	std::unique_lock l(f->m);
 	auto max_part_size = f->info.params.max_part_size;
 	l.unlock();
-	auto a = ba::get_associated_allocator(handler);
-	auto e = ba::get_associated_executor(handler, f->get_executor());
 	f->trim_part(
 	  pn, max_part_size, std::nullopt,
 	  ca::bind_ea(
@@ -1173,8 +1172,6 @@ public:
 	    }));
 	return;
       }
-      auto a = ba::get_associated_allocator(handler);
-      auto e = ba::get_associated_executor(handler, f->get_executor());
       f->trim_part(
 	part_num, ofs, std::nullopt,
 	ca::bind_ea(
@@ -1206,14 +1203,16 @@ public:
   auto trim(std::string_view markstr, CT&& ct) {
     auto m = to_marker(markstr);
     ba::async_completion<CT, void(bs::error_code)> init(ct);
+    auto a = ba::get_associated_allocator(init.completion_handler);
+    auto e = ba::get_associated_executor(init.completion_handler);
     if (!m) {
       ldout(r->cct(), 0) << __func__ << "(): failed to parse marker: marker="
 			 << markstr << dendl;
-      std::move(init.completion_handler)(errc::invalid_marker);
+      e.post(ca::bind_handler(std::move(init.completion_handler),
+			      errc::invalid_marker), a);
       return init.result.get();
     } else {
       using handler_type = decltype(init.completion_handler);
-      auto a = ba::get_associated_allocator(init.completion_handler);
       auto t = ceph::allocate_unique<Trimmer<handler_type>>(
 	a, this, m->num, m->ofs, std::move(init.completion_handler));
       t.release()->trim();
@@ -1485,9 +1484,11 @@ private:
   }
 
   void handle(bs::error_code ec) {
+    auto e = ba::get_associated_executor(handler, fifo->get_executor());
+    auto a = ba::get_associated_allocator(handler);
     auto h = std::move(handler);
     FIFO::assoc_delete(h, this);
-    std::move(h)(ec);
+    e.dispatch(ca::bind_handler(std::move(h), ec), a);
     return;
   }
 
