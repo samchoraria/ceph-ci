@@ -130,6 +130,9 @@ class CephFSMount(object):
                     "ip addr add {0}/{1} brd {2} dev ceph-brx".format(ip, mask, brd)]
             self.client_remote.run(args=args, timeout=(5*60))
         else:
+            args = ["bash", "-c", "rpm -qa | grep valgrind"]
+            p = self.client_remote.run(args=args, stdout=BytesIO(), timeout=(5*60))
+            log.info("valgrind = {}".format(p.stdout.getvalue()))
             self._bringup_network_manager_service()
             args = ["sudo", "bash", "-c",
                     "nmcli connection add type bridge con-name ceph-brx ifname ceph-brx stp no"]
