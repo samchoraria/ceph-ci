@@ -24,8 +24,6 @@ function(build_jaeger)
 			-DTHRIFT_HOME=${CMAKE_BINARY_DIR}/external
 			-DOpenTracing_HOME=${CMAKE_BINARY_DIR}/external
 			-DCMAKE_FIND_ROOT_PATH=${CMAKE_SOURCE_DIR}/debian/tmp${CMAKE_BINARY_DIR}/external
-			-DENABLE_PRECOMPILED_HEADERS=OFF
-		        -DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE_BOTH=TRUE
 			-DCMAKE_INSTALL_LIBDIR=${CMAKE_BINARY_DIR}/external/lib)
 
   set(dependencies OpenTracing thrift)
@@ -67,4 +65,7 @@ function(build_jaeger)
     INSTALL_COMMAND make install
     DEPENDS "${dependencies}"
     )
+  ExternalProject_Get_Property(Jaeger install_dir)
+  message(STATUS "external_dir test ${install_dir}")
+  set(external_dir ${install_dir} PARENT_SCOPE)
 endfunction()
