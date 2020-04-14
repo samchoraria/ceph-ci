@@ -9,9 +9,10 @@
 function(build_jaeger)
   set(Jaeger_DOWNLOAD_DIR "${CMAKE_SOURCE_DIR}/src/jaegertracing")
   set(Jaeger_SOURCE_DIR "${CMAKE_SOURCE_DIR}/src/jaegertracing/jaeger-client-cpp")
-  set(Jaeger_ROOT_DIR "${CMAKE_BINARY_DIR}/external")
-  set(Jaeger_BINARY_DIR "${Jaeger_ROOT_DIR}/Jaeger")
+  set(Jaeger_INSTALL_DIR "${CMAKE_BINARY_DIR}/external")
+  set(Jaeger_BINARY_DIR "${Jaeger_INSTALL_DIR}/Jaeger")
 
+  file(MAKE_DIRECTORY "${Jaeger_INSTALL_DIR}")
   set(Jaeger_CMAKE_ARGS -DCMAKE_POSITION_INDEPENDENT_CODE=ON
 			-DBUILD_SHARED_LIBS=ON
 			-DHUNTER_ENABLED=OFF
@@ -21,7 +22,8 @@ function(build_jaeger)
 			-DOpenTracing_DIR=${CMAKE_SOURCE_DIR}/src/jaegertracing/opentracing-cpp
 			-DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/external
 			-DTHRIFT_HOME=${CMAKE_BINARY_DIR}/external
-			-DCMAKE_FIND_ROOT_PATH="${CMAKE_SOURCE_DIR}/debian/tmp${CMAKE_BINARY_DIR}/external;${CMAKE_BINARY_DIR}/external"
+			-DOpenTracing_HOME=${CMAKE_BINARY_DIR}/external
+			-DCMAKE_FIND_ROOT_PATH=${CMAKE_SOURCE_DIR}/debian/tmp${CMAKE_BINARY_DIR}/external
 			-DENABLE_PRECOMPILED_HEADERS=OFF
 		        -DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE_BOTH=TRUE
 			-DCMAKE_INSTALL_LIBDIR=${CMAKE_BINARY_DIR}/external/lib)
@@ -58,7 +60,7 @@ function(build_jaeger)
     INSTALL_DIR "${CMAKE_BINARY_DIR}/external"
     DOWNLOAD_DIR ${Jaeger_DOWNLOAD_DIR}
     SOURCE_DIR ${Jaeger_SOURCE_DIR}
-    PREFIX ${Jaeger_ROOT_DIR}
+    PREFIX ${Jaeger_INSTALL_DIR}
     CMAKE_ARGS ${Jaeger_CMAKE_ARGS}
     BINARY_DIR ${Jaeger_BINARY_DIR}
     BUILD_COMMAND ${make_cmd}
