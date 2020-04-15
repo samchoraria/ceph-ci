@@ -49,17 +49,18 @@ class to_ceph_volume(object):
 
             cmd += " --filestore"
 
-        # # HORRIBLE HACK
-        # if self.spec.objectstore == 'bluestore' and \
-        #    not self.spec.encrypted and \
-        #    not self.spec.osds_per_device and \
-        #    len(data_devices) == 1 and \
-        #    not db_devices and \
-        #    not wal_devices:
-        #     cmd = "lvm prepare --bluestore --data %s --no-systemd" % (' '.join(data_devices))
-        #     if self.osd_id_claims:
-        #         cmd += " --osd-id {}".format(" ".join(self.osd_id_claims))
-        #     return cmd
+        # HORRIBLE HACK
+        if self.spec.objectstore == 'bluestore' and \
+           not self.spec.encrypted and \
+           not self.spec.osds_per_device and \
+           len(data_devices) == 1 and \
+           not db_devices and \
+           not wal_devices:
+            cmd = "lvm prepare --bluestore --data %s --no-systemd" % (' '.join(data_devices))
+            if self.osd_id_claims:
+                # keep on hacking
+                cmd += " --osd-id {}".format(str(self.osd_id_claims[0]))
+            return cmd
 
         if self.spec.objectstore == 'bluestore':
 
