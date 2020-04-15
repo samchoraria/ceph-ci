@@ -1,7 +1,7 @@
 function (set_library_properties_for_external_project _target _lib)
   set(_libfullname "${CMAKE_SHARED_LIBRARY_PREFIX}${_lib}${CMAKE_SHARED_LIBRARY_SUFFIX}")
 
-  if(EXISTS "${CMAKE_SOURCE_DIR}/debian/tmp${CMAKE_BINARY_DIR}/external")
+  if(EXISTS "${CMAKE_SOURCE_DIR}/debian/tmp")
     set(external_dir "${CMAKE_SOURCE_DIR}/debian/tmp${CMAKE_BINARY_DIR}/external")
   else()
     set(external_dir "${CMAKE_BINARY_DIR}/external")
