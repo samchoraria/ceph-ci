@@ -1258,7 +1258,7 @@ class LocalCluster(object):
 
 class LocalContext(object):
     def __init__(self):
-        self.config = {}
+        self.config = {'overrides':{'python':'python{0}'.format(sys.version_info.major)}}
         self.teuthology_config = teuth_config
         self.cluster = LocalCluster()
         self.daemons = DaemonGroup()

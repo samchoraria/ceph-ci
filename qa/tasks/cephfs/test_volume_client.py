@@ -19,7 +19,7 @@ class TestVolumeClient(CephFSTestCase):
     def setUp(self):
         CephFSTestCase.setUp(self)
         self.py_version = self.ctx.config.get('overrides', {}).\
-                          get('python3', TestVolumeClient.default_py_version)
+                          get('python', TestVolumeClient.default_py_version)
         log.info("using python version: {python_version}".format(
             python_version=self.py_version
         ))
@@ -46,7 +46,7 @@ vc.connect()
 vc.disconnect()
         """.format(payload=script, conf_path=client.config_path,
                    vol_prefix=vol_prefix, ns_prefix=ns_prefix),
-        self.py_version)
+        'python3')
 
     def _configure_vc_auth(self, mount, id_name):
         """
@@ -654,11 +654,10 @@ vc.disconnect()
             guest_entity_2=guest_entity_2,
         )))
         # Check the list of authorized IDs and their access levels.
+        expected_result = [('guest1', 'rw'), ('guest2', 'r')]
         if self.py_version == 'python3':
-            expected_result = [('guest1', 'rw'), ('guest2', 'r')]
             self.assertCountEqual(str(expected_result), auths)
         else:
-            expected_result = [(u'guest1', u'rw'), (u'guest2', u'r')]
             self.assertItemsEqual(str(expected_result), auths)
 
         # Disallow both the auth IDs' access to the volume.
