@@ -1,10 +1,7 @@
 function (set_library_properties_for_external_project _target _lib)
   set(_libfullname "${CMAKE_SHARED_LIBRARY_PREFIX}${_lib}${CMAKE_SHARED_LIBRARY_SUFFIX}")
-  set(external_dir "${CMAKE_BINARY_DIR}/external")
-
-  message(STATUS "external_dir ${external_dir}")
-  set(_libpath "${external_dir}/${_libfullname}")
-  set(_includepath "${external_dir}/include")
+  set(_libpath "${CMAKE_BINARY_DIR}/external/lib/${_libfullname}")
+  set(_includepath "${CMAKE_BINARY_DIR}/external/include")
   message(STATUS "Configuring ${_target} with ${_libpath}")
 
   file(MAKE_DIRECTORY "${_includepath}")
