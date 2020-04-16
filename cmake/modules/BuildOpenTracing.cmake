@@ -15,6 +15,7 @@ function(build_opentracing)
   else()
     set(make_cmd ${CMAKE_COMMAND} --build <BINARY_DIR> --target OpenTracing)
   endif()
+  set(install_cmd $(MAKE) install DESTDIR=${CMAKE_BINARY_DIR}/external)
 
   include(ExternalProject)
   ExternalProject_Add(OpenTracing
@@ -28,6 +29,6 @@ function(build_opentracing)
     CMAKE_ARGS ${OpenTracing_CMAKE_ARGS}
     BUILD_IN_SOURCE 1
     BUILD_COMMAND ${make_cmd}
-    INSTALL_COMMAND make install
+    INSTALL_COMMAND ${install_cmd}
     )
 endfunction()
