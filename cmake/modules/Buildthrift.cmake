@@ -43,7 +43,7 @@ function(build_thrift)
     CMAKE_ARGS ${thrift_CMAKE_ARGS}
     BINARY_DIR ${thrift_BINARY_DIR}
     BUILD_COMMAND ${make_cmd}
-    INSTALL_COMMAND make install
+    INSTALL_COMMAND ${install_cmd}
     DEPENDS ${dependencies}
     )
 endfunction()

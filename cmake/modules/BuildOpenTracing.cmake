@@ -15,14 +15,13 @@ function(build_opentracing)
   else()
     set(make_cmd ${CMAKE_COMMAND} --build <BINARY_DIR> --target OpenTracing)
   endif()
-  set(install_cmd $(MAKE) install DESTDIR=${CMAKE_BINARY_DIR}/external)
+  set(install_cmd $(MAKE) install prefix=${CMAKE_BINARY_DIR}/external)
 
   include(ExternalProject)
   ExternalProject_Add(OpenTracing
     GIT_REPOSITORY "https://github.com/opentracing/opentracing-cpp.git"
     GIT_TAG "v1.5.0"
     UPDATE_COMMAND ""
-    INSTALL_DIR "${CMAKE_BINARY_DIR}/external"
     DOWNLOAD_DIR ${OpenTracing_DOWNLOAD_DIR}
     SOURCE_DIR ${OpenTracing_SOURCE_DIR}
     PREFIX "${CMAKE_BINARY_DIR}/external/opentracing-cpp"
