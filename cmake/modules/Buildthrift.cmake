@@ -8,7 +8,6 @@ function(build_thrift)
 			 -DBUILD_PYTHON=OFF
 			 -DBUILD_TESTING=OFF
 			 -DBUILD_TUTORIALS=OFF
-			 -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/external
 			 -DCMAKE_INSTALL_LIBDIR=${CMAKE_BINARY_DIR}/external/lib)
 
   if(EXISTS "/opt/ceph/include/boost/")
@@ -30,7 +29,7 @@ function(build_thrift)
     set(make_cmd ${CMAKE_COMMAND} --build <BINARY_DIR> --target thrift)
   endif()
 
-  set(install_cmd $(MAKE) install DESTDIR=${CMAKE_BINARY_DIR}/external)
+  set(install_cmd $(MAKE) install DESTDIR=)
 
   include(ExternalProject)
   ExternalProject_Add(thrift
@@ -43,7 +42,7 @@ function(build_thrift)
     CMAKE_ARGS ${thrift_CMAKE_ARGS}
     BINARY_DIR ${thrift_BINARY_DIR}
     BUILD_COMMAND ${make_cmd}
-    INSTALL_COMMAND make install
+    INSTALL_COMMAND ${install_cmd}
     DEPENDS ${dependencies}
     )
 endfunction()
