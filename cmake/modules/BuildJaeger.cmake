@@ -21,6 +21,7 @@ function(build_jaeger)
 			-DCMAKE_PREFIX_PATH=${CMAKE_BINARY_DIR}/external
 			-DOpenTracing_DIR=${CMAKE_SOURCE_DIR}/src/jaegertracing/opentracing-cpp
 			-DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/external
+			-Dyaml-cpp_HOME=${CMAKE_BINARY_DIR}/external
 			-DTHRIFT_HOME=${CMAKE_BINARY_DIR}/external
 			-DOpenTracing_HOME=${CMAKE_BINARY_DIR}/external
 			-DCMAKE_FIND_ROOT_PATH=${CMAKE_SOURCE_DIR}/debian/tmp${CMAKE_BINARY_DIR}/external
