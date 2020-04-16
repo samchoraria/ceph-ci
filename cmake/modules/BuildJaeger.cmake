@@ -49,6 +49,7 @@ function(build_jaeger)
   else()
     set(make_cmd ${CMAKE_COMMAND} --build <BINARY_DIR> --config $<CONFIG> --target Jaeger)
   endif()
+  set(install_cmd $(MAKE) install DESTDIR=${CMAKE_BINARY_DIR}/external)
 
   include(ExternalProject)
   ExternalProject_Add(Jaeger
@@ -62,7 +63,7 @@ function(build_jaeger)
     CMAKE_ARGS ${Jaeger_CMAKE_ARGS}
     BINARY_DIR ${Jaeger_BINARY_DIR}
     BUILD_COMMAND ${make_cmd}
-    INSTALL_COMMAND make install
+    INSTALL_COMMAND ${install_cmd}
     DEPENDS "${dependencies}"
     )
   ExternalProject_Get_Property(Jaeger install_dir)

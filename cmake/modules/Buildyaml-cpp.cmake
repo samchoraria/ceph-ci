@@ -16,6 +16,7 @@ function(build_yamlcpp)
   else()
     set(make_cmd ${CMAKE_COMMAND} --build <BINARY_DIR> --target yaml-cpp)
   endif()
+set(install_cmd $(MAKE) install DESTDIR=${CMAKE_BINARY_DIR}/external)
 
   include(ExternalProject)
   ExternalProject_Add(yaml-cpp
@@ -28,6 +29,6 @@ function(build_yamlcpp)
     PREFIX "${CMAKE_BINARY_DIR}/external/yaml-cpp"
     CMAKE_ARGS ${yaml-cpp_CMAKE_ARGS}
     BUILD_COMMAND ${make_cmd}
-    INSTALL_COMMAND make install
+    INSTALL_COMMAND ${install_cmd}
     )
 endfunction()

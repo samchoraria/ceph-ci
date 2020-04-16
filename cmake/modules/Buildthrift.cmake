@@ -30,6 +30,8 @@ function(build_thrift)
     set(make_cmd ${CMAKE_COMMAND} --build <BINARY_DIR> --target thrift)
   endif()
 
+  set(install_cmd $(MAKE) install DESTDIR=${CMAKE_BINARY_DIR}/external)
+
   include(ExternalProject)
   ExternalProject_Add(thrift
     URL http://archive.apache.org/dist/thrift/0.11.0/thrift-0.11.0.tar.gz
