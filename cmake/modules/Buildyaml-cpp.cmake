@@ -16,10 +16,7 @@ function(build_yamlcpp)
   else()
     set(make_cmd ${CMAKE_COMMAND} --build <BINARY_DIR> --target yaml-cpp)
   endif()
-set(install_cmd $(MAKE) install DESTDIR=${CMAKE_BINARY_DIR}/external)
-
-  include(ExternalProject)
-  ExternalProject_Add(yaml-cpp
+  set(install_cmd $(MAKE) install DESTDIR=)
     GIT_REPOSITORY "https://github.com/jbeder/yaml-cpp.git"
     GIT_TAG "yaml-cpp-0.6.2"
     UPDATE_COMMAND ""
