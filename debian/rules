@@ -28,8 +28,6 @@ extraopts += -DWITH_GRAFANA=OFF
 extraopts += -DCMAKE_INSTALL_LIBDIR=/usr/lib
 extraopts += -DCMAKE_INSTALL_LIBEXECDIR=/usr/lib
 extraopts += -DCMAKE_INSTALL_SYSCONFDIR=/etc
-extraopts += -DWITH_SYSTEM_BOOST=ON
-extraopts += -DBOOST_ROOT=/opt/ceph
 extraopts += -DCMAKE_INSTALL_SYSTEMD_SERVICEDIR=/lib/systemd/system
 ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
   NUMJOBS = $(patsubst parallel=%,%,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
@@ -52,8 +50,8 @@ override_dh_auto_configure:
 
 override_dh_auto_build:
 	dh_auto_build --buildsystem=cmake
-	cp -fr $(CUR_DIR)/build/external/lib/* $(DEST_DIR)/lib
-	cp -fr $(CUR_DIR)/build/external/include/* $(DEST_DIR)/include
+	cp -fr $(CUR_DIR)/external/lib/* $(DEST_DIR)/lib
+	cp -fr $(CUR_DIR)/external/include/* $(DEST_DIR)/include
 	cp src/init-radosgw debian/radosgw.init
 
 override_dh_auto_clean:
@@ -127,7 +125,7 @@ override_dh_strip:
 	dh_strip -ppython3-cephfs --dbg-package=python3-cephfs-dbg
 
 override_dh_shlibdeps:
-	dh_shlibdeps -a --exclude=erasure-code --exclude=rados-classes --exclude=compressor -l$(JAEGER_LIBS)
+	dh_shlibdeps -a --exclude=erasure-code --exclude=rados-classes --exclude=compressor -l$(CUR_DIR)/external/lib/libopentracing.so -l$(CUR_DIR)/external/lib/libthrift.so -l$(CUR_DIR)/external/lib/libjaegertracing.so -l$(CUR_DIR)/external/lib/libyaml-cpp.so 
 
 override_dh_python3:
 	for binding in rados cephfs rbd rgw; do \
