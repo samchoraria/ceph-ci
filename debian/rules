@@ -17,17 +17,19 @@ else
   export CEPH_OSD_BASENAME = crimson-osd
 endif
 
-extraopts += -DWITH_OCF=ON -DWITH_LTTNG=ON
+extraopts += -DWITH_OCF=ON -DWITH_LTTNG=OFF
 extraopts += -DWITH_MGR_DASHBOARD_FRONTEND=OFF
 extraopts += -DWITH_PYTHON3=3
-extraopts += -DWITH_CEPHFS_JAVA=ON
-extraopts += -DWITH_CEPHFS_SHELL=ON
+extraopts += -DWITH_CEPHFS_JAVA=OFF
+extraopts += -DWITH_CEPHFS_SHELL=OFF
 extraopts += -DWITH_SYSTEMD=ON -DCEPH_SYSTEMD_ENV_DIR=/etc/default
-extraopts += -DWITH_GRAFANA=ON
+extraopts += -DWITH_GRAFANA=OFF
 # assumes that ceph is exmpt from multiarch support, so we override the libdir.
 extraopts += -DCMAKE_INSTALL_LIBDIR=/usr/lib
 extraopts += -DCMAKE_INSTALL_LIBEXECDIR=/usr/lib
 extraopts += -DCMAKE_INSTALL_SYSCONFDIR=/etc
+extraopts += -DWITH_SYSTEM_BOOST=ON
+extraopts += -DBOOST_ROOT=/opt/ceph
 extraopts += -DCMAKE_INSTALL_SYSTEMD_SERVICEDIR=/lib/systemd/system
 ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
   NUMJOBS = $(patsubst parallel=%,%,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
