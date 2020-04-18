@@ -23,6 +23,9 @@ class TestVolumeClient(CephFSTestCase):
         log.info("using python version: {python_version}".format(
             python_version=self.py_version
         ))
+        log.info("from sys.version_info.major --> using python version: {}".format(
+            sys.version_info.major
+        ))
 
     def _volume_client_python(self, client, script, vol_prefix=None, ns_prefix=None):
         # Can't dedent this *and* the script we pass in, because they might have different
