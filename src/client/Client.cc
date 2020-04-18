@@ -4278,6 +4278,7 @@ void Client::_trim_negative_child_dentries(InodeRef& in)
   }
 }
 
+
 void Client::trim_caps(MetaSession *s, uint64_t max)
 {
   mds_rank_t mds = s->mds_num;
