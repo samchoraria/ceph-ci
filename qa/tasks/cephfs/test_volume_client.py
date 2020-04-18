@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import sys
 from textwrap import dedent
 from tasks.cephfs.cephfs_test_case import CephFSTestCase
 from tasks.cephfs.fuse_mount import FuseMount
@@ -22,6 +23,9 @@ class TestVolumeClient(CephFSTestCase):
                           get('python', TestVolumeClient.default_py_version)
         log.info("using python version: {python_version}".format(
             python_version=self.py_version
+        ))
+        log.info("from sys.version_info.major --> using python version: {}".format(
+            sys.version_info.major
         ))
 
     def _volume_client_python(self, client, script, vol_prefix=None, ns_prefix=None):
