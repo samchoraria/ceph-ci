@@ -2,7 +2,7 @@
 # -*- makefile -*-
 export DH_VERBOSE=1
 export DESTDIR=$(CURDIR)/debian/tmp
-export JAEGER_LIB=$JAEGER_LIB
+export JAEGER_LIBS=$(JAEGER_LIB)
 
 export DEB_HOST_ARCH      ?= $(shell dpkg-architecture -qDEB_HOST_ARCH)
 ifneq (,$(findstring WITH_STATIC_LIBSTDCXX,$(CEPH_EXTRA_CMAKE_ARGS)))
@@ -50,8 +50,8 @@ override_dh_auto_configure:
 
 override_dh_auto_build:
 	dh_auto_build --buildsystem=cmake
-	cp -fr $(CURDIR)/obj-$(DEB_HOST_ARCH)external/lib/* $(DESTDIR)/lib
-	cp -fr $(CURDIR)/external/include/* $(DESTDIR)/include
+	cp -fr $(CURDIR)/obj-$(DEB_HOST_ARCH)/external/lib/* $(DESTDIR)/lib
+	cp -fr $(CURDIR)/obj-$(DEB_HOST_ARCH)/external/include/* $(DESTDIR)/include
 
 	cp src/init-radosgw debian/radosgw.init
 
@@ -124,7 +124,7 @@ override_dh_strip:
 	dh_strip -ppython3-cephfs --dbg-package=python3-cephfs-dbg
 
 override_dh_shlibdeps:
-	dh_shlibdeps -a --exclude=erasure-code --exclude=rados-classes --exclude=compressor
+	dh_shlibdeps -a --exclude=erasure-code --exclude=rados-classes --exclude=compressor -l$(JAEGER_LIBS) -l$(CURDIR)/obj-$(DEB_HOST_ARCH)/external/lib/;$(CURDIR)/obj-$(DEB_HOST_ARCH)/external/;$(CURDIR)/obj-$(DEB_HOST_ARCH)/external/lib/libopentracing.so;$(CURDIR)/obj-$(DEB_HOST_ARCH)/external/lib/libjaegertracing.so;$(CURDIR)/obj-$(DEB_HOST_ARCH)/external/lib/libthrift.so;$(CURDIR)/obj-$(DEB_HOST_ARCH)/external/lib/libyaml-cpp.so
 
 override_dh_python3:
 	for binding in rados cephfs rbd rgw; do \
