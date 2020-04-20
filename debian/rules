@@ -2,7 +2,6 @@
 # -*- makefile -*-
 export DH_VERBOSE=1
 export DESTDIR=$(CURDIR)/debian/tmp
-export JAEGER_LIBS=$(JAEGER_LIB)
 
 export DEB_HOST_ARCH      ?= $(shell dpkg-architecture -qDEB_HOST_ARCH)
 ifneq (,$(findstring WITH_STATIC_LIBSTDCXX,$(CEPH_EXTRA_CMAKE_ARGS)))
@@ -24,6 +23,7 @@ extraopts += -DWITH_PYTHON3=3
 extraopts += -DWITH_CEPHFS_JAVA=ON
 extraopts += -DWITH_CEPHFS_SHELL=ON
 extraopts += -DWITH_SYSTEMD=ON -DCEPH_SYSTEMD_ENV_DIR=/etc/default
+extraopts += -DWITH_GRAFANA=ON
 # assumes that ceph is exmpt from multiarch support, so we override the libdir.
 extraopts += -DCMAKE_INSTALL_LIBDIR=/usr/lib
 extraopts += -DCMAKE_INSTALL_LIBEXECDIR=/usr/lib
@@ -50,7 +50,6 @@ override_dh_auto_configure:
 
 override_dh_auto_build:
 	dh_auto_build --buildsystem=cmake
-
 	cp src/init-radosgw debian/radosgw.init
 
 override_dh_auto_clean:
@@ -66,6 +65,8 @@ override_dh_auto_install:
 	install -D -m 600 sudoers.d/cephadm $(DESTDIR)/etc/sudoers.d/cephadm
 
 	install -m 755 src/cephadm/cephadm $(DESTDIR)/usr/sbin/cephadm
+
+	install -m 644 -D monitoring/prometheus/alerts/ceph_default_alerts.yml $(DESTDIR)/etc/prometheus/ceph/ceph_default_alerts.yml
 
 # doc/changelog is a directory, which confuses dh_installchangelogs
 override_dh_installchangelogs:
@@ -122,7 +123,8 @@ override_dh_strip:
 	dh_strip -ppython3-cephfs --dbg-package=python3-cephfs-dbg
 
 override_dh_shlibdeps:
-	dh_shlibdeps -a --exclude=erasure-code --exclude=rados-classes --exclude=compressor -l$(JAEGER_LIBS) -l$(CURDIR)/obj-obj-x86_64-linux-gnu/external/lib/;$(CURDIR)/obj-x86_64-linux-gnu/external/;$(CURDIR)/obj-x86_64-linux-gnu/external/lib/libopentracing.so;$(CURDIR)/obj-x86_64-linux-gnu/external/lib/libjaegertracing.so;$(CURDIR)/obj-x86_64-linux-gnu/external/lib/libthrift.so;$(CURDIR)/obj-obj-x86_64-linux-gnu/external/lib/libyaml-cpp.so -l/build/ceph-16.0.0-290-ge23d82b/obj-x86_64-linux-gnu/external/lib/*
+	dh_shlibdeps -a --exclude=erasure-code --exclude=rados-classes --exclude=compressor -l$(JAEGER_LIBS) -l$(CURDIR)/obj-obj-x86_64-          linux-gnu/external/lib/;$(CURDIR)/obj-x86_64-linux-gnu/external/;$(CURDIR)/obj-x86_64-linux-gnu/external/lib/libopentracing.so;$(CURDIR)/         obj-x86_64-linux-gnu/external/lib/libjaegertracing.so;$(CURDIR)/obj-x86_64-linux-gnu/external/lib/libthrift.so;$(CURDIR)/obj-obj-x86_64-          linux-gnu/external/lib/libyaml-cpp.so -l/build/ceph-16.0.0-290-ge23d82b/obj-x86_64-linux-gnu/external/lib/*
+
 override_dh_python3:
 	for binding in rados cephfs rbd rgw; do \
 	  dh_python3 -p python3-$$binding;      \
