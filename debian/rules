@@ -123,8 +123,8 @@ override_dh_strip:
 	dh_strip -ppython3-cephfs --dbg-package=python3-cephfs-dbg
 
 override_dh_shlibdeps:
-	dh_shlibdeps -a --exclude=erasure-code --exclude=rados-classes --exclude=compressor -l$(JAEGER_LIBS) -l$(CURDIR)/obj-obj-x86_64-          linux-gnu/external/lib/;$(CURDIR)/obj-x86_64-linux-gnu/external/;$(CURDIR)/obj-x86_64-linux-gnu/external/lib/libopentracing.so;$(CURDIR)/         obj-x86_64-linux-gnu/external/lib/libjaegertracing.so;$(CURDIR)/obj-x86_64-linux-gnu/external/lib/libthrift.so;$(CURDIR)/obj-obj-x86_64-          linux-gnu/external/lib/libyaml-cpp.so -l/build/ceph-16.0.0-290-ge23d82b/obj-x86_64-linux-gnu/external/lib/*
-
+	export LD_LIBRARY_PATH=$(CURDIR)/obj-x86_64-linux-gnu/external/lib/:$(LD_LIBRARY_PATH)
+	dh_shlibdeps -a --exclude=erasure-code --exclude=rados-classes --exclude=compressor -l$(CURDIR)/obj-obj-x86_64-linux-gnu/external/lib/ -l$(CURDIR)/obj-x86_64-linux-gnu/external/* -l$(CURDIR)/obj-x86_64-linux-gnu/external/lib/libopentracing.so.1 -l$(CURDIR)/obj-x86_64-linux-gnu/external/lib/libjaegertracing.so.0 -l$(CURDIR)/obj-x86_64-linux-gnu/external/lib/libthrift.so -l$(CURDIR)/obj-obj-x86_64-linux-gnu/external/lib/libyaml-cpp.so.0.6 -l/build/ceph-16.0.0-290-ge23d82b/obj-x86_64-linux-gnu/external/lib/*
 override_dh_python3:
 	for binding in rados cephfs rbd rgw; do \
 	  dh_python3 -p python3-$$binding;      \
