@@ -50,8 +50,8 @@ override_dh_auto_configure:
 
 override_dh_auto_build:
 	dh_auto_build --buildsystem=cmake
-	cp -fr $(CURDIR)/obj-$(DEB_HOST_ARCH)/external/lib/* $(DESTDIR)/lib
-	cp -fr $(CURDIR)/obj-$(DEB_HOST_ARCH)/external/include/* $(DESTDIR)/include
+	cp -fr $(CURDIR)/obj-x86_64-linux-gnu/external/lib/* $(DESTDIR)/lib
+	cp -fr $(CURDIR)/obj-x86_64-linux-gnu/external/include/* $(DESTDIR)/include
 
 	cp src/init-radosgw debian/radosgw.init
 
