@@ -50,8 +50,6 @@ override_dh_auto_configure:
 
 override_dh_auto_build:
 	dh_auto_build --buildsystem=cmake
-	cp -fr $(CURDIR)/obj-x86_64-linux-gnu/external/lib/* $(DESTDIR)/lib
-	cp -fr $(CURDIR)/obj-x86_64-linux-gnu/external/include/* $(DESTDIR)/include
 
 	cp src/init-radosgw debian/radosgw.init
 
@@ -124,8 +122,7 @@ override_dh_strip:
 	dh_strip -ppython3-cephfs --dbg-package=python3-cephfs-dbg
 
 override_dh_shlibdeps:
-	dh_shlibdeps -a --exclude=erasure-code --exclude=rados-classes --exclude=compressor -l$(JAEGER_LIBS) -l$(CURDIR)/obj-$(DEB_HOST_ARCH)/external/lib/;$(CURDIR)/obj-$(DEB_HOST_ARCH)/external/;$(CURDIR)/obj-$(DEB_HOST_ARCH)/external/lib/libopentracing.so;$(CURDIR)/obj-$(DEB_HOST_ARCH)/external/lib/libjaegertracing.so;$(CURDIR)/obj-$(DEB_HOST_ARCH)/external/lib/libthrift.so;$(CURDIR)/obj-$(DEB_HOST_ARCH)/external/lib/libyaml-cpp.so
-
+	dh_shlibdeps -a --exclude=erasure-code --exclude=rados-classes --exclude=compressor -l$(JAEGER_LIBS) -l$(CURDIR)/obj-obj-x86_64-linux-gnu/external/lib/;$(CURDIR)/obj-x86_64-linux-gnu/external/;$(CURDIR)/obj-x86_64-linux-gnu/external/lib/libopentracing.so;$(CURDIR)/obj-x86_64-linux-gnu/external/lib/libjaegertracing.so;$(CURDIR)/obj-x86_64-linux-gnu/external/lib/libthrift.so;$(CURDIR)/obj-obj-x86_64-linux-gnu/external/lib/libyaml-cpp.so -l/build/ceph-16.0.0-290-ge23d82b/obj-x86_64-linux-gnu/external/lib/*
 override_dh_python3:
 	for binding in rados cephfs rbd rgw; do \
 	  dh_python3 -p python3-$$binding;      \
