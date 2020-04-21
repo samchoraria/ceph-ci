@@ -11087,27 +11087,30 @@ int BlueStore::_upgrade_super()
       _prepare_ondisk_format_super(t);
       int r = db->submit_transaction_sync(t);
       ceph_assert(r == 0);
-    }
-    if (ondisk_format == 2) {
-      // changes:
-      // - onode has FLAG_PER_POOL_OMAP.  Note that we do not know that *all*
-      //   ondes are using the per-pool prefix until a repair is run; at that
-      //   point the per_pool_omap=1 key will be set.
-      // - super: added per_pool_omap key, which indicates that *all* objects
-      //   are using the new prefix and key format
-      ondisk_format = 3;
-      KeyValueDB::Transaction t = db->get_transaction();
-      _prepare_ondisk_format_super(t);
-      int r = db->submit_transaction_sync(t);
-      ceph_assert(r == 0);
-    }
-    if (ondisk_format == 3) {
-      // changes:
-      // - FreelistManager keeps meta within bdev label
-      int r = _write_out_fm_meta(0);
-      ceph_assert(r == 0);
-
-      ondisk_format = 4;
+    } else {
+      if (ondisk_format == 2) {
+        // changes:
+        // - onode has FLAG_PER_POOL_OMAP.  Note that we do not know that *all*
+        //   ondes are using the per-pool prefix until a repair is run; at that
+        //   point the per_pool_omap=1 key will be set.
+        // - super: added per_pool_omap key, which indicates that *all* objects
+        //   are using the new prefix and key format
+        ondisk_format = 3;
+      }
+      if (ondisk_format == 3) {
+        // changes:
+        // - FreelistManager keeps meta within bdev label
+        int r = _write_out_fm_meta(0);
+        ceph_assert(r == 0);
+        ondisk_format = 4;
+      }
+      {
+        // this to be the last operation
+        KeyValueDB::Transaction t = db->get_transaction();
+        _prepare_ondisk_format_super(t);
+        int r = db->submit_transaction_sync(t);
+        ceph_assert(r == 0);
+      }
     }
   }
   // done
