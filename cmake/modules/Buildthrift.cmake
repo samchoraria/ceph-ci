@@ -9,9 +9,10 @@ function(build_thrift)
 			 -DBUILD_TESTING=OFF
 			 -DBUILD_TUTORIALS=OFF
 			 -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/external
+			 -DCMAKE_INSTALL_RPATH=${CMAKE_BINARY_DIR}/external/lib
 			 -DCMAKE_INSTALL_LIBDIR=${CMAKE_BINARY_DIR}/external/lib)
 
-  if(EXISTS "/opt/ceph/include/boost/")
+  if(EXISTS "/opt/ceph/include/boost/" OR Boost_FOUND)
     message(STATUS "thrift will be using system boost")
     set(dependencies "")
     list(APPEND thrift_CMAKE_ARGS -DBOOST_ROOT=/opt/ceph)
