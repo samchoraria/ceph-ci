@@ -10,6 +10,7 @@ function(build_thrift)
 			 -DBUILD_TUTORIALS=OFF
 			 -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/external
 			 -DCMAKE_INSTALL_RPATH=${CMAKE_BINARY_DIR}/external/lib
+			 -DCMAKE_INSTALL_RPATH_USE_LINK_PATH=TRUE
 			 -DCMAKE_INSTALL_LIBDIR=${CMAKE_BINARY_DIR}/external/lib)
 
   if(EXISTS "/opt/ceph/include/boost/" OR Boost_FOUND)

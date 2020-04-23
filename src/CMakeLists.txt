@@ -262,7 +262,6 @@ endif(WITH_BLKIN)
 
 if(WITH_JAEGER)
   include(IncludeJaeger)
-  set($ENV{JAEGER_LIBS} ${CMAKE_BINARY_DIR}/external/lib)
 endif()
 
 # Common infrastructure

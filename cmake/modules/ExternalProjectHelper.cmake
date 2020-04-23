@@ -1,6 +1,7 @@
 function (set_library_properties_for_external_project _target _lib)
   set(_libfullname "${CMAKE_SHARED_LIBRARY_PREFIX}${_lib}${CMAKE_SHARED_LIBRARY_SUFFIX}")
-  set(_libpath "${CMAKE_BINARY_DIR}/external/lib")
+  set(_external_dir "${CMAKE_BINARY_DIR}/external/")
+  set(_libpath "${CMAKE_BINARY_DIR}/external/lib/${_libfullname}")
   set(_includepath "${CMAKE_BINARY_DIR}/external/include")
   message(STATUS "Configuring ${_target} with ${_libpath}")
 
@@ -13,5 +14,6 @@ function (set_library_properties_for_external_project _target _lib)
     IMPORTED_LINK_INTERFACE_LANGUAGES "CXX"
     IMPORTED_LOCATION "${_libpath}"
     INTERFACE_INCLUDE_DIRECTORIES "${_includepath}"
-    INSTALL_RPATH "${CMAKE_BINARY_DIR}/external/lib")
+    INSTALL_RPATH_USE_LINK_PATH TRUE
+    INSTALL_RPATH "${_external_dir}")
 endfunction ()

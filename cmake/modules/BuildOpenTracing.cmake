@@ -7,7 +7,8 @@ function(build_opentracing)
 			      -DBUILD_MOCKTRACER=OFF
 		              -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/external
 			      -DCMAKE_INSTALL_LIBDIR=${CMAKE_BINARY_DIR}/external/lib
-			      -DCMAKE_INSTALL_RPATH=${CMAKE_BINARY_DIR}/external/lib
+			      -DCMAKE_INSTALL_RPATH=${CMAKE_BINARY_DIR}/external
+			      -DCMAKE_INSTALL_RPATH_USE_LINK_PATH=TRUE
 			      -DCMAKE_PREFIX_PATH=${CMAKE_BINARY_DIR}/external)
 
   if(CMAKE_MAKE_PROGRAM MATCHES "make")
