@@ -456,7 +456,7 @@ class TestVolumes(CephFSTestCase):
         self.assertEqual(usedsize, susedsize)
 
         # shrink the subvolume
-        nsize = usedsize/2
+        nsize = usedsize//2
         try:
             self._fs_cmd("subvolume", "resize", self.volname, subvolname, str(nsize))
         except CommandFailedError:
