@@ -1,5 +1,5 @@
 import unittest
-from tests import mock
+import mock
 from ..health import *
 
 class HealthChecksTest(unittest.TestCase):

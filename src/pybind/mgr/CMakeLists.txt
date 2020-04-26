@@ -1,6 +1,7 @@
 if(WITH_MGR_DASHBOARD_FRONTEND)
   add_subdirectory(dashboard)
 endif()
+add_subdirectory(insights)
 if(WITH_MGR_ROOK_CLIENT)
   add_subdirectory(rook)
 endif()
