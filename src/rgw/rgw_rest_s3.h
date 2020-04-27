@@ -893,6 +893,7 @@ private:
   std::string m_row_delimiter;
   std::string m_compression_type;
   std::string m_escape_char;
+  char * m_buff_header;
 
 public:
   unsigned int chunk_number;

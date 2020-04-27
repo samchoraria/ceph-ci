@@ -5882,7 +5882,7 @@ using namespace s3selectEngine;
 const char *RGWSelectObj_ObjStore_S3::header_name_str[3] = {":event-type", ":content-type", ":message-type"};
 const char *RGWSelectObj_ObjStore_S3::header_value_str[3] = {"Records", "application/octet-stream", "event"};
 
-RGWSelectObj_ObjStore_S3::RGWSelectObj_ObjStore_S3():s3select_syntax(new s3select()),m_previous_line(false),m_s3_csv_object(0),chunk_number(0),m_processed_bytes(0)
+RGWSelectObj_ObjStore_S3::RGWSelectObj_ObjStore_S3():s3select_syntax(new s3select()),m_previous_line(false),m_s3_csv_object(0),m_buff_header(static_cast<char*>(malloc(1000))),chunk_number(0),m_processed_bytes(0)
 {
   set_get_data(true);
 }
@@ -5893,18 +5893,21 @@ RGWSelectObj_ObjStore_S3::~RGWSelectObj_ObjStore_S3()
     delete m_s3_csv_object;
 
   delete s3select_syntax;
+
+  if(m_buff_header)
+    delete m_buff_header;
 }
 
 void RGWSelectObj_ObjStore_S3::encode_short(char & buff, short s , int & i)
 {
-        short x = htons(s);
-        memcpy(&buff,&x,sizeof(s));i+=sizeof(s);
+  short x = htons(s);
+  memcpy(&buff,&x,sizeof(s));i+=sizeof(s);
 }
 
 void RGWSelectObj_ObjStore_S3::encode_int(char & buff, u_int32_t s , int & i)
 {
-        u_int32_t x = htonl(s);
-        memcpy(&buff,&x,sizeof(s));i+=sizeof(s);
+  u_int32_t x = htonl(s);
+  memcpy(&buff,&x,sizeof(s));i+=sizeof(s);
 }
 
 int RGWSelectObj_ObjStore_S3::creare_header_records(char *buff)
@@ -5975,20 +5978,27 @@ int RGWSelectObj_ObjStore_S3::run_s3select(const char*query,const char*input,siz
 {
   int status = 0;
   csv_object::csv_defintions csv;
-  
-  if(m_row_delimiter.size()) csv.row_delimiter = *m_row_delimiter.c_str();
-  if(m_column_delimiter.size()) csv.column_delimiter = *m_column_delimiter.c_str();
-  if(m_quot.size()) csv.quot_char = *m_quot.c_str();
-  if(m_escape_char.size()) csv.escape_char = *m_escape_char.c_str();
+
+  if (m_row_delimiter.size())
+    csv.row_delimiter = *m_row_delimiter.c_str();
+
+  if (m_column_delimiter.size())
+    csv.column_delimiter = *m_column_delimiter.c_str();
+
+  if (m_quot.size())
+    csv.quot_char = *m_quot.c_str();
+
+  if (m_escape_char.size())
+    csv.escape_char = *m_escape_char.c_str();
 
   m_result = "012345678901"; //12 positions for header-crc
-  char buff_header[1000];
+
   int header_size = 0;
   s3select_syntax->parse_query(query);
 
   if (m_s3_csv_object==0)
   {
-      m_s3_csv_object = new s3selectEngine::csv_object(s3select_syntax,csv);
+    m_s3_csv_object = new s3selectEngine::csv_object(s3select_syntax,csv);
   }
 
   if (s3select_syntax->get_error_description().empty() == false)
@@ -6001,9 +6011,9 @@ int RGWSelectObj_ObjStore_S3::run_s3select(const char*query,const char*input,siz
   }
   else
   {
-    header_size = creare_header_records(buff_header);
+    header_size = creare_header_records(m_buff_header);
 
-    m_result.append(buff_header,header_size); 
+    m_result.append(m_buff_header,header_size); 
 
     m_result.append(PAYLOAD_LINE);
 
@@ -6042,10 +6052,12 @@ void RGWSelectObj_ObjStore_S3::convert_escape_seq(std::string & esc)
 int RGWSelectObj_ObjStore_S3::extract_by_tag(std::string tag_name,std::string & result)
 {
   result = "";
-  size_t _qs = m_s3select_query.find("<" + tag_name + ">", 0) + tag_name.size()+2;
-  if(_qs == std::string::npos) return -1;
+  size_t _qs = m_s3select_query.find("<" + tag_name + ">", 0) + tag_name.size() + 2;
+  if (_qs == std::string::npos)
+    return -1;
   size_t _qe = m_s3select_query.find("</" + tag_name + ">", _qs);
-  if(_qe == std::string::npos) return -1;
+  if (_qe == std::string::npos)
+    return -1;
 
   result = m_s3select_query.substr(_qs, _qe - _qs);
 
@@ -6093,7 +6105,6 @@ int RGWSelectObj_ObjStore_S3::send_response_data(bufferlist &bl, off_t ofs, off_
   if (chunk_number == 0)
     end_header(s, this, "application/xml", CHUNKED_TRANSFER_ENCODING);
 
-#define LINE_DELIMITER '\n' //TODO should be dynamic
 #define GT "&gt;"
 #define LT "&lt;"
   if (m_s3select_query.find(GT) != std::string::npos)
@@ -6102,15 +6113,23 @@ int RGWSelectObj_ObjStore_S3::send_response_data(bufferlist &bl, off_t ofs, off_
     boost::replace_all(m_s3select_query, LT, "<");
 
   std::string query;
-  
-  //AWS cli s3select parameters
-  extract_by_tag("Expression",query);
-  extract_by_tag("FieldDelimiter",m_column_delimiter);convert_escape_seq(m_column_delimiter);
-  extract_by_tag("QuoteCharacter",m_quot);convert_escape_seq(m_quot);
-  extract_by_tag("RecordDelimiter",m_row_delimiter);convert_escape_seq(m_row_delimiter);
-  extract_by_tag("QuoteEscapeCharacter",m_escape_char);convert_escape_seq(m_escape_char);
-  extract_by_tag("CompressionType",m_compression_type);
 
+  //AWS cli s3select parameters
+  extract_by_tag("Expression", query);
+
+  extract_by_tag("FieldDelimiter", m_column_delimiter);
+  convert_escape_seq(m_column_delimiter);
+
+  extract_by_tag("QuoteCharacter", m_quot);
+  convert_escape_seq(m_quot);
+
+  extract_by_tag("RecordDelimiter", m_row_delimiter);
+  convert_escape_seq(m_row_delimiter);
+
+  extract_by_tag("QuoteEscapeCharacter", m_escape_char);
+  convert_escape_seq(m_escape_char);
+
+  extract_by_tag("CompressionType", m_compression_type);
 
   std::string tmp_buff;
   std::string merge_line;
@@ -6122,21 +6141,21 @@ int RGWSelectObj_ObjStore_S3::send_response_data(bufferlist &bl, off_t ofs, off_
   if (m_previous_line)
   { //if previous broken line exist , merge it to current chunk
     char *p_obj_chunk = (char *)bl.c_str();
-    while (*p_obj_chunk != LINE_DELIMITER)
+    while (*p_obj_chunk != *m_row_delimiter.data())
       p_obj_chunk++;
 
     tmp_buff.assign((char *)bl.c_str(), (char *)bl.c_str() + (p_obj_chunk - bl.c_str()));
-    merge_line = m_last_line + tmp_buff + LINE_DELIMITER;
+    merge_line = m_last_line + tmp_buff + m_row_delimiter;
     m_previous_line = false;
     skip_first_line = true;
 
     status = run_s3select(query.c_str(), merge_line.c_str(), strlen(merge_line.c_str()), false, false, false);
   }
 
-  if (bl.c_str()[len - 1] != LINE_DELIMITER)
+  if (bl.c_str()[len - 1] != *m_row_delimiter.data())
   { //in case of "broken" last line
     char *p_obj_chunk = &(bl.c_str()[len - 1]);
-    while (*p_obj_chunk != LINE_DELIMITER)
+    while (*p_obj_chunk != *m_row_delimiter.data())
       p_obj_chunk--; //scan until end-of previous line in chunk
 
     skip_last_bytes = (&(bl.c_str()[len - 1]) - p_obj_chunk);
