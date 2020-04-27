@@ -416,6 +416,7 @@ if(WITH_JAEGER)
   opentracing::libopentracing
   thrift::libthrift
   jaegertracing::libjaegertracing)
+  include_directories(SYSTEM "${CMAKE_BINARY_DIR}/external/include")
 endif()
 
 if(WIN32)
