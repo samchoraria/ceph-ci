@@ -888,6 +888,11 @@ private:
   std::string m_s3select_query;
   std::string m_result;
   csv_object *m_s3_csv_object;
+  std::string m_column_delimiter;
+  std::string m_quot;
+  std::string m_row_delimiter;
+  std::string m_compression_type;
+  std::string m_escape_char;
 
 public:
   unsigned int chunk_number;
@@ -927,7 +932,13 @@ private:
   int create_message(char *buff, u_int32_t result_len, u_int32_t header_len);
 
   int run_s3select(const char *query, const char *input, size_t input_length, bool skip_first_line, bool skip_last_line, bool to_aggregate);
+
+  int extract_by_tag(std::string tag_name,std::string & result);
+
+  void convert_escape_seq(std::string & esc);
+
 };
+
 }; // namespace s3selectEngine
 
 namespace rgw::auth::s3 {

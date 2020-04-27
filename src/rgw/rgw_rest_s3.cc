@@ -5974,7 +5974,13 @@ int RGWSelectObj_ObjStore_S3::create_message(char * buff , u_int32_t result_len,
 int RGWSelectObj_ObjStore_S3::run_s3select(const char*query,const char*input,size_t input_length,bool skip_first_line,bool skip_last_line,bool to_aggregate)
 {
   int status = 0;
+  csv_object::csv_defintions csv;
   
+  if(m_row_delimiter.size()) csv.row_delimiter = *m_row_delimiter.c_str();
+  if(m_column_delimiter.size()) csv.column_delimiter = *m_column_delimiter.c_str();
+  if(m_quot.size()) csv.quot_char = *m_quot.c_str();
+  if(m_escape_char.size()) csv.escape_char = *m_escape_char.c_str();
+
   m_result = "012345678901"; //12 positions for header-crc
   char buff_header[1000];
   int header_size = 0;
@@ -5982,7 +5988,7 @@ int RGWSelectObj_ObjStore_S3::run_s3select(const char*query,const char*input,siz
 
   if (m_s3_csv_object==0)
   {
-      m_s3_csv_object = new s3selectEngine::csv_object(s3select_syntax);
+      m_s3_csv_object = new s3selectEngine::csv_object(s3select_syntax,csv);
   }
 
   if (s3select_syntax->get_error_description().empty() == false)
@@ -6021,6 +6027,29 @@ int RGWSelectObj_ObjStore_S3::run_s3select(const char*query,const char*input,siz
   rgw_flush_formatter_and_reset(s, s->formatter);
 
   return status;
+}
+
+void RGWSelectObj_ObjStore_S3::convert_escape_seq(std::string & esc)
+{
+  if (esc.compare("\n") == 0)
+    esc = '\n';
+  else if (esc.compare("\t") == 0)
+    esc = '\t';
+  else if (esc.compare("\r") == 0)
+    esc = '\r';
+}
+
+int RGWSelectObj_ObjStore_S3::extract_by_tag(std::string tag_name,std::string & result)
+{
+  result = "";
+  size_t _qs = m_s3select_query.find("<" + tag_name + ">", 0) + tag_name.size()+2;
+  if(_qs == std::string::npos) return -1;
+  size_t _qe = m_s3select_query.find("</" + tag_name + ">", _qs);
+  if(_qe == std::string::npos) return -1;
+
+  result = m_s3select_query.substr(_qs, _qe - _qs);
+
+  return 0;
 }
 
 int RGWSelectObj_ObjStore_S3::send_response_data(bufferlist &bl, off_t ofs, off_t len)
@@ -6072,10 +6101,16 @@ int RGWSelectObj_ObjStore_S3::send_response_data(bufferlist &bl, off_t ofs, off_
   if (m_s3select_query.find(LT) != std::string::npos)
     boost::replace_all(m_s3select_query, LT, "<");
 
-  size_t _qs = m_s3select_query.find("<Expression>", 0) + strlen("<Expression>");
-  size_t _qe = m_s3select_query.find("</Expression>", _qs);
+  std::string query;
+  
+  //AWS cli s3select parameters
+  extract_by_tag("Expression",query);
+  extract_by_tag("FieldDelimiter",m_column_delimiter);convert_escape_seq(m_column_delimiter);
+  extract_by_tag("QuoteCharacter",m_quot);convert_escape_seq(m_quot);
+  extract_by_tag("RecordDelimiter",m_row_delimiter);convert_escape_seq(m_row_delimiter);
+  extract_by_tag("QuoteEscapeCharacter",m_escape_char);convert_escape_seq(m_escape_char);
+  extract_by_tag("CompressionType",m_compression_type);
 
-  std::string query = m_s3select_query.substr(_qs, _qe - _qs);
 
   std::string tmp_buff;
   std::string merge_line;
