@@ -288,6 +288,7 @@ else
         echo "Using apt-get to install dependencies"
         $SUDO apt-get install -y devscripts equivs
         $SUDO apt-get install -y dpkg-dev
+        $SUDO apt-get install -y nlohmann-json-dev nlohmann-json3-dev
         case "$VERSION" in
             *Bionic*)
                 ensure_decent_gcc_on_ubuntu 9 bionic
@@ -296,7 +297,11 @@ else
             *Disco*)
                 [ ! $NO_BOOST_PKGS ] && apt-get install -y libboost1.67-all-dev
                 ;;
+            *Focal*)
+                [ ! $NO_BOOST_PKGS ] && apt-get install -y libboost1.71-all-dev
+                ;;
             *)
+
                 $SUDO apt-get install -y gcc
                 ;;
         esac

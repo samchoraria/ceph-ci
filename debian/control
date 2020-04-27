@@ -72,7 +72,6 @@ Build-Depends:
 # Make-Check   libxmlsec1-openssl,
 # Make-Check   libxmlsec1-dev,
                lsb-release,
-	        nlohmann-json-dev,
                parted,
                patch,
                pkg-config,
