@@ -6125,6 +6125,8 @@ int RGWSelectObj_ObjStore_S3::send_response_data(bufferlist &bl, off_t ofs, off_
 
   extract_by_tag("RecordDelimiter", m_row_delimiter);
   convert_escape_seq(m_row_delimiter);
+  if (m_row_delimiter.size()==0) 
+    m_row_delimiter='\n';
 
   extract_by_tag("QuoteEscapeCharacter", m_escape_char);
   convert_escape_seq(m_escape_char);
