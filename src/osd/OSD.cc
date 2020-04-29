@@ -6531,6 +6531,15 @@ void OSD::_collect_metadata(map<string,string> *pm)
   (*pm)["default_device_class"] = store->get_default_device_class();
   store->collect_metadata(pm);
 
+  string osdspec_affinity;
+  int r = store->read_meta("osdspec_affinity", &osdspec_affinity);
+  if (r < 0 || osdspec_affinity.empty()) {
+    (*pm)["osdspec_affinity"] = "";
+  }
+  else {
+    (*pm)["osdspec_affinity"] = osdspec_affinity;
+  }
+
   collect_sys_info(pm, cct);
 
   (*pm)["front_iface"] = pick_iface(
