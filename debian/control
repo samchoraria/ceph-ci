@@ -51,6 +51,7 @@ Build-Depends:
                libleveldb-dev,
                liblttng-ust-dev,
                liblz4-dev (>= 0.0~r131),
+               libboost-dev,
                libncurses-dev,
                libnss3-dev,
                liboath-dev,
