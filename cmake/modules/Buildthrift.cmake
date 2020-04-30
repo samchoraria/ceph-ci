@@ -36,7 +36,7 @@ function(build_thrift)
 
   include(ExternalProject)
   ExternalProject_Add(thrift
-    URL http://archive.apache.org/dist/thrift/0.11.0/thrift-0.11.0.tar.gz
+    URL https://downloads.apache.org/thrift/0.11.0/thrift-0.11.0.tar.gz
     URL_HASH SHA1=bdf159ef455c6d3c71e95dba15a6d05f6aaca2a9
     INSTALL_DIR "${CMAKE_BINARY_DIR}/external"
     DOWNLOAD_DIR ${thrift_DOWNLOAD_DIR}
