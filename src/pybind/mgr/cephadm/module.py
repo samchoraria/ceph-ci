@@ -2079,7 +2079,8 @@ class CephadmOrchestrator(orchestrator.Orchestrator, MgrModule):
             'format': 'json'
         })
         if ret != 0:
-            raise OrchestratorError(f"Caught error on calling 'osd metadata {osd_id}' -> {err}")
+            self.log.warning(f"Caught error on calling 'osd metadata {osd_id}' -> {err}")
+            return ''
         try:
             metadata = json.loads(out)
         except json.decoder.JSONDecodeError:
