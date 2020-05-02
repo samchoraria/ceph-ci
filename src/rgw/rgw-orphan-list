@@ -76,8 +76,8 @@ if [ "${PIPESTATUS[0]}" -gt 1 ] ;then
     error_out "ceph-diff-sorted"
 fi
 
-found="$(wc -l <$delta_out)"
-possible="$(wc -l <$rados_out)"
+found="$(wc -l < $delta_out)"
+possible="$(wc -l < $rados_out)"
 percentage=$(expr 100 \* $found / $possible)
 
 echo "$found potential orphans found out of a possible $possible (${percentage}%)."
