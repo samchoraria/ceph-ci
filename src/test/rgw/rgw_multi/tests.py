@@ -433,7 +433,8 @@ def disable_bucket_sync(zone, bucket_name):
 def check_buckets_sync_status_obj_not_exist(zone, buckets):
     for _ in range(config.checkpoint_retries):
         cmd = ['log', 'list'] + zone.zone_arg()
-        log_list, ret = zone.cluster.admin(cmd, check_retcode=False, read_only=True)
+        s, ret = zone.cluster.admin(cmd, check_retcode=False, read_only=True)
+        log_list = s.decode('utf-8')
         for bucket in buckets:
             if log_list.find(':'+bucket+":") >= 0:
                 break
