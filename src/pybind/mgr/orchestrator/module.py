@@ -727,11 +727,11 @@ Usage:
 
     @_cli_write_command(
         'orch daemon add iscsi',
-        'name=pool,type=CephString '
+        'name=pool,type=CephString,req=false '
         'name=trusted_ip_list,type=CephString,req=false '
         'name=placement,type=CephString,req=false',
         'Start iscsi daemon(s)')
-    def _iscsi_add(self, pool, trusted_ip_list=None, placement=None, inbuf=None):
+    def _iscsi_add(self, pool=None, trusted_ip_list=None, placement=None, inbuf=None):
         usage = """
         Usage:
           ceph orch daemon add iscsi -i <json_file>
@@ -743,13 +743,15 @@ Usage:
             except ValueError as e:
                 msg = 'Failed to read JSON input: {}'.format(str(e)) + usage
                 return HandleCommandResult(-errno.EINVAL, stderr=msg)
-        else:
+        elif pool:
             iscsi_spec = IscsiServiceSpec(
                 service_id='iscsi',
                 pool=pool,
                 trusted_ip_list=trusted_ip_list,
                 placement=PlacementSpec.from_string(placement),
             )
+        else:
+            return HandleCommandResult(-errno.EINVAL, stderr=usage)
 
         completion = self.add_iscsi(iscsi_spec)
         self._orchestrator_wait([completion])
