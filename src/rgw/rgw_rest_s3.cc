@@ -6003,8 +6003,14 @@ int RGWSelectObj_ObjStore_S3::run_s3select(const char*query,const char*input,siz
 
   if (s3select_syntax->get_error_description().empty() == false)
   {
+    header_size = creare_header_records(m_buff_header);
+
+    m_result.append(m_buff_header,header_size); 
+
     m_result.append(PAYLOAD_LINE);
+    
     m_result.append(s3select_syntax->get_error_description());
+
     ldout(s->cct, 10) << "s3-select query: failed to prase query; {" << s3select_syntax->get_error_description() << "}"<< dendl;
 
     status = -1;
@@ -6132,6 +6138,12 @@ int RGWSelectObj_ObjStore_S3::send_response_data(bufferlist &bl, off_t ofs, off_
   convert_escape_seq(m_escape_char);
 
   extract_by_tag("CompressionType", m_compression_type);
+
+  if (m_compression_type.length()>0 && m_compression_type.compare("NONE") != 0)
+  {
+      ldout(s->cct, 10) << "RGW supports currently only NONE option for compression type" << dendl;
+      return -1;
+  }
 
   std::string tmp_buff;
   std::string merge_line;

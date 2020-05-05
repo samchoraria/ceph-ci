@@ -336,7 +336,7 @@ struct _fn_to_timestamp : public base_function
         std::vector<base_statement *>::iterator iter = args->begin();
         int args_size = args->size();
 
-        if (args_size < 1)
+        if (args_size != 1)
             throw base_s3select_exception("to_timestamp should have one parameter");
 
         base_statement *str = *iter;
