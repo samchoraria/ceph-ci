@@ -32,8 +32,8 @@ The following table describes the support for s3-select functionalities:
 | Aggregation Function            | count           | select count(*) from stdin where (int(1)+int(_3))>int(_5);            |
 +---------------------------------+-----------------+-----------------------------------------------------------------------+
 | Timestamp Functions             | extract         | select count(*) from stdin where                                      |
-|                                 |                 |       extract("year",timestamp(_2)) > 1950                            |    
-|                                 |                 |            and extract("year",timestamp(_1)) < 1960;                  |
+|                                 |                 | extract("year",timestamp(_2)) > 1950                                  |    
+|                                 |                 | and extract("year",timestamp(_1)) < 1960;                             |
 +---------------------------------+-----------------+-----------------------------------------------------------------------+
 | Timestamp Functions             | dateadd         | select count(0) from stdin where                                      |
 |                                 |                 | datediff("year",timestamp(_1),dateadd("day",366,timestamp(_1))) == 1; |  
@@ -41,13 +41,14 @@ The following table describes the support for s3-select functionalities:
 | Timestamp Functions             | datediff        | select count(0) from stdin where                                      |  
 |                                 |                 | datediff("month",timestamp(_1),timestamp(_2))) == 2;                  | 
 +---------------------------------+-----------------+-----------------------------------------------------------------------+
-| Timestamp Functions             | utcnow          | select count(0) from  stdin where                                     |
-|                                 |                 |    datediff("hours",utcnow(),dateadd("day",1,utcnow())) == 24 ;       |
+| Timestamp Functions             | utcnow          | select count(0) from stdin where                                      |
+|                                 |                 | datediff("hours",utcnow(),dateadd("day",1,utcnow())) == 24 ;          |
 +---------------------------------+-----------------+-----------------------------------------------------------------------+
-| String Functions                | substr          |  select count(0) from  stdin where                                    |
-|                                 |                 |    int(substr(_1,1,4))>1950 and int(substr(_1,1,4))<1960;             |
+| String Functions                | substr          | select count(0) from stdin where                                      |
+|                                 |                 | int(substr(_1,1,4))>1950 and int(substr(_1,1,4))<1960;                |
 +---------------------------------+-----------------+-----------------------------------------------------------------------+
-|                                 |                 |                                                                       |
+| alias support                   |                 |  select int(_1) as a1, int(_2) as a2 , (a1+a2) as a3                  | 
+|                                 |                 |  from stdin where a3>100 and a3<300;                                  |
 +---------------------------------+-----------------+-----------------------------------------------------------------------+
 
 Sending Query to RGW
@@ -69,5 +70,26 @@ CSV default defintion for field-delimiter,row-delimiter,quote-char,escape-char a
   --key {OBJECT-NAME} 
   --expression "select count(0) from stdin where int(_1)<10;" output.csv
 
+CSV parsing behavior
+====================
 
++---------------------------------+-----------------+-----------------------------------------------------------------------+
+| Feature                         | Description     | input ==> tokens                                                      |
++=================================+=================+=======================================================================+
+|     NULL                        | successive      | ,,1,,2,    ==> {null}{null}{1}{null}{2}{null}                         |
+|                                 | field delimiter |                                                                       |
++---------------------------------+-----------------+-----------------------------------------------------------------------+
+|     QUOTE                       | quote character | 11,22,"a,b,c,d",last ==> {11}{22}{"a,b,c,d"}{last}                    |
+|                                 | overrides       |                                                                       |
+|                                 | field delimiter |                                                                       |
++---------------------------------+-----------------+-----------------------------------------------------------------------+
+|     Escape                      | escape char     | 11,22,str=\\"abcd\\"\\,str2=\\"123\\",last                            |
+|                                 | overrides       | ==> {11}{22}{str="abcd",str2="123"}{last}                             |
+|                                 | meta-character. |                                                                       |
+|                                 | escape removed  |                                                                       |
++---------------------------------+-----------------+-----------------------------------------------------------------------+
+|     row delimiter               | no close quote, | 11,22,a="str,44,55,66                                                 |
+|                                 | row delimiter is| ==> {11}{22}{a="str,44,55,66}                                         |
+|                                 | closing line    |                                                                       |
++---------------------------------+-----------------+-----------------------------------------------------------------------+
 
