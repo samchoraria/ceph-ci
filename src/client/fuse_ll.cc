@@ -34,6 +34,7 @@
 #include "common/config.h"
 #include "include/ceph_assert.h"
 #include "include/cephfs/ceph_statx.h"
+#include "include/ceph_fuse.h"
 
 #include "fuse_ll.h"
 #include <fuse.h>
