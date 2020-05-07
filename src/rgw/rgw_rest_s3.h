@@ -894,6 +894,7 @@ private:
   std::string m_compression_type;
   std::string m_escape_char;
   char * m_buff_header;
+  std::string m_header_info;
 
 public:
   unsigned int chunk_number;

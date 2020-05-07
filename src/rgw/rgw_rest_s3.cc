@@ -5979,18 +5979,6 @@ int RGWSelectObj_ObjStore_S3::run_s3select(const char*query,const char*input,siz
   int status = 0;
   csv_object::csv_defintions csv;
 
-  if (m_row_delimiter.size())
-    csv.row_delimiter = *m_row_delimiter.c_str();
-
-  if (m_column_delimiter.size())
-    csv.column_delimiter = *m_column_delimiter.c_str();
-
-  if (m_quot.size())
-    csv.quot_char = *m_quot.c_str();
-
-  if (m_escape_char.size())
-    csv.escape_char = *m_escape_char.c_str();
-
   m_result = "012345678901"; //12 positions for header-crc
 
   int header_size = 0;
@@ -5998,6 +5986,27 @@ int RGWSelectObj_ObjStore_S3::run_s3select(const char*query,const char*input,siz
 
   if (m_s3_csv_object==0)
   {
+    if (m_row_delimiter.size())
+      csv.row_delimiter = *m_row_delimiter.c_str();
+
+    if (m_column_delimiter.size())
+      csv.column_delimiter = *m_column_delimiter.c_str();
+
+    if (m_quot.size())
+      csv.quot_char = *m_quot.c_str();
+
+    if (m_escape_char.size())
+      csv.escape_char = *m_escape_char.c_str();
+
+    if(m_header_info.compare("IGNORE")==0)
+    {
+      csv.ignore_header_info=true;
+    }
+    else if(m_header_info.compare("USE")==0)
+    {
+      csv.use_header_info=true;
+    } 
+    
     m_s3_csv_object = new s3selectEngine::csv_object(s3select_syntax,csv);
   }
 
@@ -6144,6 +6153,8 @@ int RGWSelectObj_ObjStore_S3::send_response_data(bufferlist &bl, off_t ofs, off_
       ldout(s->cct, 10) << "RGW supports currently only NONE option for compression type" << dendl;
       return -1;
   }
+
+  extract_by_tag("FileHeaderInfo",m_header_info);
 
   std::string tmp_buff;
   std::string merge_line;
