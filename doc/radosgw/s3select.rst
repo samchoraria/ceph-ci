@@ -65,7 +65,7 @@ CSV default defintion for field-delimiter,row-delimiter,quote-char,escape-char a
   --bucket {BUCKET-NAME}  
   --expression-type 'SQL'     
   --input-serialization 
-  '{"CSV": {"FieldDelimiter": "," , "QuoteCharacter": "\"" , "RecordDelimiter" : "\n" , "QuoteEscapeCharacter" : "\\" }, "CompressionType": "NONE"}' 
+  '{"CSV": {"FieldDelimiter": "," , "QuoteCharacter": "\"" , "RecordDelimiter" : "\n" , "QuoteEscapeCharacter" : "\\" , "FileHeaderInfo": "USE" }, "CompressionType": "NONE"}' 
   --output-serialization '{"CSV": {}}' 
   --key {OBJECT-NAME} 
   --expression "select count(0) from stdin where int(_1)<10;" output.csv
@@ -91,5 +91,8 @@ CSV parsing behavior
 |     row delimiter               | no close quote, | 11,22,a="str,44,55,66                                                 |
 |                                 | row delimiter is| ==> {11}{22}{a="str,44,55,66}                                         |
 |                                 | closing line    |                                                                       |
++---------------------------------+-----------------+-----------------------------------------------------------------------+
+|     csv header info             | FileHeaderInfo  | for "USE" value, each token on first line is column-name              |
+|                                 | tag             | "IGNORE" value, means to skip the first line                          |
 +---------------------------------+-----------------+-----------------------------------------------------------------------+
 
