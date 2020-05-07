@@ -247,7 +247,6 @@ BuildRequires:  lksctp-tools-devel
 BuildRequires:  protobuf-devel
 BuildRequires:  ragel
 BuildRequires:  systemtap-sdt-devel
-#BuildRequires:  yaml-cpp-devel 
 %if 0%{?fedora}
 BuildRequires:  fmt-devel
 BuildRequires:  libubsan

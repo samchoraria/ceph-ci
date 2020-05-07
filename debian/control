@@ -64,7 +64,6 @@ Build-Depends:
                libudev-dev,
                libnl-genl-3-dev,
                libxml2-dev,
-	        libyaml-cpp-dev,
                librabbitmq-dev,
                librdkafka-dev,
 # Make-Check   libxmlsec1,

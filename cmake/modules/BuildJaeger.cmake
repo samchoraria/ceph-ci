@@ -25,7 +25,8 @@ function(build_jaeger)
 			-DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/external
 			-Dyaml-cpp_HOME=${CMAKE_BINARY_DIR}/external
 			-DTHRIFT_HOME=${CMAKE_BINARY_DIR}/external
-			-DOpenTracing_HOME=${CMAKE_BINARY_DIR}/external
+      -DOpenTracing_HOME=${CMAKE_BINARY_DIR}/external
+      -DCMAKE_LIBRARY_PATH=${CMAKE_BINARY_DIR}/external
 			-DCMAKE_FIND_ROOT_PATH=${CMAKE_BINARY_DIR}/external
 			-DCMAKE_INSTALL_LIBDIR=${CMAKE_BINARY_DIR}/external/lib)
 
