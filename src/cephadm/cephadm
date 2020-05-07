@@ -2884,6 +2884,7 @@ def command_ceph_volume():
     c = CephContainer(
         image=args.image,
         entrypoint='/usr/sbin/ceph-volume',
+        envs=args.env,
         args=args.command,
         privileged=True,
         volume_mounts=mounts,
@@ -4189,6 +4190,11 @@ def _get_parser():
         type=int,
         default=DEFAULT_RETRY,
         help='max number of retries')
+    parser.add_argument(
+        '--env', '-e',
+        action='append',
+        default=[],
+        help='set environment variable')
 
     subparsers = parser.add_subparsers(help='sub-command')
 
@@ -4318,11 +4324,6 @@ def _get_parser():
     parser_shell.add_argument(
         '--mount', '-m',
         help='file or directory path that will be mounted in container /mnt')
-    parser_shell.add_argument(
-        '--env', '-e',
-        action='append',
-        default=[],
-        help='set environment variable')
     parser_shell.add_argument(
         'command', nargs='*',
         help='command (optional)')

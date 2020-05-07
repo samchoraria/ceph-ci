@@ -1520,10 +1520,13 @@ class CephadmOrchestrator(orchestrator.Orchestrator, MgrModule):
                      stdin=None,
                      no_fsid=False,
                      error_ok=False,
-                     image=None):
-        # type: (str, Optional[str], str, List[str], Optional[str], Optional[str], bool, bool, Optional[str]) -> Tuple[List[str], List[str], int]
+                     image=None,
+                     env_vars=None):
+        # type: (str, Optional[str], str, List[str], Optional[str], Optional[str], bool, bool, Optional[str], Optional[List[str]]) -> Tuple[List[str], List[str], int]
         """
         Run cephadm on the remote host with the given command + args
+
+        :env_vars: in format -> [KEY=VALUE, ..]
         """
         if not addr and host in self.inventory:
             addr = self.inventory.get_addr(host)
@@ -1555,6 +1558,11 @@ class CephadmOrchestrator(orchestrator.Orchestrator, MgrModule):
             self.log.debug('%s container image %s' % (entity, image))
 
             final_args = []
+
+            if env_vars:
+                for env_var_pair in env_vars:
+                    final_args.extend(['--env', env_var_pair])
+
             if image:
                 final_args.extend(['--image', image])
             final_args.append(command)
@@ -2101,8 +2109,12 @@ class CephadmOrchestrator(orchestrator.Orchestrator, MgrModule):
             if not cmd:
                 self.log.debug("No data_devices, skipping DriveGroup: {}".format(drive_group.service_id))
                 continue
+            env_vars = []
+            if drive_group.service_id is not None:
+                env_vars = [f"CEPH_VOLUME_OSDSPEC_AFFINITY={drive_group.service_id}"]
             ret_msg = self._create_osd(host, cmd,
-                                       replace_osd_ids=drive_group.osd_id_claims.get(host, []))
+                                       replace_osd_ids=drive_group.osd_id_claims.get(host, []), env_vars=env_vars)
+
             ret.append(ret_msg)
         return ", ".join(ret)
 
@@ -2167,7 +2179,8 @@ class CephadmOrchestrator(orchestrator.Orchestrator, MgrModule):
                     ret_all.append({'data': concat_out, 'drivegroup': drive_group.service_id, 'host': host})
         return ret_all
 
-    def _run_ceph_volume_command(self, host: str, cmd: str) -> Tuple[List[str], List[str], int]:
+    def _run_ceph_volume_command(self, host: str, cmd: str,
+                                 env_vars: Optional[List[str]] = None) -> Tuple[List[str], List[str], int]:
         self.inventory.assert_host(host)
 
         # get bootstrap key
@@ -2192,12 +2205,13 @@ class CephadmOrchestrator(orchestrator.Orchestrator, MgrModule):
         out, err, code = self._run_cephadm(
             host, 'osd', 'ceph-volume',
             _cmd,
+            env_vars=env_vars,
             stdin=j,
             error_ok=True)
         return out, err, code
 
-    def _create_osd(self, host, cmd, replace_osd_ids=None):
-        out, err, code = self._run_ceph_volume_command(host, cmd)
+    def _create_osd(self, host, cmd, replace_osd_ids=None, env_vars=None):
+        out, err, code = self._run_ceph_volume_command(host, cmd, env_vars=env_vars)
 
         if code == 1 and ', it is already prepared' in '\n'.join(err):
             # HACK: when we create against an existing LV, ceph-volume
