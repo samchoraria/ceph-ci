@@ -558,6 +558,8 @@ class CephFSMount(object):
             if "no such file or directory" not in stderr.getvalue().lower():
                 raise
 
+        self.cleanup_netns()
+
     def wait_until_mounted(self):
         raise NotImplementedError()
 
