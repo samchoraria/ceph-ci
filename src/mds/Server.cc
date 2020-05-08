@@ -511,6 +511,8 @@ void Server::handle_client_session(const cref_t<MClientSession> &m)
   if (fsid != FS_CLUSTER_ID_NONE && !session->fsid_capable(fsid, MAY_READ)) {
     dout(0) << " dropping message not allowed for this fsid: " << *m << dendl;
     auto reply = make_message<MClientSession>(CEPH_SESSION_REJECT);
+    reply->metadata["error_string"] = "client doesn't have caps for fsid " +
+      std::to_string(fsid);
     mds->send_message(reply, m->get_connection());
     return;
   }
