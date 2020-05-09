@@ -1,5 +1,4 @@
 from contextlib import contextmanager
-from io import BytesIO
 import json
 import logging
 import datetime
@@ -595,7 +594,7 @@ class CephFSMount(object):
             cwd = self.mountpoint
 
         return self.client_remote.run(args=args, stdin=stdin, wait=wait,
-                                      stdout=BytesIO(), stderr=BytesIO(),
+                                      stdout=StringIO(), stderr=StringIO(),
                                       cwd=cwd, check_status=check_status)
 
     def run_as_user(self, args, user, wait=True, stdin=None,
@@ -613,7 +612,7 @@ class CephFSMount(object):
             cwd = self.mountpoint
 
         return self.client_remote.run(args=args, wait=wait, stdin=stdin,
-                                      stdout=BytesIO(), stderr=BytesIO(),
+                                      stdout=StringIO(), stderr=StringIO(),
                                       check_status=check_status, cwd=cwd)
 
     def run_as_root(self, args, wait=True, stdin=None, check_status=True,
@@ -626,7 +625,7 @@ class CephFSMount(object):
             cwd = self.mountpoint
 
         return self.client_remote.run(args=args, wait=wait, stdin=stdin,
-                                      stdout=BytesIO(), stderr=BytesIO(),
+                                      stdout=StringIO(), stderr=StringIO(),
                                       check_status=check_status, cwd=cwd)
 
     def _verify(self, proc, retval=None, errmsg=None):
