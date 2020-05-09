@@ -28,6 +28,7 @@ class HomeTest(ControllerTestCase, FakeFsMixin):
         with mock.patch(cls.builtins_open, new=cls.f_open),\
                 mock.patch('os.listdir', new=cls.f_os.listdir):
             lang = LanguageMixin()
+            logger.debug("ASD lang: %s", lang.DEFAULT_LANGUAGE_PATH)
             cls.fs.create_file(
                 os.path.join(lang.DEFAULT_LANGUAGE_PATH, 'index.html'),
                 contents='<!doctype html><html lang="en"><body></body></html>')
@@ -53,7 +54,7 @@ class HomeTest(ControllerTestCase, FakeFsMixin):
     @mock.patch('os.stat', new=FakeFsMixin.f_os.stat)
     @mock.patch('os.listdir', new=FakeFsMixin.f_os.listdir)
     def test_home_en(self):
-        self._get('/', headers=[('Accept-Language', 'en')])
+        self._get('/', headers=[('Accept-Language', 'en-US')])
         self.assertStatus(200)
         logger.info(self.body)
         self.assertIn('<html lang="en">', self.body.decode('utf-8'))

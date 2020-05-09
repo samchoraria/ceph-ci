@@ -22,6 +22,9 @@ logger = logging.getLogger("controllers.home")
 
 class LanguageMixin(object):
     def __init__(self):
+        logger.debug("ASD get_frontend_path: %s", mgr.get_frontend_path())
+        logger.debug("ASD listdir: %s", os.listdir(mgr.get_frontend_path()))
+
         self.LANGUAGES = {
             f
             for f in os.listdir(mgr.get_frontend_path())
@@ -34,6 +37,7 @@ class LanguageMixin(object):
             }
             for f in self.LANGUAGES
         }
+        logger.debug("ASD LANGUAGES_PATH_MAP: %s", self.LANGUAGES_PATH_MAP)
         # pre-populating with the primary language subtag.
         for lang in list(self.LANGUAGES_PATH_MAP.keys()):
             if '-' in lang:
@@ -47,6 +51,7 @@ class LanguageMixin(object):
         self.DEFAULT_LANGUAGE = config['config']['locale']
         self.DEFAULT_LANGUAGE_PATH = os.path.join(mgr.get_frontend_path(),
                                                   self.DEFAULT_LANGUAGE)
+        logger.debug("ASD DEFAULT_LANGUAGE: %s", self.DEFAULT_LANGUAGE)
         super(LanguageMixin, self).__init__()
 
 
