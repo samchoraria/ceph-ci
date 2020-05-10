@@ -883,8 +883,6 @@ class RGWSelectObj_ObjStore_S3 : public RGWGetObj_ObjStore_S3
 
 private:
   s3select *s3select_syntax;
-  std::string m_last_line;
-  bool m_previous_line;
   std::string m_s3select_query;
   std::string m_result;
   csv_object *m_s3_csv_object;
@@ -898,7 +896,6 @@ private:
 
 public:
   unsigned int chunk_number;
-  u_int64_t m_processed_bytes;
 
   enum header_name_En
   {
@@ -933,12 +930,13 @@ private:
 
   int create_message(char *buff, u_int32_t result_len, u_int32_t header_len);
 
-  int run_s3select(const char *query, const char *input, size_t input_length, bool skip_first_line, bool skip_last_line, bool to_aggregate);
+  int run_s3select(const char *query, const char *input, size_t input_length);
 
   int extract_by_tag(std::string tag_name,std::string & result);
 
   void convert_escape_seq(std::string & esc);
 
+  int handle_aws_cli_parameters(std::string &sql_query);
 };
 
 }; // namespace s3selectEngine

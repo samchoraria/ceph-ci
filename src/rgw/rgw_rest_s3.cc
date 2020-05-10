@@ -5882,7 +5882,11 @@ using namespace s3selectEngine;
 const char *RGWSelectObj_ObjStore_S3::header_name_str[3] = {":event-type", ":content-type", ":message-type"};
 const char *RGWSelectObj_ObjStore_S3::header_value_str[3] = {"Records", "application/octet-stream", "event"};
 
-RGWSelectObj_ObjStore_S3::RGWSelectObj_ObjStore_S3():s3select_syntax(new s3select()),m_previous_line(false),m_s3_csv_object(0),m_buff_header(static_cast<char*>(malloc(1000))),chunk_number(0),m_processed_bytes(0)
+RGWSelectObj_ObjStore_S3::RGWSelectObj_ObjStore_S3():
+s3select_syntax(new s3select()),
+m_s3_csv_object(0),
+m_buff_header(static_cast<char*>(malloc(1000))),
+chunk_number(0)
 {
   set_get_data(true);
 }
@@ -5974,7 +5978,7 @@ int RGWSelectObj_ObjStore_S3::create_message(char * buff , u_int32_t result_len,
 #define PAYLOAD_LINE "\n<Payload>\n<Records>\n<Payload>\n"
 #define END_PAYLOAD_LINE "\n</Payload></Records></Payload>"
 
-int RGWSelectObj_ObjStore_S3::run_s3select(const char*query,const char*input,size_t input_length,bool skip_first_line,bool skip_last_line,bool to_aggregate)
+int RGWSelectObj_ObjStore_S3::run_s3select(const char*query,const char*input,size_t input_length)
 {
   int status = 0;
   csv_object::csv_defintions csv;
@@ -6032,7 +6036,7 @@ int RGWSelectObj_ObjStore_S3::run_s3select(const char*query,const char*input,siz
 
     m_result.append(PAYLOAD_LINE);
 
-    status = m_s3_csv_object->run_s3select_on_object(m_result,input ,input_length ,skip_first_line ,skip_last_line ,to_aggregate);
+    status = m_s3_csv_object->run_s3select_on_stream(m_result,input,input_length,s->obj_size);
     if(status<0)
     {
       m_result.append(m_s3_csv_object->get_error_description());
@@ -6062,6 +6066,49 @@ void RGWSelectObj_ObjStore_S3::convert_escape_seq(std::string & esc)
     esc = '\t';
   else if (esc.compare("\r") == 0)
     esc = '\r';
+}
+
+int RGWSelectObj_ObjStore_S3::handle_aws_cli_parameters(std::string & sql_query)
+{
+
+  if(chunk_number !=0)
+    return 0;
+
+#define GT "&gt;"
+#define LT "&lt;"
+  if (m_s3select_query.find(GT) != std::string::npos)
+    boost::replace_all(m_s3select_query, GT, ">");
+  if (m_s3select_query.find(LT) != std::string::npos)
+    boost::replace_all(m_s3select_query, LT, "<");
+
+  //AWS cli s3select parameters
+  extract_by_tag("Expression", sql_query);
+
+  extract_by_tag("FieldDelimiter", m_column_delimiter);
+  convert_escape_seq(m_column_delimiter);
+
+  extract_by_tag("QuoteCharacter", m_quot);
+  convert_escape_seq(m_quot);
+
+  extract_by_tag("RecordDelimiter", m_row_delimiter);
+  convert_escape_seq(m_row_delimiter);
+  if (m_row_delimiter.size()==0) 
+    m_row_delimiter='\n';
+
+  extract_by_tag("QuoteEscapeCharacter", m_escape_char);
+  convert_escape_seq(m_escape_char);
+
+  extract_by_tag("CompressionType", m_compression_type);
+
+  if (m_compression_type.length()>0 && m_compression_type.compare("NONE") != 0)
+  {
+      ldout(s->cct, 10) << "RGW supports currently only NONE option for compression type" << dendl;
+      return -1;
+  }
+
+  extract_by_tag("FileHeaderInfo",m_header_info);
+
+  return 0;
 }
 
 int RGWSelectObj_ObjStore_S3::extract_by_tag(std::string tag_name,std::string & result)
@@ -6120,77 +6167,18 @@ int RGWSelectObj_ObjStore_S3::send_response_data(bufferlist &bl, off_t ofs, off_
   if (chunk_number == 0)
     end_header(s, this, "application/xml", CHUNKED_TRANSFER_ENCODING);
 
-#define GT "&gt;"
-#define LT "&lt;"
-  if (m_s3select_query.find(GT) != std::string::npos)
-    boost::replace_all(m_s3select_query, GT, ">");
-  if (m_s3select_query.find(LT) != std::string::npos)
-    boost::replace_all(m_s3select_query, LT, "<");
+  std::string sql_query;
+  handle_aws_cli_parameters(sql_query);
 
-  std::string query;
-
-  //AWS cli s3select parameters
-  extract_by_tag("Expression", query);
-
-  extract_by_tag("FieldDelimiter", m_column_delimiter);
-  convert_escape_seq(m_column_delimiter);
-
-  extract_by_tag("QuoteCharacter", m_quot);
-  convert_escape_seq(m_quot);
-
-  extract_by_tag("RecordDelimiter", m_row_delimiter);
-  convert_escape_seq(m_row_delimiter);
-  if (m_row_delimiter.size()==0) 
-    m_row_delimiter='\n';
-
-  extract_by_tag("QuoteEscapeCharacter", m_escape_char);
-  convert_escape_seq(m_escape_char);
-
-  extract_by_tag("CompressionType", m_compression_type);
-
-  if (m_compression_type.length()>0 && m_compression_type.compare("NONE") != 0)
+  int status =0;
+  
+  for(auto & it : bl.buffers())
   {
-      ldout(s->cct, 10) << "RGW supports currently only NONE option for compression type" << dendl;
-      return -1;
+    status = run_s3select(sql_query.c_str(),(char*)&(it)[0],it.length());
+    if(status<0)
+      break;
   }
-
-  extract_by_tag("FileHeaderInfo",m_header_info);
-
-  std::string tmp_buff;
-  std::string merge_line;
-  u_int32_t skip_last_bytes = 0;
-  bool skip_first_line = false;
-  m_processed_bytes += len;
-  int status = 0;
-
-  if (m_previous_line)
-  { //if previous broken line exist , merge it to current chunk
-    char *p_obj_chunk = (char *)bl.c_str();
-    while (*p_obj_chunk != *m_row_delimiter.data())
-      p_obj_chunk++;
-
-    tmp_buff.assign((char *)bl.c_str(), (char *)bl.c_str() + (p_obj_chunk - bl.c_str()));
-    merge_line = m_last_line + tmp_buff + m_row_delimiter;
-    m_previous_line = false;
-    skip_first_line = true;
-
-    status = run_s3select(query.c_str(), merge_line.c_str(), strlen(merge_line.c_str()), false, false, false);
-  }
-
-  if (bl.c_str()[len - 1] != *m_row_delimiter.data())
-  { //in case of "broken" last line
-    char *p_obj_chunk = &(bl.c_str()[len - 1]);
-    while (*p_obj_chunk != *m_row_delimiter.data())
-      p_obj_chunk--; //scan until end-of previous line in chunk
-
-    skip_last_bytes = (&(bl.c_str()[len - 1]) - p_obj_chunk);
-    m_last_line.assign(p_obj_chunk + 1, p_obj_chunk + 1 + skip_last_bytes); //save it for next chunk
-
-    m_previous_line = true;
-  }
-
-  status = run_s3select(query.c_str(), bl.c_str(), len, skip_first_line, m_previous_line /*skip last line*/, (m_processed_bytes >= s->obj_size));
-
+  
   chunk_number++;
 
   return status;
