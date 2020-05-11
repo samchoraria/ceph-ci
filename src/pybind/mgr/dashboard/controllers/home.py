@@ -22,6 +22,9 @@ logger = logging.getLogger("controllers.home")
 
 class LanguageMixin(object):
     def __init__(self):
+        logger.debug("get_frontend_path: %s", mgr.get_frontend_path())
+        logger.debug("listdir: %s", os.listdir(mgr.get_frontend_path()))
+
         self.LANGUAGES = {
             f
             for f in os.listdir(mgr.get_frontend_path())
@@ -34,6 +37,7 @@ class LanguageMixin(object):
             }
             for f in self.LANGUAGES
         }
+        logger.debug("LANGUAGES_PATH_MAP: %s", self.LANGUAGES_PATH_MAP)
         # pre-populating with the primary language subtag.
         for lang in list(self.LANGUAGES_PATH_MAP.keys()):
             if '-' in lang:
