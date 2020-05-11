@@ -328,6 +328,7 @@ class FuseMount(CephFSMount):
         self.id = None
         self.inst = None
         self.addr = None
+        super(FuseMount, self).umount()
 
     def umount_wait(self, force=False, require_clean=False, timeout=900):
         """

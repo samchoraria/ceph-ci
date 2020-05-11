@@ -94,6 +94,7 @@ class KernelMount(CephFSMount):
         self.mounted = False
         self.cleanup_netns()
         self.cleanup()
+        super(KernelMount, self).umount()
 
     def umount_wait(self, force=False, require_clean=False, timeout=900):
         """

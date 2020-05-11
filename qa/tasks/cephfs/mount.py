@@ -72,7 +72,6 @@ class CephFSMount(object):
         if not isinstance(path, str):
             raise RuntimeError('path should be of str type.')
         self._mountpoint = path
-        self._parse_netns_name()
 
     @property
     def netns_name(self):
@@ -421,7 +420,7 @@ class CephFSMount(object):
         self.wait_until_mounted()
 
     def umount(self):
-        raise NotImplementedError()
+        self._mountpoint = None
 
     def umount_wait(self, force=False, require_clean=False):
         """
