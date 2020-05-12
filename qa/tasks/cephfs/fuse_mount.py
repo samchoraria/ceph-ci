@@ -260,6 +260,7 @@ class FuseMount(CephFSMount):
 
     def umount(self):
         if not self.is_mounted():
+            self.cleanup()
             return
 
         try:
@@ -328,6 +329,7 @@ class FuseMount(CephFSMount):
         self.id = None
         self.inst = None
         self.addr = None
+        self.cleanup()
 
     def umount_wait(self, force=False, require_clean=False, timeout=900):
         """
@@ -337,6 +339,7 @@ class FuseMount(CephFSMount):
             log.debug('ceph-fuse client.{id} is not mounted at {remote} {mnt}'.format(id=self.client_id,
                                                                                       remote=self.client_remote,
                                                                                       mnt=self.mountpoint))
+            self.cleanup()
             return
 
         if force:
@@ -365,7 +368,6 @@ class FuseMount(CephFSMount):
             if require_clean:
                 raise
 
-        self.cleanup_netns()
         self.mounted = False
         self.cleanup()
 
@@ -384,7 +386,6 @@ class FuseMount(CephFSMount):
             except CommandFailedError:
                 pass
 
-        self.cleanup_netns()
         self.mounted = False
 
         # Indiscriminate, unlike the touchier cleanup()

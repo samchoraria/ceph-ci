@@ -421,6 +421,8 @@ class CephFSMount(object):
             else:
                 raise
 
+        self.cleanup_netns()
+
     def wait_until_mounted(self):
         raise NotImplementedError()
 
