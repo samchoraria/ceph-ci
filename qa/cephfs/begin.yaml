@@ -13,7 +13,7 @@ tasks:
         - flex
         - libelf-dev
         - libssl-dev
-        - network-manager
+        - iptables
         - iproute2
         - util-linux
         # for xfstests-dev
@@ -29,7 +29,7 @@ tasks:
         - flex
         - elfutils-libelf-devel
         - openssl-devel
-        - NetworkManager
+        - iptables
         - iproute
         - util-linux
         # for xfstests-dev
