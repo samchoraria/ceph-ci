@@ -16,7 +16,7 @@
 #include <boost/algorithm/string/replace.hpp>
 #include <boost/utility/string_view.hpp>
 #include <boost/tokenizer.hpp>
-#include "s3select.h"
+#include <s3select/include/s3select.h>
 
 #include <liboath/oath.h>
 
@@ -5877,7 +5877,6 @@ bool rgw::auth::s3::S3AnonymousEngine::is_applicable(
 }
 
 
-#include "s3select.h"
 using namespace s3selectEngine;
 const char *RGWSelectObj_ObjStore_S3::header_name_str[3] = {":event-type", ":content-type", ":message-type"};
 const char *RGWSelectObj_ObjStore_S3::header_value_str[3] = {"Records", "application/octet-stream", "event"};
