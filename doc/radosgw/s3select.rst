@@ -29,50 +29,15 @@ Basic workflow
     | **RGWSelectObj_ObjStore_S3::send_response_data** is the “entry point”, it handles each fetched chunk according to input object-key.
     | **send_response_data** is first handling the input query, it extracts the query and other CLI parameters.
    
-    | Per each new fetched chunk (~4m), it runs the s3-select query on that chunk.    
+    | Per each new fetched chunk (~4m), RGW executes s3-select query on it.    
     | The current implementation supports CSV objects and since chunks are randomly “cutting” the CSV rows in the middle, those broken-lines (first or last per chunk) are skipped while processing the query.   
     | Those “broken” lines are stored and later merged with the next broken-line (belong to the next chunk), and finally processed.
    
-    | Per each processed chunk an output message is formatted according to AWS specification and sent back to the client.    
+    | Per each processed chunk an output message is formatted according to `AWS specification <https://docs.aws.amazon.com/AmazonS3/latest/API/archive-RESTObjectSELECTContent.html#archive-RESTObjectSELECTContent-responses>`_ and sent back to the client.
+    | RGW supports the following response: ``{:event-type,records} {:content-type,application/octet-stream} {:message-type,event}``.
     | For aggregation queries the last chunk should be identified as the end of input, following that the s3-select-engine initiates end-of-process and produces an aggregate result.  
 
-Design Concepts
----------------
-
-AST- Abstract Syntax Tree
-~~~~~~~~~~~~~~~~~~~~~~~~~
-    | The s3-select main flow is initiated with parsing of input-string (i.e user query), and follows 
-    | with building an AST (abstract-syntax-tree) as a result.  
-    | The execution phase is built upon the AST.
-    
-    | ``Base_statement`` is the base for the all object-nodes participating in the execution phase, it consists of the ``eval()`` method which returns the <value> object.
-    
-    | ``value`` object is handling the known basic-types such as int,string,float,time-stamp
-    | It is able to operate comparison and basic arithmetic operations on mentioned types.
-    
-    | The execution-flow is actually calling the ``eval()`` method on the root-node (per each projection), it goes all the way down, and returns the actual result (``value`` object) from bottom node to root node(all the way up) .
-
-    | **Alias** programming-construct is an essential part of s3-select language, it enables much better programming especially with objects containing many columns or in the case of complex queries.
-    
-    | Upon parsing the statement containing alias construct, it replaces alias with reference to the correct AST-node, on runtime the node is simply evaluated as any other node.
-
-    | There is a risk that self(or cyclic) reference may occur causing stack-overflow(endless-loop), for that concern upon evaluating an alias, it is validated for cyclic reference.
-    
-    | Alias also maintains result-cache, meaning upon using the same alias more than once, it’s not evaluating the same node again(it will return the same result),instead it uses the result from cache.
-
-    | Of Course, per each new row the cache is invalidated.
         
-
-S3 select parser definition
-~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    | The implementation of s3-select uses the `boost::spirit <https://www.boost.org/doc/libs/1_71_0/libs/spirit/classic/doc/grammar.html>`_ the definition of s3-select command is according to AWS.
-     
-    | Upon parsing is initiated on input text, and a specific rule is identified, an action which is bound to that rule is executed.
-    | Those actions are building the AST, each action is unique (as its rule), at the end of the process it forms a structure similar to a tree. 
-    
-    | As mentioned, running eval() on the root node, execute the s3-select statement (per projection).
-    | The input stream is accessible to the execution tree, by the scratch-area object, that object is constantly updated per each new row. 
-
 Basic functionalities
 ~~~~~~~~~~~~~~~~~~~~~
 
@@ -82,89 +47,14 @@ Basic functionalities
     | review the bellow feature-table_.
 
 
-
-Memory handling
-~~~~~~~~~~~~~~~
-
-    | S3select structures and objects are lockless and thread-safe, it uses placement-new in order to reduce the alloc/dealloc intensive cycles, which may impact the main process hosting s3-select.
-    
-    | Once AST is built there is no need to allocate memory for the execution itself, the AST is “static” for the query-execution life-cycle.
-    
-    | The execution itself is stream-oriented, meaning there is no pre-allocation before execution, object size has no impact on memory consumption.
-    
-    | It processes chunk after chunk, row after row, all memory needed for processing resides on AST. 
-    
-    | The AST is similar to stack behaviour in that it consumes already allocated memory and “releases” it upon completing its task.
-
-S3 Object different types
-~~~~~~~~~~~~~~~~~~~~~~~~~
-
-    | The processing of input stream is decoupled from s3-select-engine, meaning , each input-type should have its own parser, converting s3-object into columns.
-    
-    | Current implementation includes only CSV reader; its parsing definitions are according to AWS.
-    | The parser is implemented using `boost::state-machine <https://www.boost.org/doc/libs/1_64_0/libs/msm/doc/HTML/index.html>`_.
-    
-    | The CSV parser handles NULL,quote,escape rules,field delimiter,row delimiter and users may define (via AWS CLI) all of those dynamically.
-
 Error Handling
 ~~~~~~~~~~~~~~
-    | S3-select statement may be syntactically correct but semantically wrong, for one example ``select a * b from …`` , where a is number and b is a string.
-    | Current implementation is for CSV file types, CSV has no schema, column-types may evaluate on runtime.
-    | The above means that wrong semantic statements may occur on runtime.
-    
-    | As for syntax error ``select x frm stdin;`` , the builtin parser fails on first miss-match to language definition, and produces an error message back to client (AWS-CLI).
-    | The error message is point on location of miss-match.
-    
-    | Fatal severity (attached to the exception) will end execution immediately, other error severity are counted, upon reaching 100, it ends execution with an error message.
+
+    | Any error occurs while the input query processing, i.e. parsing phase or execution phase, is returned to client as response error message.
+
+    | Fatal severity (attached to the exception) will end query execution immediately, other error severity are counted, upon reaching 100, it ends query execution with an error message.
 
 
-AST illustration for s3-select statement
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-    | **select (payment*0.3),date from stdin where region=="east" and age<30;**
-
-
-.. ditaa::
-
-                                          +---------------------+ 
-                                          |       select        | 
-                                  +-------+---------------------+---------+
-                                  |                    |                  |
-                                  |                    |                  |      
-                                  |                    |                  |
-                                  |                    V                  |
-                                  |        +--------------------+         |
-                                  |        |      s3object      |         | 
-                                  |        +--------------------+         |
-                                  |                                       |
-                                  V                                       V
-                    +---------------------+                        +-------------+
-                    |    projections      |                        |    where    |
-                    +---------------------+                        +-------------+
-                      |                  |                                |                        
-                      |                  |                                |
-                      |                  |                                |
-                      |                  |                                |
-                      |                  |                                |
-                      |                  |                                |
-                      V                  V                                V
-               +-----------+      +-----------+                    +-------------+ 
-               |  multiply |      |    date   |                    |     and     |
-               +-----------+      +-----------+                    +-------------+
-                |         |                                          |         |  
-                |         |                                          |         |
-                |         |                                          |         |
-                |         |                                          |         |
-                V         V                                          V         V
-         +-------+    +-------+                                   +-----+   +-----+
-         |payment|    |  0.3  |                                   | EQ  |   | LT  |
-         +-------+    +-------+                                +--+-----+   +-----+--+
-                                                               |        |   |        |
-                                                               |        |   |        |
-                                                               V        V   V        V
-                                                          +-------+ +----+ +-----+ +-----+
-                                                          | region| |east| |age  | | 30  |
-                                                          +-------+ +----+ +-----+ +-----+
 
 
 
@@ -173,7 +63,8 @@ Features Support
 
 .. _feature-table:
 
-The following table describes the support for s3-select functionalities:
+  | Currently only part of `AWS select command <https://docs.aws.amazon.com/AmazonS3/latest/dev/s3-glacier-select-sql-reference-select.html>`_ is implemented, table bellow describes what is currently supported.
+  | The following table describes the current implementation for s3-select functionalities:
 
 +---------------------------------+-----------------+-----------------------------------------------------------------------+
 | Feature                         | Detailed        | Example                                                               |
@@ -188,7 +79,7 @@ The following table describes the support for s3-select functionalities:
 +---------------------------------+-----------------+-----------------------------------------------------------------------+
 | casting operator                | int(expression) | select int(_1),int( 1.2 + 3.4) from stdin;                            |
 +---------------------------------+-----------------+-----------------------------------------------------------------------+
-|                                 |float(expression)|                                                                       |
+|                                 |float(expression)| select float(1.2) from stdin;                                         |
 +---------------------------------+-----------------+-----------------------------------------------------------------------+
 |                                 | timestamp(...)  | select timestamp("1999:10:10-12:23:44") from stdin;                   |
 +---------------------------------+-----------------+-----------------------------------------------------------------------+
@@ -220,12 +111,65 @@ The following table describes the support for s3-select functionalities:
 |                                 |                 |  from stdin where a3>100 and a3<300;                                  |
 +---------------------------------+-----------------+-----------------------------------------------------------------------+
 
+s3-select function interfaces
+-----------------------------
+
+Timestamp functions
+~~~~~~~~~~~~~~~~~~~
+    | The `timestamp functionalities <https://docs.aws.amazon.com/AmazonS3/latest/dev/s3-glacier-select-sql-reference-date.html>`_ is partially implemented.
+    | the casting operator( ``timestamp( string )`` ), converts string to timestamp basic type.
+    | Currently it can convert the following pattern ``yyyy:mm:dd hh:mi:dd``
+
+    | ``extract( date-part , timestamp)`` : function return integer according to date-part extract from input timestamp.
+    | supported date-part : year,month,week,day.
+
+    | ``dateadd(date-part , integer,timestamp)`` : function return timestamp, a calculation results of input timestamp and date-part.
+    | supported data-part : year,month,day.
+
+    | ``datediff(date-part,timestamp,timestamp)`` : function return an integer, a calculated result for difference between 2 timestamps according to date-part.
+    | supported date-part : year,month,day,hours.  
+
+
+    | ``utcnow()`` : return timestamp of current time.
+
+Aggregation functions
+~~~~~~~~~~~~~~~~~~~~~
+
+    | ``count()`` : return integer according to number of rows matching condition(if such exist).
+
+    | ``sum(expression)`` : return a summary of expression per all rows matching condition(if such exist).
+
+    | ``max(expression)`` : return the maximal result for all expressions matching condition(if such exist).
+
+    | ``min(expression)`` : return the minimal result for all expressions matching condition(if such exist).
+
+String functions
+~~~~~~~~~~~~~~~~
+
+    | ``substr(string,from,to)`` : return a string extract from input string according to from,to inputs.
+
+
+Alias
+~~~~~
+    | **Alias** programming-construct is an essential part of s3-select language, it enables much better programming especially with objects containing many columns or in the case of complex queries.
+    
+    | Upon parsing the statement containing alias construct, it replaces alias with reference to correct projection column, on query execution time the reference is evaluated as any other expression.
+
+    | There is a risk that self(or cyclic) reference may occur causing stack-overflow(endless-loop), for that concern upon evaluating an alias, it is validated for cyclic reference.
+    
+    | Alias also maintains result-cache, meaning upon using the same alias more than once, it’s not evaluating the same expression again(it will return the same result),instead it uses the result from cache.
+
+    | Of Course, per each new row the cache is invalidated.
+
 Sending Query to RGW
 --------------------
 
-Syntax
-~~~~~~
-CSV default defintion for field-delimiter,row-delimiter,quote-char,escape-char are: { , \\n " \\ }
+   | Any http-client can send s3-select request to RGW, it must be compliant with `AWS Request syntax <https://docs.aws.amazon.com/AmazonS3/latest/API/API_SelectObjectContent.html#API_SelectObjectContent_RequestSyntax>`_.
+
+
+
+   | Sending s3-select request to RGW using AWS cli, should follow `AWS command reference <https://docs.aws.amazon.com/cli/latest/reference/s3api/select-object-content.html>`_.
+   | bellow is an example for it.
 
 ::
 
@@ -237,6 +181,22 @@ CSV default defintion for field-delimiter,row-delimiter,quote-char,escape-char a
   --output-serialization '{"CSV": {}}' 
   --key {OBJECT-NAME} 
   --expression "select count(0) from stdin where int(_1)<10;" output.csv
+
+Syntax
+~~~~~~
+
+    | **Input serialization** (Implemented), it let the user define the CSV definitions; the default values are {\\n} for row-delimiter {,} for field delimiter, {"} for quote, {\\} for escape characters.
+    | it handle the **csv-header-info**, the first row in input object containing the schema.
+    | **Output serialization** is currently not implemented, the same for **compression-type**.
+
+    | s3-select engine contain a CSV parser, which parse s3-objects as follows.   
+    | - each row ends with row-delimiter.
+    | - field-separator separates between adjacent columns, successive field separator define NULL column.
+    | - quote-character overrides field separator, meaning , field separator become as any character between quotes.
+    | - escape character disables any special characters, except for row delimiter.
+    
+    | Below are examples for CSV parsing rules.
+
 
 CSV parsing behavior
 --------------------
@@ -262,4 +222,47 @@ CSV parsing behavior
 +---------------------------------+-----------------+-----------------------------------------------------------------------+
 |     csv header info             | FileHeaderInfo  | "**USE**" value means each token on first line is column-name,        |
 |                                 | tag             | "**IGNORE**" value means to skip the first line                       |
-+---------------------------------+-----------------+-----------------------------------------------------------------------+ 
++---------------------------------+-----------------+-----------------------------------------------------------------------+       
+
+
+BOTO3
+-----
+
+ | using BOTO3 is "natural" and easy due to AWS-cli support. 
+
+::
+
+
+ def run_s3select(bucket,key,query,column_delim=",",row_delim="\n",quot_char='"',esc_char='\\',csv_header_info="NONE"):
+    s3 = boto3.client('s3',
+        endpoint_url=endpoint,
+        aws_access_key_id=access_key,
+        region_name=region_name,
+        aws_secret_access_key=secret_key)
+        
+
+
+    r = s3.select_object_content(
+        Bucket=bucket,
+        Key=key,
+        ExpressionType='SQL',
+        InputSerialization = {"CSV": {"RecordDelimiter" : row_delim, "FieldDelimiter" : column_delim,"QuoteEscapeCharacter": esc_char, "QuoteCharacter": quot_char, "FileHeaderInfo": csv_header_info}, "CompressionType": "NONE"},
+        OutputSerialization = {"CSV": {}},
+        Expression=query,)
+
+    result = ""
+    for event in r['Payload']:
+        if 'Records' in event:
+            records = event['Records']['Payload'].decode('utf-8')
+            result += records
+
+    return result
+
+
+
+
+  run_s3select(
+  "my_bucket",
+  "my_csv_object",
+  "select int(_1) as a1, int(_2) as a2 , (a1+a2) as a3 from stdin where a3>100 and a3<300;")
+
