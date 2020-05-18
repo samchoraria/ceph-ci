@@ -6,6 +6,7 @@
 #include "BitmapAllocator.h"
 #include "AvlAllocator.h"
 #include "HybridAllocator.h"
+#include "ZonedAllocator.h"
 #include "common/debug.h"
 #include "common/admin_socket.h"
 #define dout_subsys ceph_subsys_bluestore
@@ -125,6 +126,8 @@ Allocator *Allocator::create(CephContext* cct, string type,
     return new HybridAllocator(cct, size, block_size,
       cct->_conf.get_val<uint64_t>("bluestore_hybrid_alloc_mem_cap"),
       name);
+  } else if (type == "zoned") {
+    return new ZonedAllocator(cct, size, block_size, name);
   }
   if (alloc == nullptr) {
     lderr(cct) << "Allocator::" << __func__ << " unknown alloc type "
