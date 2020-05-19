@@ -74,8 +74,9 @@ class Module(MgrModule):
         except CephfsConnectionException as e:
             return e.to_tuple()
         if not scheds:
-            return errno.ENOENT, '', f'SnapSchedule for {path} not found'
-        return 0, '\n'.join([str(sched) for sched in scheds]), ''
+            return -errno.ENOENT, '', f'SnapSchedule for {path} not found'
+        #return 0, '\n'.join([str(sched) for sched in scheds]), ''
+        return 0, json.dumps([(sched.schedule, sched.retention) for sched in scheds]), ''
 
     @CLIWriteCommand('fs snap-schedule add',
                      'name=path,type=CephString '
