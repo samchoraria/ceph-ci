@@ -727,8 +727,12 @@ protected:
     return s->info.args.exists("legal-hold");
   }
 
+  bool is_select_op() const {
+    return s->info.args.exists("select-type");
+  }
+
   bool is_obj_update_op() const override {
-    return is_acl_op() || is_tagging_op() || is_obj_retention_op() || is_obj_legal_hold_op();
+    return is_acl_op() || is_tagging_op() || is_obj_retention_op() || is_obj_legal_hold_op() || is_select_op();
   }
   RGWOp *get_obj_op(bool get_data);
 
@@ -878,14 +882,16 @@ namespace s3selectEngine
 {
 class s3select;
 class csv_object;
+}
+
 class RGWSelectObj_ObjStore_S3 : public RGWGetObj_ObjStore_S3
 {
 
 private:
-  s3select *s3select_syntax;
+  s3selectEngine::s3select *s3select_syntax;
   std::string m_s3select_query;
   std::string m_result;
-  csv_object *m_s3_csv_object;
+  s3selectEngine::csv_object *m_s3_csv_object;
   std::string m_column_delimiter;
   std::string m_quot;
   std::string m_row_delimiter;
@@ -893,6 +899,7 @@ private:
   std::string m_escape_char;
   char * m_buff_header;
   std::string m_header_info;
+  std::string m_sql_query;
 
 public:
   unsigned int chunk_number;
@@ -918,12 +925,14 @@ public:
 
   virtual int send_response_data(bufferlist &bl, off_t ofs, off_t len) override;
 
+  virtual int get_params() override;
+
 private:
   void encode_short(char &buff, short s, int &i);
 
   void encode_int(char &buff, u_int32_t s, int &i);
 
-  int creare_header_records(char *buff);
+  int create_header_records(char *buff);
 
   // the parameters are according to CRC-32 algorithm and its aligned with AWS-cli checksum
   boost::crc_optimal<32, 0x04C11DB7, 0xFFFFFFFF, 0xFFFFFFFF, true, true> crc32;
@@ -939,7 +948,6 @@ private:
   int handle_aws_cli_parameters(std::string &sql_query);
 };
 
-}; // namespace s3selectEngine
 
 namespace rgw::auth::s3 {
 

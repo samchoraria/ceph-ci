@@ -4519,7 +4519,7 @@ RGWOp *RGWHandler_REST_Obj_S3::op_post()
     return new RGWInitMultipart_ObjStore_S3;
   
   if (s->info.args.exists("select-type"))
-    return new s3selectEngine::RGWSelectObj_ObjStore_S3;
+    return new RGWSelectObj_ObjStore_S3;
 
   return new RGWPostObj_ObjStore_S3;
 }
@@ -5901,19 +5901,57 @@ RGWSelectObj_ObjStore_S3::~RGWSelectObj_ObjStore_S3()
     delete m_buff_header;
 }
 
-void RGWSelectObj_ObjStore_S3::encode_short(char & buff, short s , int & i)
+int RGWSelectObj_ObjStore_S3::get_params()
+{
+
+  if (s->info.args.exists("select-type"))
+  {
+    //retrieve s3-select query from payload
+    bufferlist data;
+    int ret;
+    int max_size = 4096;
+    std::tie(ret, data) = rgw_rest_read_all_input(s, max_size, false);
+    if (ret != 0)
+    {
+      ldout(s->cct, 10) << "s3-select query: failed to retrieve query; ret = " << ret << dendl;
+      return ret;
+    }
+
+    m_s3select_query = data.to_str();
+    if (m_s3select_query.length() > 0)
+    {
+      ldout(s->cct, 10) << "s3-select query: " << m_s3select_query << dendl;
+    }
+    else
+    {
+      ldout(s->cct, 10) << "s3-select query: failed to retrieve query;" << dendl;
+      return -1;
+    }
+  }
+
+  int status = handle_aws_cli_parameters(m_sql_query);
+
+  if (status<0) 
+    return status;
+
+  return RGWGetObj_ObjStore_S3::get_params();
+}
+
+void RGWSelectObj_ObjStore_S3::encode_short(char &buff, short s, int &i)
 {
   short x = htons(s);
-  memcpy(&buff,&x,sizeof(s));i+=sizeof(s);
+  memcpy(&buff,&x,sizeof(s));
+  i+=sizeof(s);
 }
 
-void RGWSelectObj_ObjStore_S3::encode_int(char & buff, u_int32_t s , int & i)
+void RGWSelectObj_ObjStore_S3::encode_int(char &buff, u_int32_t s, int &i)
 {
   u_int32_t x = htonl(s);
-  memcpy(&buff,&x,sizeof(s));i+=sizeof(s);
+  memcpy(&buff,&x,sizeof(s));
+  i+=sizeof(s);
 }
 
-int RGWSelectObj_ObjStore_S3::creare_header_records(char *buff)
+int RGWSelectObj_ObjStore_S3::create_header_records(char *buff)
 {
   int i = 0;
 
@@ -5947,7 +5985,7 @@ int RGWSelectObj_ObjStore_S3::creare_header_records(char *buff)
   return i;
 }
 
-int RGWSelectObj_ObjStore_S3::create_message(char * buff , u_int32_t result_len,u_int32_t header_len)
+int RGWSelectObj_ObjStore_S3::create_message(char *buff, u_int32_t result_len, u_int32_t header_len)
 {
   u_int32_t total_byte_len = 0;
   u_int32_t preload_crc = 0;
@@ -5977,7 +6015,7 @@ int RGWSelectObj_ObjStore_S3::create_message(char * buff , u_int32_t result_len,
 #define PAYLOAD_LINE "\n<Payload>\n<Records>\n<Payload>\n"
 #define END_PAYLOAD_LINE "\n</Payload></Records></Payload>"
 
-int RGWSelectObj_ObjStore_S3::run_s3select(const char*query,const char*input,size_t input_length)
+int RGWSelectObj_ObjStore_S3::run_s3select(const char *query, const char *input, size_t input_length)
 {
   int status = 0;
   csv_object::csv_defintions csv;
@@ -5985,10 +6023,11 @@ int RGWSelectObj_ObjStore_S3::run_s3select(const char*query,const char*input,siz
   m_result = "012345678901"; //12 positions for header-crc
 
   int header_size = 0;
-  s3select_syntax->parse_query(query);
-
+  
   if (m_s3_csv_object==0)
   {
+    s3select_syntax->parse_query(query);
+
     if (m_row_delimiter.size())
       csv.row_delimiter = *m_row_delimiter.c_str();
 
@@ -6015,7 +6054,7 @@ int RGWSelectObj_ObjStore_S3::run_s3select(const char*query,const char*input,siz
 
   if (s3select_syntax->get_error_description().empty() == false)
   {
-    header_size = creare_header_records(m_buff_header);
+    header_size = create_header_records(m_buff_header);
 
     m_result.append(m_buff_header,header_size); 
 
@@ -6029,7 +6068,7 @@ int RGWSelectObj_ObjStore_S3::run_s3select(const char*query,const char*input,siz
   }
   else
   {
-    header_size = creare_header_records(m_buff_header);
+    header_size = create_header_records(m_buff_header);
 
     m_result.append(m_buff_header,header_size); 
 
@@ -6057,16 +6096,6 @@ int RGWSelectObj_ObjStore_S3::run_s3select(const char*query,const char*input,siz
   return status;
 }
 
-void RGWSelectObj_ObjStore_S3::convert_escape_seq(std::string & esc)
-{
-  if (esc.compare("\n") == 0)
-    esc = '\n';
-  else if (esc.compare("\t") == 0)
-    esc = '\t';
-  else if (esc.compare("\r") == 0)
-    esc = '\r';
-}
-
 int RGWSelectObj_ObjStore_S3::handle_aws_cli_parameters(std::string & sql_query)
 {
 
@@ -6084,18 +6113,14 @@ int RGWSelectObj_ObjStore_S3::handle_aws_cli_parameters(std::string & sql_query)
   extract_by_tag("Expression", sql_query);
 
   extract_by_tag("FieldDelimiter", m_column_delimiter);
-  convert_escape_seq(m_column_delimiter);
 
   extract_by_tag("QuoteCharacter", m_quot);
-  convert_escape_seq(m_quot);
 
   extract_by_tag("RecordDelimiter", m_row_delimiter);
-  convert_escape_seq(m_row_delimiter);
   if (m_row_delimiter.size()==0) 
     m_row_delimiter='\n';
 
   extract_by_tag("QuoteEscapeCharacter", m_escape_char);
-  convert_escape_seq(m_escape_char);
 
   extract_by_tag("CompressionType", m_compression_type);
 
@@ -6130,50 +6155,22 @@ int RGWSelectObj_ObjStore_S3::send_response_data(bufferlist &bl, off_t ofs, off_
   if (len == 0)
     return 0;
 
-  if (s->info.args.exists("select-type") && (chunk_number == 0))
-  {
-    //retrieve s3-select query from payload
-    bufferlist data;
-    int ret; 
-    int max_size = 4096;
-    std::tie(ret, data) = rgw_rest_read_all_input(s, max_size, false);
-    if (ret != 0)
-    {
-      ldout(s->cct, 10) << "s3-select query: failed to retrieve query; ret = " << ret << dendl;
-      return ret;
-    }
-
-    m_s3select_query = data.to_str();
-    if (m_s3select_query.length() > 0)
-    {
-      ldout(s->cct, 10) << "s3-select query: " << m_s3select_query << dendl;
-    }
-    else
-    {
-      ldout(s->cct, 10) << "s3-select query: failed to retrieve query;" << dendl;
-      return -1;
-    }
-  }
-
   if (chunk_number == 0)
   {
     if (op_ret < 0)
       set_req_state_err(s, op_ret);
     dump_errno(s);
   }
+
   // Explicitly use chunked transfer encoding so that we can stream the result
   // to the user without having to wait for the full length of it.
   if (chunk_number == 0)
     end_header(s, this, "application/xml", CHUNKED_TRANSFER_ENCODING);
 
-  std::string sql_query;
-  handle_aws_cli_parameters(sql_query);
-
-  int status =0;
-  
+  int status=0;
   for(auto & it : bl.buffers())
   {
-    status = run_s3select(sql_query.c_str(),(char*)&(it)[0],it.length());
+    status = run_s3select(m_sql_query.c_str(),(char*)&(it)[0],it.length());
     if(status<0)
       break;
   }
