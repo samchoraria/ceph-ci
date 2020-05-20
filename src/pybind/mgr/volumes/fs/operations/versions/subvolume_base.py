@@ -131,6 +131,12 @@ class SubvolumeBase(object):
             # pool layout changes.
             xattr_key = 'ceph.dir.layout.pool'
             xattr_val = get_ancestor_xattr(self.fs, path, "ceph.dir.layout.pool")
+            try:
+                data_pool = self.fs.getxattr(path, 'ceph.dir.layout.pool').decode('utf-8')
+                if data_pool:
+                    xattr_val = None
+            except cephfs.Error as e:
+                pass
         if xattr_key and xattr_val:
             try:
                 self.fs.setxattr(path, xattr_key, xattr_val.encode('utf-8'), 0)
