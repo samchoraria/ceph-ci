@@ -11545,6 +11545,7 @@ void MDCache::fragment_freeze_dirs(const std::vector<CDir*>& dirs)
     else
       any_non_subtree = true;
   }
+  ceph_assert(mds_kill_dirfrag_export_at != 1)
 
   if (any_subtree && any_non_subtree) {
     // either all dirfrags are subtree roots or all are not.
@@ -11997,6 +11998,7 @@ void MDCache::_fragment_stored(MDRequestRef& mdr)
     }
 
     mds->send_message_mds(notify, p.first);
+    ceph_assert(mds_kill_dirfrag_export_at != 2);
   }
 
   // journal commit
@@ -12018,6 +12020,8 @@ void MDCache::_fragment_stored(MDRequestRef& mdr)
     // unfreeze
     dir->unfreeze_dir();
   }
+
+  ceph_assert(mds_kill_dirfrag_export_at != 3);
 
   if (info.notify_ack_waiting.empty()) {
     fragment_drop_locks(info);
@@ -12119,6 +12123,7 @@ void MDCache::fragment_maybe_finish(const fragment_info_iterator& it)
   }
 
   fragments.erase(it);
+  ceph_assert(mds_kill_dirfrag_export_at != 5);
 }
 
 
@@ -12141,12 +12146,14 @@ void MDCache::handle_fragment_notify_ack(const cref_t<MMDSFragmentNotifyAck> &ac
   if (it->second.notify_ack_waiting.erase(from) &&
       it->second.notify_ack_waiting.empty()) {
     fragment_drop_locks(it->second);
+    ceph_assert(mds_kill_dirfrag_export_at != 4);
     fragment_maybe_finish(it);
   }
 }
 
 void MDCache::handle_fragment_notify(const cref_t<MMDSFragmentNotify> &notify)
 {
+  ceph_assert(mds_kill_dirfrag_import_at != 1)
   dout(10) << "handle_fragment_notify " << *notify << " from " << notify->get_source() << dendl;
   mds_rank_t from = mds_rank_t(notify->get_source().num());
 
@@ -12195,6 +12202,7 @@ void MDCache::handle_fragment_notify(const cref_t<MMDSFragmentNotify> &notify)
     auto ack = make_message<MMDSFragmentNotifyAck>(notify->get_base_dirfrag(),
 					     notify->get_bits(), notify->get_tid());
     mds->send_message_mds(ack, from);
+    ceph_assert(mds_kill_dirfrag_import_at != 2)
   }
 }
 
