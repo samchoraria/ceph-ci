@@ -100,7 +100,7 @@ endif(HAVE_LIBAIO)
 
 if(HAVE_LIBZBC)
   target_link_libraries(os ${ZBC_LIBRARIES})
-endif(HAVE_LIBZBC)
+endif()
 
 if(WITH_FUSE)
   target_link_libraries(os FUSE::FUSE)

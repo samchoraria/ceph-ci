@@ -132,7 +132,7 @@ public:
   }
   int get_devices(std::set<std::string> *ls) const final;
 
-  bool is_smr() final { return true; }
+  bool is_smr() const final { return true; }
 
   bool get_thin_utilization(uint64_t *total, uint64_t *avail) const final;
 

@@ -14,11 +14,11 @@
 #include <mutex>
 
 #include "Allocator.h"
+#include "common/ceph_mutex.h"
 #include "include/btree_map.h"
 #include "include/interval_set.h"
-#include "os/bluestore/bluestore_types.h"
 #include "include/mempool.h"
-#include "common/ceph_mutex.h"
+#include "os/bluestore/bluestore_types.h"
 
 class ZonedAllocator : public Allocator {
   CephContext* cct;

@@ -170,12 +170,12 @@ public:
   virtual bool is_rotational() { return rotational; }
 
   // HM-SMR-specific calls
-  virtual bool is_smr() { return false; }
-  virtual uint64_t get_zone_size() {
+  virtual bool is_smr() const { return false; }
+  virtual uint64_t get_zone_size() const {
     ceph_assert(is_smr());
     return zone_size;
   }
-  virtual uint64_t get_conventional_region_size() {
+  virtual uint64_t get_conventional_region_size() const {
     ceph_assert(is_smr());
     return conventional_region_size;
   }
