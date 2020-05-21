@@ -184,6 +184,7 @@ class AMQPReceiver(object):
                 remaining_retries -= 1
                 print('failed to connect to rabbitmq (remaining retries '
                     + str(remaining_retries) + '): ' + str(error))
+                time.sleep(1)
 
         if remaining_retries == 0:
             raise Exception('failed to connect to rabbitmq - no retries left')
