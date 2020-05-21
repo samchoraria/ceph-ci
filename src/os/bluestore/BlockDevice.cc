@@ -34,6 +34,9 @@
 
 #if defined(HAVE_LIBZBC)
 #include "HMSMRDevice.h"
+extern "C" {
+#include <libzbc/zbc.h>
+}
 #endif
 
 #include "common/debug.h"

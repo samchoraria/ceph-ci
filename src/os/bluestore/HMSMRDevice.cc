@@ -4,6 +4,7 @@
  * Ceph - scalable distributed file system
  *
  * Copyright (C) 2014 Red Hat
+ * Copyright (C) 2020 Abutalib Aghayev
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -23,6 +24,7 @@
 #include "include/intarith.h"
 #include "include/types.h"
 #include "include/compat.h"
+#include "include/scope_guard.h"
 #include "include/stringify.h"
 #include "common/blkdev.h"
 #include "common/errno.h"
@@ -34,6 +36,10 @@
 
 #include "global/global_context.h"
 #include "ceph_io_uring.h"
+
+extern "C" {
+#include <libzbc/zbc.h>
+}
 
 #define dout_context cct
 #define dout_subsys ceph_subsys_bdev
@@ -86,16 +92,20 @@ bool HMSMRDevice::set_smr_params(const std::string& path) {
   dout(10) << __func__ << " opening " << path << dendl;
 
   zbc_device *dev;
-  if (zbc_open(path.c_str(), O_RDWR | O_DIRECT, &dev) != 0)
+  if (zbc_open(path.c_str(), O_RDWR | O_DIRECT, &dev) != 0) {
     return false;
+  }
+  auto close_dev = make_scope_guard([dev] { zbc_close(dev); });
 
   unsigned int nr_zones = 0;
-  if (zbc_report_nr_zones(dev, 0, ZBC_RO_NOT_WP, &nr_zones) != 0)
+  if (zbc_report_nr_zones(dev, 0, ZBC_RO_NOT_WP, &nr_zones) != 0) {
     return false;
+  }
 
   std::vector<zbc_zone> zones(nr_zones);
-  if (zbc_report_zones(dev, 0, ZBC_RO_NOT_WP, zones.data(), &nr_zones) != 0)
+  if (zbc_report_zones(dev, 0, ZBC_RO_NOT_WP, zones.data(), &nr_zones) != 0) {
     return false;
+  }
 
   zone_size = 512 * zbc_zone_length(&zones[0]); // on HM-SMR zones are equisized
   conventional_region_size = nr_zones * zone_size;
@@ -104,7 +114,6 @@ bool HMSMRDevice::set_smr_params(const std::string& path) {
 	   << " and conventional region size to " << conventional_region_size
            << dendl;
 
-  zbc_close(dev);
   return true;
 }
 

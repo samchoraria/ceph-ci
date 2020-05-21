@@ -4,6 +4,7 @@
  * Ceph - scalable distributed file system
  *
  * Copyright (C) 2014 Red Hat
+ * Copyright (C) 2020 Abutalib Aghayev
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -28,14 +29,9 @@
 #include "ceph_aio.h"
 #include "BlockDevice.h"
 
-extern "C" {
-#include <libzbc/zbc.h>
-}
-
 #define RW_IO_MAX (INT_MAX & CEPH_PAGE_MASK)
 
-
-class HMSMRDevice : public BlockDevice {
+class HMSMRDevice final : public BlockDevice {
   std::vector<int> fd_directs, fd_buffereds;
   bool enable_wrt = true;
   std::string path;
@@ -87,7 +83,7 @@ class HMSMRDevice : public BlockDevice {
 
   void _aio_thread();
   void _discard_thread();
-  int queue_discard(interval_set<uint64_t> &to_release) override;
+  int queue_discard(interval_set<uint64_t> &to_release) final;
 
   int _aio_start();
   void _aio_stop();
@@ -122,45 +118,45 @@ public:
   HMSMRDevice(CephContext* cct, aio_callback_t cb, void *cbpriv,
               aio_callback_t d_cb, void *d_cbpriv);
 
-  void aio_submit(IOContext *ioc) override;
-  void discard_drain() override;
+  void aio_submit(IOContext *ioc) final;
+  void discard_drain() final;
 
   int collect_metadata(const std::string& prefix,
-                       map<std::string,std::string> *pm) const override;
-  int get_devname(std::string *s) const override {
+                       map<std::string,std::string> *pm) const final;
+  int get_devname(std::string *s) const final {
     if (devname.empty()) {
       return -ENOENT;
     }
     *s = devname;
     return 0;
   }
-  int get_devices(std::set<std::string> *ls) const override;
+  int get_devices(std::set<std::string> *ls) const final;
 
-  bool is_smr() override { return true; }
+  bool is_smr() final { return true; }
 
-  bool get_thin_utilization(uint64_t *total, uint64_t *avail) const override;
+  bool get_thin_utilization(uint64_t *total, uint64_t *avail) const final;
 
   int read(uint64_t off, uint64_t len, bufferlist *pbl,
 	   IOContext *ioc,
-	   bool buffered) override;
+	   bool buffered) final;
   int aio_read(uint64_t off, uint64_t len, bufferlist *pbl,
-	       IOContext *ioc) override;
+	       IOContext *ioc) final;
   int read_random(uint64_t off, uint64_t len, char *buf,
-                  bool buffered) override;
+                  bool buffered) final;
 
   int write(uint64_t off, bufferlist& bl, bool buffered,
-            int write_hint = WRITE_LIFE_NOT_SET) override;
+            int write_hint = WRITE_LIFE_NOT_SET) final;
   int aio_write(uint64_t off, bufferlist& bl,
 		IOContext *ioc,
 		bool buffered,
-		int write_hint = WRITE_LIFE_NOT_SET) override;
-  int flush() override;
-  int discard(uint64_t offset, uint64_t len) override;
+		int write_hint = WRITE_LIFE_NOT_SET) final;
+  int flush() final;
+  int discard(uint64_t offset, uint64_t len) final;
 
   // for managing buffered readers/writers
-  int invalidate_cache(uint64_t off, uint64_t len) override;
-  int open(const std::string& path) override;
-  void close() override;
+  int invalidate_cache(uint64_t off, uint64_t len) final;
+  int open(const std::string& path) final;
+  void close() final;
 };
 
 #endif
