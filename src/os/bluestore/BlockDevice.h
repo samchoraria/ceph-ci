@@ -159,7 +159,7 @@ public:
   virtual bool supported_bdev_label() { return true; }
   virtual bool is_rotational() { return rotational; }
 
-  virtual void aio_submit(IOContext *ioc) = 0;
+  virtual void aio_submit(IOContext *ioc, bool check_if_should_wait) = 0;
 
   void set_no_exclusive_lock() {
     lock_exclusive = false;
