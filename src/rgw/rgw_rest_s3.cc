@@ -4518,7 +4518,7 @@ RGWOp *RGWHandler_REST_Obj_S3::op_post()
   if (s->info.args.exists("uploads"))
     return new RGWInitMultipart_ObjStore_S3;
   
-  if (s->info.args.exists("select-type"))
+  if (is_select_op())
     return new RGWSelectObj_ObjStore_S3;
 
   return new RGWPostObj_ObjStore_S3;
@@ -5904,29 +5904,26 @@ RGWSelectObj_ObjStore_S3::~RGWSelectObj_ObjStore_S3()
 int RGWSelectObj_ObjStore_S3::get_params()
 {
 
-  if (s->info.args.exists("select-type"))
+  //retrieve s3-select query from payload
+  bufferlist data;
+  int ret;
+  int max_size = 4096;
+  std::tie(ret, data) = rgw_rest_read_all_input(s, max_size, false);
+  if (ret != 0)
   {
-    //retrieve s3-select query from payload
-    bufferlist data;
-    int ret;
-    int max_size = 4096;
-    std::tie(ret, data) = rgw_rest_read_all_input(s, max_size, false);
-    if (ret != 0)
-    {
-      ldout(s->cct, 10) << "s3-select query: failed to retrieve query; ret = " << ret << dendl;
-      return ret;
-    }
+    ldout(s->cct, 10) << "s3-select query: failed to retrieve query; ret = " << ret << dendl;
+    return ret;
+  }
 
-    m_s3select_query = data.to_str();
-    if (m_s3select_query.length() > 0)
-    {
-      ldout(s->cct, 10) << "s3-select query: " << m_s3select_query << dendl;
-    }
-    else
-    {
-      ldout(s->cct, 10) << "s3-select query: failed to retrieve query;" << dendl;
-      return -1;
-    }
+  m_s3select_query = data.to_str();
+  if (m_s3select_query.length() > 0)
+  {
+    ldout(s->cct, 10) << "s3-select query: " << m_s3select_query << dendl;
+  }
+  else
+  {
+    ldout(s->cct, 10) << "s3-select query: failed to retrieve query;" << dendl;
+    return -1;
   }
 
   int status = handle_aws_cli_parameters(m_sql_query);
