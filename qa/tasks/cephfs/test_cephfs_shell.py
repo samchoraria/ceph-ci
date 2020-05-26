@@ -38,13 +38,16 @@ class TestCephFSShell(CephFSTestCase):
                              opts=None, stdin=None):
         if mount_x is None:
             mount_x = self.mount_a
-
         if isinstance(cmd, list):
             cmd = " ".join(cmd)
+        if not shell_conf_path:
+            conf_contents = "[cephfs-shell]\ncolors = False\ndebug = True\n"
+            confpath = mount_x.run_shell(args=['mktemp']).stdout.getvalue().\
+                strip()
+            sudo_write_file(mount_x.client_remote, confpath, conf_contents)
+            shell_conf_path = confpath
 
-        args = ["cephfs-shell"]
-        if shell_conf_path:
-            args += ["-c", shell_conf_path]
+        args = ["cephfs-shell", "-c", shell_conf_path]
         if opts:
             args += opts
         args.extend(("--", cmd))
