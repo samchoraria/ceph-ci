@@ -314,3 +314,88 @@ class TestFragmentation(CephFSTestCase):
             lambda: _count_fragmented() > 0,
             timeout=30
         )
+
+class TestDirfragKillPoints(TestFragmentation, CephFSTestCase):
+    # Two active MDS
+    MDSS_REQUIRED = 4
+
+    init = False
+
+    def _setup_cluster(self):
+        # Set Multi-MDS cluster
+        self.fs.set_max_mds(2)
+
+        self.fs.wait_for_daemons()
+
+        all_daemons = self.fs.get_daemon_names()
+
+        return True
+
+    def _run_export_dir(self, importv, exportv):
+
+        status = self.fs.status()
+
+        rank_0 = self.fs.get_rank(status=status, rank = 0)
+        rank_1 = self.fs.get_rank(status=status, rank = 1)
+        rank_0_name = rank_0['name']
+        rank_1_name = rank_1['name']
+
+        killpoint = {}
+        killpoint[0] = ('export', exportv)
+        killpoint[1] = ('import', importv)
+
+        command = ["config", "set", "mds_kill_dirfrag_export_at", str(exportv)]
+        result = self.fs.rank_asok(command, rank=0, status=status)
+        assert(result["success"])
+
+        command = ["config", "set", "mds_kill_dirfrag_import_at", str(importv)]
+        result = self.fs.rank_asok(command, rank=1, status=status)
+        assert(result["success"])
+
+        try:
+            self.test_oversize()
+        except Exception as e:
+            log.error(e.__str__())
+
+        status2 = self.fs.status()
+
+        rank_0_new = self.fs.get_rank(status=status2, rank = 0)
+        rank_1_new = self.fs.get_rank(status=status2, rank = 1)
+        rank_0_new_name = rank_0_new['name']
+        rank_1_new_name = rank_1_new['name']
+
+        if status2.hadfailover_rank(self.fs.id, status, 0):
+            log.info("MDS %s crashed and active as MDS %s at type %s killpoint %d"
+                    %(rank_0_name, rank_0_new_name, killpoint[0][0], killpoint[0][1]))
+
+        if status2.hadfailover_rank(self.fs.id, status, 1):
+            log.info("MDS %s crashed and active as MDS %s at type %s killpoint %d"
+                    %(rank_1_name, rank_1_new_name, killpoint[1][0], killpoint[1][1]))
+
+        active_mds = self.fs.get_active_names()
+        if len(active_mds) != 2:
+            "One or more MDS did not come up"
+            return False
+
+        return True
+
+
+    def _run_export(self, importv, exportv):
+        if not(self._run_export_dir(importv, exportv)):
+            log.error("Error for killpoint %d:%d" %(importv, exportv))
+        else:
+            return True
+
+def make_test_killpoints(importv, exportv):
+    def test_export_killpoints(self):
+        self.init = False
+        self._setup_cluster()
+        assert(self._run_export(importv, exportv))
+        log.info("Test passed for killpoint (%d, %d)" %(importv, exportv))
+    return test_export_killpoints
+
+for import_killpoint in range(0, 3):
+    for export_killpoint in range(0, 6):
+        test_export_killpoints = make_test_killpoints(import_killpoint, export_killpoint)
+        setattr(TestKillPoints, "test_dirfrag_killpoints_%d_%d" % (import_killpoint, export_killpoint), test_export_killpoints)
+>>>>>>> f6e9cabfb0... Add testing of the dirfrag killpoints
