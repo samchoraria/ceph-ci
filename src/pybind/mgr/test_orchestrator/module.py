@@ -258,8 +258,10 @@ class TestOrchestrator(MgrModule, orchestrator.Orchestrator):
         def run(all_hosts):
             # type: (List[orchestrator.HostSpec]) -> None
             drive_group.validate()
-            if not drive_group.placement.filter_matching_hosts(lambda label=None, as_hostspec=None: all_hosts):
+            if not drive_group.placement.filter_matching_hosts(lambda label=None, as_hostspec=None:
+                                                               [h.hostname for h in all_hosts]):
                 raise orchestrator.OrchestratorValidationError('failed to match')
+
         return self.get_hosts().then(run).then(
             on_complete=orchestrator.ProgressReference(
                 message='create_osds',
