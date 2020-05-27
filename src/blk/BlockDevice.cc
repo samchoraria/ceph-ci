@@ -20,15 +20,15 @@
 #include "BlockDevice.h"
 
 #if defined(HAVE_LIBAIO) || defined(HAVE_POSIXAIO)
-#include "KernelDevice.h"
+#include "kernel/KernelDevice.h"
 #endif
 
 #if defined(HAVE_SPDK)
-#include "NVMEDevice.h"
+#include "spdk/NVMEDevice.h"
 #endif
 
 #if defined(HAVE_BLUESTORE_PMEM)
-#include "PMEMDevice.h"
+#include "pmem/PMEMDevice.h"
 #include "libpmem.h"
 #endif
 
