@@ -485,6 +485,12 @@ int RocksDBStore::load_rocksdb_options(bool create_if_missing, rocksdb::Options&
   if (cct->_conf.get_val<Option::size_t>("rocksdb_metadata_block_size") > 0)
     bbt_opts.metadata_block_size = cct->_conf.get_val<Option::size_t>("rocksdb_metadata_block_size");
 
+  // Set max_total_wal_size if unset
+  // This is only used if we have some non-default column families,
+  // But value rocksdb uses by default is way too large
+  if (opt.max_total_wal_size == 0) {
+    opt.max_total_wal_size = opt.write_buffer_size;
+  }
   opt.table_factory.reset(rocksdb::NewBlockBasedTableFactory(bbt_opts));
   dout(10) << __func__ << " block size " << cct->_conf->rocksdb_block_size
            << ", block_cache size " << byte_u_t(block_cache_size)
