@@ -2,6 +2,7 @@ import json
 import errno
 import logging
 import time
+from collections import defaultdict
 from threading import Event
 from functools import wraps
 
@@ -31,7 +32,7 @@ from orchestrator import OrchestratorError, OrchestratorValidationError, HostSpe
 from . import remotes
 from . import utils
 from .services.cephadmservice import MonService, MgrService, MdsService, RgwService, \
-    RbdMirrorService, CrashService
+    RbdMirrorService, CrashService, CephadmService
 from .services.iscsi import IscsiService
 from .services.nfs import NFSService
 from .services.osd import RemoveUtil, OSDRemoval, OSDService
@@ -315,6 +316,21 @@ class CephadmOrchestrator(orchestrator.Orchestrator, MgrModule):
         self.node_exporter_service = NodeExporterService(self)
         self.crash_service = CrashService(self)
         self.iscsi_service = IscsiService(self)
+        self.cephadm_services = {
+            'mon': self.mon_service,
+            'mgr': self.mgr_service,
+            'osd': self.osd_service,
+            'mds': self.mds_service,
+            'rgw': self.rgw_service,
+            'rbd-mirror': self.rbd_mirror_service,
+            'nfs': self.nfs_service,
+            'grafana': self.grafana_service,
+            'alertmanager': self.alertmanager_service,
+            'prometheus': self.prometheus_service,
+            'node-exporter': self.node_exporter_service,
+            'crash': self.crash_service,
+            'iscsi': self.iscsi_service,
+        }
 
     def shutdown(self):
         self.log.debug('shutdown')
@@ -322,6 +338,10 @@ class CephadmOrchestrator(orchestrator.Orchestrator, MgrModule):
         self._worker_pool.join()
         self.run = False
         self.event.set()
+
+    def _get_cephadm_service(self, service_type: str) -> CephadmService:
+        assert service_type in ServiceSpec.KNOWN_SERVICE_TYPES
+        return self.cephadm_services[service_type]
 
     def _kick_serve_loop(self):
         self.log.debug('_kick_serve_loop')
@@ -1794,8 +1814,7 @@ you may want to run:
             last_monmap = None   # just in case clocks are skewed
 
         daemons = self.cache.get_daemons()
-        grafanas = []  # type: List[orchestrator.DaemonDescription]
-        iscsi_daemons = []
+        daemons_post = defaultdict(list)
         for dd in daemons:
             # orphan?
             spec = self.spec_store.specs.get(dd.service_name(), None)
@@ -1809,12 +1828,10 @@ you may want to run:
             if spec and spec.unmanaged:
                 continue
 
-            # dependencies?
-            if dd.daemon_type == 'grafana':
-                # put running instances at the front of the list
-                grafanas.insert(0, dd)
-            elif dd.daemon_type == 'iscsi':
-                iscsi_daemons.append(dd)
+            # These daemon types require additional configs after creation
+            if dd.daemon_type in ['grafana', 'iscsi', 'prometheus', 'alertmanager']:
+                daemons_post[dd.daemon_type].append(dd)
+
             deps = self._calc_daemon_deps(dd.daemon_type, dd.daemon_id)
             last_deps, last_config = self.cache.get_daemon_last_config_deps(
                 dd.hostname, dd.name())
@@ -1840,10 +1857,9 @@ you may want to run:
                 self._create_daemon(dd.daemon_type, dd.daemon_id,
                                     dd.hostname, reconfig=True)
 
-        if grafanas:
-            self.grafana_service.daemon_check_post(grafanas)
-        if iscsi_daemons:
-            self.iscsi_service.daemon_check_post(iscsi_daemons)
+        # do daemon post actions
+        for daemon_type, daemon_descs in daemons_post.items():
+            self._get_cephadm_service(daemon_type).daemon_check_post(daemon_descs)
 
     def _add_daemon(self, daemon_type, spec,
                     create_func: Callable[..., T], config_func=None) -> List[T]:
