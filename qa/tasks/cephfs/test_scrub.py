@@ -2,6 +2,7 @@
 Test CephFS scrub (distinct from OSD scrub) functionality
 """
 import logging
+import time
 from collections import namedtuple
 
 from tasks.cephfs.cephfs_test_case import CephFSTestCase
@@ -75,6 +76,9 @@ class BacktraceWorkload(Workload):
         self._filesystem.mds_asok(["flush", "journal"])
         self._filesystem._write_data_xattr(st['st_ino'], "parent", "")
 
+    def create_files(self, nfiles=1000):
+        self._mount.create_n_files("scrub-new-files/file", nfiles)
+
 
 class DupInodeWorkload(Workload):
     """
@@ -143,6 +147,35 @@ class TestScrub(CephFSTestCase):
             raise AssertionError("Validation failed, first error: {0}\n{1}".format(
                 errors[0].exception, errors[0].backtrace
             ))
+
+    def _scrub_new_files(self, workload):
+        """
+        That scrubbing new files does not lead to errors
+        """
+        workload.create_files(1000)
+
+        out_json = self.fs.rank_tell(["scrub", "start", "/", "recursive"])
+        while True:
+            out_json = self.fs.rank_tell(["scrub", "status"])
+            if out_json['status'] == "no active scrubs running":
+                break;
+            time.sleep(10)
+
+        out_json = self.fs.rank_tell(["damage", "ls"])
+        self.assertNotEqual(out_json, None)
+
+        damage_count = 0;
+        for it in out_json:
+            if it['damage_type'] == "backtrace":
+                damage_count += 1;
+
+        if damage_count > 0:
+            log.error("{0} Scrub errors found for new files".format(damage_count))
+            raise AssertionError("damage count {0} is not zero".format(damage_count))
+
+
+    def test_scrub_backtrace_for_new_files(self):
+        self._scrub_new_files(BacktraceWorkload(self.fs, self.mount_a))
 
     def test_scrub_backtrace(self):
         self._scrub(BacktraceWorkload(self.fs, self.mount_a))
