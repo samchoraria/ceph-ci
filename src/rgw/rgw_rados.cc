@@ -44,6 +44,7 @@
 #include "rgw_coroutine.h"
 #include "rgw_compression.h"
 #include "rgw_worker.h"
+#include "rgw_notify.h"
 
 #undef fork // fails to compile RGWPeriod::fork() below
 
@@ -1072,6 +1073,8 @@ void RGWRados::finalize()
   }
   delete reshard;
   delete index_completion_manager;
+
+  rgw::notify::shutdown();
 }
 
 /** 
@@ -1302,6 +1305,13 @@ int RGWRados::init_complete()
 
   index_completion_manager = new RGWIndexCompletionManager(this);
   ret = index_completion_manager->start();
+  if (ret < 0) {
+    return ret;
+  }
+  ret = rgw::notify::init(cct, store);
+  if (ret < 0 ) {
+    ldout(cct, 1) << "ERROR: failed to initialize notification manager" << dendl;
+  }
 
   return ret;
 }
