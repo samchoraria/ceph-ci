@@ -592,9 +592,13 @@ int RGWRadosStore::create_bucket(RGWUser& u, const rgw_bucket& b,
       delete bucket;
       return ret;
     }
+  ldout(ctx(), 20) << "JP: " << jp << dendl;
 
+    ldpp_dout(this, 20) << "decode: entry_point_obj_ver" << dendl;
     JSONDecoder::decode_json("entry_point_object_ver", *pep_objv, &jp);
+    ldpp_dout(this, 20) << "decode: object_ver" << dendl;
     JSONDecoder::decode_json("object_ver", *pobjv, &jp);
+    ldpp_dout(this, 20) << "decode: bucket_info" << dendl;
     JSONDecoder::decode_json("bucket_info", master_info, &jp);
     ldpp_dout(this, 20) << "parsed: objv.tag=" << pobjv->tag << " objv.ver=" << pobjv->ver << dendl;
     //ldpp_dout(this, 20) << "got creation time: << " << master_info.creation_time << dendl;

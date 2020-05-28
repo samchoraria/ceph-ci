@@ -235,14 +235,18 @@ void JSONParser::handle_data(const char *s, int len)
 // parse a supplied JSON fragment
 bool JSONParser::parse(const char *buf_, int len)
 {
+  std::cout << "DFG 1 parse buf=" << buf_ << "\n";
   if (!buf_) {
     set_failure();
     return false;
   }
 
   string json_string(buf_, len);
+  std::cout << "DFG 2 parse string=" << json_string << "\n";
   success = read(json_string, data);
+  std::cout << "DFG 3 \n";
   if (success) {
+  std::cout << "DFG 4 \n";
     handle_value(data);
     if (data.type() != obj_type &&
         data.type() != array_type) {
