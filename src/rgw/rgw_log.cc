@@ -185,11 +185,9 @@ void rgw_log_usage_finalize()
 
 static void log_usage(struct req_state *s, const string& op_name)
 {
-  ldout(s->cct, 5) << "DANG 1" << dendl;
   if (s->system_request) /* don't log system user operations */
     return;
 
-  ldout(s->cct, 5) << "DANG 2" << dendl;
   if (!usage_logger)
     return;
 
@@ -197,24 +195,19 @@ static void log_usage(struct req_state *s, const string& op_name)
   rgw_user payer;
   string bucket_name;
 
-  ldout(s->cct, 5) << "DANG 3" << dendl;
   bucket_name = s->bucket_name;
 
   if (!bucket_name.empty()) {
-  ldout(s->cct, 5) << "DANG 4" << dendl;
   bucket_name = s->bucket_name;
     user = s->bucket_owner.get_id();
     if (!rgw::sal::RGWBucket::empty(s->bucket) &&
 	s->bucket->get_info().requester_pays) {
       payer = s->user->get_id();
-  ldout(s->cct, 5) << "DANG 5" << dendl;
     }
   } else {
-  ldout(s->cct, 5) << "DANG 6" << dendl;
       user = s->user->get_id();
   }
 
-  ldout(s->cct, 5) << "DANG 7" << dendl;
   bool error = s->err.is_err();
   if (error && s->err.http_ret == 404) {
     bucket_name = "-"; /* bucket not found, use the invalid '-' as bucket name */
@@ -242,9 +235,7 @@ static void log_usage(struct req_state *s, const string& op_name)
 
   utime_t ts = ceph_clock_now();
 
-  ldout(s->cct, 5) << "DANG 8" << dendl;
   usage_logger->insert(ts, entry);
-  ldout(s->cct, 5) << "DANG 9" << dendl;
 }
 
 void rgw_format_ops_log_entry(struct rgw_log_entry& entry, Formatter *formatter)
@@ -331,51 +322,38 @@ int rgw_log_op(RGWRados *store, RGWREST* const rest, struct req_state *s,
   struct rgw_log_entry entry;
   string bucket_id;
 
-  ldout(s->cct, 5) << "DFG 1" << dendl;
   if (s->enable_usage_log)
     log_usage(s, op_name);
 
-  ldout(s->cct, 5) << "DFG 2" << dendl;
   if (!s->enable_ops_log)
     return 0;
 
-  ldout(s->cct, 5) << "DFG 3" << dendl;
   if (s->bucket_name.empty()) {
     ldout(s->cct, 5) << "nothing to log for operation" << dendl;
     return -EINVAL;
   }
-  ldout(s->cct, 5) << "DFG 4" << dendl;
   if (s->err.ret == -ERR_NO_SUCH_BUCKET || rgw::sal::RGWBucket::empty(s->bucket)) {
-  ldout(s->cct, 5) << "DFG 5" << dendl;
     if (!s->cct->_conf->rgw_log_nonexistent_bucket) {
       ldout(s->cct, 5) << "bucket " << s->bucket_name << " doesn't exist, not logging" << dendl;
       return 0;
     }
-  ldout(s->cct, 5) << "DFG 6" << dendl;
     bucket_id = "";
   } else {
-  ldout(s->cct, 5) << "DFG 7" << dendl;
     bucket_id = s->bucket->get_bucket_id();
   }
-  ldout(s->cct, 5) << "DFG 8" << dendl;
   entry.bucket = rgw_make_bucket_entry_name(s->bucket_tenant, s->bucket_name);
 
-  ldout(s->cct, 5) << "DFG 9" << dendl;
   if (check_utf8(entry.bucket.c_str(), entry.bucket.size()) != 0) {
     ldout(s->cct, 5) << "not logging op on bucket with non-utf8 name" << dendl;
     return 0;
   }
 
-  ldout(s->cct, 5) << "DFG 10" << dendl;
   if (!rgw::sal::RGWObject::empty(s->object)) {
-  ldout(s->cct, 5) << "DFG 11" << dendl;
     entry.obj = s->object->get_key();
   } else {
-  ldout(s->cct, 5) << "DFG 12" << dendl;
     entry.obj = rgw_obj_key("-");
   }
 
-  ldout(s->cct, 5) << "DFG 13" << dendl;
   entry.obj_size = s->obj_size;
 
   if (s->cct->_conf->rgw_remote_addr_param.length())
@@ -383,7 +361,6 @@ int rgw_log_op(RGWRados *store, RGWREST* const rest, struct req_state *s,
 		  entry.remote_addr);
   else
     set_param_str(s, "REMOTE_ADDR", entry.remote_addr);
-  ldout(s->cct, 5) << "DFG 14" << dendl;
   set_param_str(s, "HTTP_USER_AGENT", entry.user_agent);
   // legacy apps are still using misspelling referer, such as curl -e option
   if (s->info.env->exists("HTTP_REFERRER"))
@@ -391,19 +368,16 @@ int rgw_log_op(RGWRados *store, RGWREST* const rest, struct req_state *s,
   else
     set_param_str(s, "HTTP_REFERER", entry.referrer);
 
-  ldout(s->cct, 5) << "DFG 15" << dendl;
   std::string uri;
   if (s->info.env->exists("REQUEST_METHOD")) {
     uri.append(s->info.env->get("REQUEST_METHOD"));
     uri.append(" ");
   }
 
-  ldout(s->cct, 5) << "DFG 16" << dendl;
   if (s->info.env->exists("REQUEST_URI")) {
     uri.append(s->info.env->get("REQUEST_URI"));
   }
 
-  ldout(s->cct, 5) << "DFG 17" << dendl;
   if (s->info.env->exists("QUERY_STRING")) {
     const char* qs = s->info.env->get("QUERY_STRING");
     if(qs && (*qs != '\0')) {
@@ -412,14 +386,12 @@ int rgw_log_op(RGWRados *store, RGWREST* const rest, struct req_state *s,
     }
   }
 
-  ldout(s->cct, 5) << "DFG 18" << dendl;
   if (s->info.env->exists("HTTP_VERSION")) {
     uri.append(" ");
     uri.append("HTTP/");
     uri.append(s->info.env->get("HTTP_VERSION"));
   }
 
-  ldout(s->cct, 5) << "DFG 19" << dendl;
   entry.uri = std::move(uri);
 
   entry.op = op_name;
@@ -429,7 +401,6 @@ int rgw_log_op(RGWRados *store, RGWREST* const rest, struct req_state *s,
     if (rest->log_x_headers()) {
       for (const auto& iter : s->info.env->get_map()) {
 	if (rest->log_x_header(iter.first)) {
-  ldout(s->cct, 5) << "DFG 20" << dendl;
 	  entry.x_headers.insert(
 	    rgw_log_entry::headers_map::value_type(iter.first, iter.second));
 	}
@@ -437,18 +408,14 @@ int rgw_log_op(RGWRados *store, RGWREST* const rest, struct req_state *s,
     }
   }
 
-  ldout(s->cct, 5) << "DFG 21" << dendl;
   entry.user = s->user->get_id().to_str();
   if (s->object_acl)
     entry.object_owner = s->object_acl->get_owner().get_id();
-  ldout(s->cct, 5) << "DFG 22" << dendl;
   entry.bucket_owner = s->bucket_owner.get_id();
 
-  ldout(s->cct, 5) << "DFG 23" << dendl;
   uint64_t bytes_sent = ACCOUNTING_IO(s)->get_bytes_sent();
   uint64_t bytes_received = ACCOUNTING_IO(s)->get_bytes_received();
 
-  ldout(s->cct, 5) << "DFG 24" << dendl;
   entry.time = s->time;
   entry.total_time = s->time_elapsed();
   entry.bytes_sent = bytes_sent;
@@ -460,7 +427,6 @@ int rgw_log_op(RGWRados *store, RGWREST* const rest, struct req_state *s,
   } else
     entry.http_status = "200"; // default
 
-  ldout(s->cct, 5) << "DFG 25" << dendl;
   entry.error_code = s->err.err_code;
   entry.bucket_id = bucket_id;
   entry.trans_id = s->trans_id;
@@ -468,7 +434,6 @@ int rgw_log_op(RGWRados *store, RGWREST* const rest, struct req_state *s,
   bufferlist bl;
   encode(entry, bl);
 
-  ldout(s->cct, 5) << "DFG 26" << dendl;
   struct tm bdt;
   time_t t = req_state::Clock::to_time_t(entry.time);
   if (s->cct->_conf->rgw_log_object_name_utc)
@@ -476,18 +441,14 @@ int rgw_log_op(RGWRados *store, RGWREST* const rest, struct req_state *s,
   else
     localtime_r(&t, &bdt);
 
-  ldout(s->cct, 5) << "DFG 27" << dendl;
   int ret = 0;
 
   if (s->cct->_conf->rgw_ops_log_rados) {
-  ldout(s->cct, 5) << "DFG 28" << dendl;
     string oid = render_log_object_name(s->cct->_conf->rgw_log_object_name, &bdt,
 				        entry.bucket_id, entry.bucket);
 
-  ldout(s->cct, 5) << "DFG 29" << dendl;
     rgw_raw_obj obj(store->svc.zone->get_zone_params().log_pool, oid);
 
-  ldout(s->cct, 5) << "DFG 30" << dendl;
     ret = store->append_async(obj, bl.length(), bl);
     if (ret == -ENOENT) {
       ret = store->create_pool(store->svc.zone->get_zone_params().log_pool);
@@ -498,7 +459,6 @@ int rgw_log_op(RGWRados *store, RGWREST* const rest, struct req_state *s,
     }
   }
 
-  ldout(s->cct, 5) << "DFG 31" << dendl;
   if (olog) {
     olog->log(entry);
   }
@@ -506,7 +466,6 @@ done:
   if (ret < 0)
     ldout(s->cct, 0) << "ERROR: failed to log entry" << dendl;
 
-  ldout(s->cct, 5) << "DFG 32" << dendl;
   return ret;
 }
 
