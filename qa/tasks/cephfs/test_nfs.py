@@ -53,14 +53,21 @@ class TestNFS(MgrTestCase):
     def _check_nfs_status(self):
         return self._orch_cmd('ls', 'nfs')
 
+    def _test_idempotency(self, cmd_func):
+        for _ in range(2):
+            res = self.cmd_func()
+            log.info("TESTING IDEMPOTENCY")
+            log.info(res)
+
     def _test_create_cluster(self):
         self._check_nfs_server_status()
-        self._nfs_cmd('cluster', 'create', self.export_type, self.cluster_id)
+        res = self._nfs_cmd('cluster', 'create', self.export_type, self.cluster_id)
         time.sleep(8)
         orch_output = self._check_nfs_status()
         expected_status = '1/1'
         if self.expected_name not in orch_output or expected_status not in orch_output:
             raise RuntimeError("NFS Ganesha cluster could not be deployed")
+        return res
 
     def _test_delete_cluster(self):
         self._nfs_cmd('cluster', 'delete', self.cluster_id)
@@ -98,6 +105,9 @@ class TestNFS(MgrTestCase):
     def test_create_and_delete_cluster(self):
         self._test_create_cluster()
         self._test_delete_cluster()
+
+    def test_create_cluster_idempotency(self):
+        self._test_idempotency(self._test_create_cluster)
 
     def test_export_create_and_delete(self):
         self._create_default_export()
