@@ -12957,22 +12957,6 @@ void BlueStore::_do_write_small(
 	   << std::dec << dendl;
   ceph_assert(length < min_alloc_size);
 
-  // On zoned devices, the first goal is to support non-overwrite workloads,
-  // such as RGW, with large, aligned objects.  Therefore, for user writes
-  // _do_write_small should not trigger.  OSDs, however, write and update a tiny
-  // amount of metadata, such as OSD maps, to disk.  For those cases, we
-  // temporarily just pad them to min_alloc_size and write them to a new place
-  // on every update.
-  if (bdev->is_smr()) {
-    BlobRef b = c->new_blob();
-    uint64_t b_off = 0, b_off0 = 0;
-    bufferlist l;
-    blp.copy(length, l);
-    _pad_zeros(&l, &b_off0, min_alloc_size);
-    wctx->write(offset, b, min_alloc_size, b_off0, l, b_off, length, false, true);
-    return;
-  }
-
   uint64_t end_offs = offset + length;
 
   logger->inc(l_bluestore_write_small);
@@ -12985,6 +12969,22 @@ void BlueStore::_do_write_small(
   auto min_off = offset >= max_bsize ? offset - max_bsize : 0;
   uint32_t alloc_len = min_alloc_size;
   auto offset0 = p2align<uint64_t>(offset, alloc_len);
+
+  // On zoned devices, the first goal is to support non-overwrite workloads,
+  // such as RGW, with large, aligned objects.  Therefore, for user writes
+  // _do_write_small should not trigger.  OSDs, however, write and update a tiny
+  // amount of metadata, such as OSD maps, to disk.  For those cases, we
+  // temporarily just pad them to min_alloc_size and write them to a new place
+  // on every update.
+  if (bdev->is_smr()) {
+    BlobRef b = c->new_blob();
+    uint64_t b_off = p2phase<uint64_t>(offset, alloc_len);
+    uint64_t b_off0 = b_off;
+    _pad_zeros(&bl, &b_off0, min_alloc_size);
+    o->extent_map.punch_hole(c, offset, length, &wctx->old_extents);
+    wctx->write(offset, b, alloc_len, b_off0, bl, b_off, length, false, true);
+    return;
+  }
 
   bool any_change;
 
