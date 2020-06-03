@@ -6061,9 +6061,21 @@ void Client::_close_sessions()
     }
 
     // wait for sessions to close
-    ldout(cct, 2) << "waiting for " << mds_sessions.size() << " mds sessions to close" << dendl;
+    double timo = cct->_conf.get_val<std::chrono::seconds>("client_shutdown_timeout").count();
+    ldout(cct, 2) << "waiting for " << mds_sessions.size() << " mds sessions to close (timeout: "
+                  << timo << "s)" << dendl;
     std::unique_lock l{client_lock, std::adopt_lock};
-    mount_cond.wait(l);
+    if (!timo) {
+      mount_cond.wait(l);
+    } else if (!mount_cond.wait_for(l, ceph::make_timespan(timo), [this] { return mds_sessions.empty(); })) {
+      ldout(cct, 5) << mds_sessions.size() << " mds(s) did not respond to session close -- timing out." << dendl;
+      while (!mds_sessions.empty()) {
+        auto it = mds_sessions.begin();
+        // this purges entry from mds_sessions
+        _closed_mds_session(&it->second, -ETIMEDOUT);
+      }
+    }
+
     l.release();
   }
 }
