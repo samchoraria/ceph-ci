@@ -1313,22 +1313,19 @@ class DaemonDescription(object):
                 # TODO: can a DaemonDescription exist without a hostname?
                 raise err
 
-            # use the bare hostname, not the FQDN.
-            host = self.hostname.split('.')[0]
-
-            if host == self.daemon_id:
-                # daemon_id == "host"
+            if self.hostname == self.daemon_id:
+                # daemon_id == "hostname"
                 return self.daemon_id
 
-            elif host in self.daemon_id:
-                # daemon_id == "service_id.host"
-                # daemon_id == "service_id.host.random"
-                pre, post = self.daemon_id.rsplit(host, 1)
+            elif self.hostname in self.daemon_id:
+                # daemon_id == "service_id.hostname"
+                # daemon_id == "service_id.hostname.random"
+                pre, post = self.daemon_id.rsplit(self.hostname, 1)
                 if not pre.endswith('.'):
-                    # '.' sep missing at front of host
+                    # '.' sep missing at front of hostname
                     raise err
                 elif post and not post.startswith('.'):
-                    # '.' sep missing at end of host
+                    # '.' sep missing at end of hostname
                     raise err
                 return pre[:-1]
 
