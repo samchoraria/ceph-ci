@@ -269,6 +269,9 @@ class ObjectNotEmpty(OSError):
 class NotDirectory(OSError):
     pass
 
+class ConnectionTimedOut(OSError):
+    pass
+
 IF UNAME_SYSNAME == "FreeBSD":
     cdef errno_to_exception =  {
         errno.EPERM      : PermissionError,
@@ -282,6 +285,7 @@ IF UNAME_SYSNAME == "FreeBSD":
         errno.ERANGE     : OutOfRange,
         errno.EWOULDBLOCK: WouldBlock,
         errno.ENOTEMPTY  : ObjectNotEmpty,
+        errno.ETIMEDOUT  : ConnectionTimedOut,
     }
 ELSE:
     cdef errno_to_exception =  {
@@ -296,7 +300,8 @@ ELSE:
         errno.ERANGE     : OutOfRange,
         errno.EWOULDBLOCK: WouldBlock,
         errno.ENOTEMPTY  : ObjectNotEmpty,
-        errno.ENOTDIR    : NotDirectory
+        errno.ENOTDIR    : NotDirectory,
+        errno.ETIMEDOUT  : ConnectionTimedOut,
     }
 
 

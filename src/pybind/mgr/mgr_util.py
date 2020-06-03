@@ -103,18 +103,24 @@ class CephfsConnectionPool(object):
             return (self.ops_in_progress == 0 and ((time.time() - self.last_used) >= timeout))
 
         def connect(self):
-            assert self.ops_in_progress == 0
-            logger.debug("Connecting to cephfs '{0}'".format(self.fs_name))
-            self.fs = cephfs.LibCephFS(rados_inst=self.mgr.rados)
-            logger.debug("Setting user ID and group ID of CephFS mount as root...")
-            self.fs.conf_set("client_mount_uid", "0")
-            self.fs.conf_set("client_mount_gid", "0")
-            logger.debug("CephFS initializing...")
-            self.fs.init()
-            logger.debug("CephFS mounting...")
-            self.fs.mount(filesystem_name=self.fs_name.encode('utf-8'))
-            logger.debug("Connection to cephfs '{0}' complete".format(self.fs_name))
-            self.mgr._ceph_register_client(self.fs.get_addrs())
+            try:
+                assert self.ops_in_progress == 0
+                logger.debug("Connecting to cephfs '{0}'".format(self.fs_name))
+                self.fs = cephfs.LibCephFS(rados_inst=self.mgr.rados)
+                logger.debug("Setting user ID and group ID of CephFS mount as root...")
+                self.fs.conf_set("client_mount_uid", "0")
+                self.fs.conf_set("client_mount_gid", "0")
+                self.fs.conf_set("client_mount_timeout", "5")
+                self.fs.conf_set("client_shutdown_timeout", "10")
+                logger.debug("CephFS initializing...")
+                self.fs.init()
+                logger.debug("CephFS mounting...")
+                self.fs.mount(filesystem_name=self.fs_name.encode('utf-8'))
+                logger.debug("Connection to cephfs '{0}' complete".format(self.fs_name))
+                self.mgr._ceph_register_client(self.fs.get_addrs())
+            except Exception as e:
+                logger.warn("connect: {0}".format(e))
+                raise
 
         def disconnect(self):
             try:
@@ -196,6 +202,7 @@ class CephfsConnectionPool(object):
                 if e.args[0] == errno.ENOENT:
                     raise CephfsConnectionException(
                         -errno.ENOENT, "FS '{0}' not found".format(fs_name))
+                logger.info("err={0}.{1}.{2}.{3}".format(e, e.args[0], type(e), type(e.args[0])))
                 raise CephfsConnectionException(-e.args[0], e.args[1])
             self.connections[fs_name] = conn
             return conn.get_fs_handle()

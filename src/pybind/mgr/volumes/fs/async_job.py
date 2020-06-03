@@ -5,6 +5,8 @@ import threading
 import traceback
 from collections import deque
 
+from mgr_util import CephfsConnectionException
+
 from .exception import NotImplementedException
 
 log = logging.getLogger(__name__)
@@ -119,25 +121,29 @@ class AsyncJobs(object):
             # do this now so that the other thread pick up jobs for other volumes
             self.q.rotate(1)
             running_jobs = [j[0] for j in self.jobs[volname]]
-            (ret, job) = self.get_next_job(volname, running_jobs)
-            if job:
-                next_job = (volname, job)
-                break
-            # this is an optimization when for a given volume there are no more
-            # jobs and no jobs are in progress. in such cases we remove the volume
-            # from the tracking list so as to:
-            #
-            # a. not query the filesystem for jobs over and over again
-            # b. keep the filesystem connection idle so that it can be freed
-            #    from the connection pool
-            #
-            # if at all there are jobs for a volume, the volume gets added again
-            # to the tracking list and the jobs get kickstarted.
-            # note that, we do not iterate the volume list fully if there is a
-            # jobs to process (that will take place eventually).
-            if ret == 0 and not job and not running_jobs:
-                to_remove.append(volname)
-            nr_vols -= 1
+            try:
+                (ret, job) = self.get_next_job(volname, running_jobs)
+                if job:
+                    next_job = (volname, job)
+                    break
+                # this is an optimization when for a given volume there are no more
+                # jobs and no jobs are in progress. in such cases we remove the volume
+                # from the tracking list so as to:
+                #
+                # a. not query the filesystem for jobs over and over again
+                # b. keep the filesystem connection idle so that it can be freed
+                #    from the connection pool
+                #
+                # if at all there are jobs for a volume, the volume gets added again
+                # to the tracking list and the jobs get kickstarted.
+                # note that, we do not iterate the volume list fully if there is a
+                # jobs to process (that will take place eventually).
+                if ret == 0 and not job and not running_jobs:
+                    to_remove.append(volname)
+            except CephfsConnectionException as cce:
+                log.warn("connection exception: {0}".format(cce))
+            finally:
+                nr_vols -= 1
         for vol in to_remove:
             log.debug("auto removing volume '{0}' from tracked volumes".format(vol))
             self.q.remove(vol)
