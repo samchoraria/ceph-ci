@@ -3150,7 +3150,6 @@ void RGWCreateBucket::execute()
   bool existed;
   string bucket_name = rgw_make_bucket_entry_name(s->bucket_tenant, s->bucket_name);
   rgw_raw_obj obj(store->svc()->zone->get_zone_params().domain_root, bucket_name);
-  obj_version objv, *pobjv = NULL;
 
   op_ret = get_params();
   if (op_ret < 0)
@@ -3266,8 +3265,8 @@ void RGWCreateBucket::execute()
   op_ret = store->create_bucket(*s->user, tmp_bucket, zonegroup_id,
 				placement_rule,
 				info.swift_ver_location,
-				pquota_info, attrs, info, pobjv, &ep_objv,
-				true, obj_lock_enabled, &s->bucket_exists, &s->info,
+				pquota_info, attrs, info, ep_objv,
+				true, obj_lock_enabled, &s->bucket_exists, s->info,
 				&s->bucket);
 
   /* continue if EEXIST and create_bucket will fail below.  this way we can

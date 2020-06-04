@@ -512,7 +512,7 @@ static int rgw_op_get_bucket_policy_from_attr(RGWRadosStore *store,
 
 int RGWRadosStore::forward_request_to_master(RGWUser *user, obj_version *objv,
 					     bufferlist& in_data,
-					     JSONParser *jp, req_info *info)
+					     JSONParser *jp, req_info& info)
 {
   if (!svc()->zone->get_master_conn()) {
     ldout(ctx(), 0) << "rest connection is invalid" << dendl;
@@ -522,7 +522,7 @@ int RGWRadosStore::forward_request_to_master(RGWUser *user, obj_version *objv,
   bufferlist response;
   string uid_str = user->get_id().to_str();
 #define MAX_REST_RESPONSE (128 * 1024) // we expect a very small response
-  int ret = svc()->zone->get_master_conn()->forward(rgw_user(uid_str), *info,
+  int ret = svc()->zone->get_master_conn()->forward(rgw_user(uid_str), info,
                                                     objv, MAX_REST_RESPONSE,
 						    &in_data, &response);
   if (ret < 0)
@@ -545,12 +545,11 @@ int RGWRadosStore::create_bucket(RGWUser& u, const rgw_bucket& b,
 				 const RGWQuotaInfo * pquota_info,
 				 map<std::string, bufferlist>& attrs,
 				 RGWBucketInfo& info,
-				 obj_version *pobjv,
-				 obj_version *pep_objv,
+				 obj_version& ep_objv,
 				 bool exclusive,
 				 bool obj_lock_enabled,
 				 bool *existed,
-				 req_info *req_info,
+				 req_info& req_info,
 				 RGWBucket** bucket_out)
 {
   int ret;
@@ -561,6 +560,7 @@ int RGWRadosStore::create_bucket(RGWUser& u, const rgw_bucket& b,
   real_time creation_time;
   RGWAccessControlPolicy old_policy(ctx());
   RGWBucket *bucket;
+  obj_version objv, *pobjv = NULL;
 
   *bucket_out = NULL;
   /* If it exists, look it up; otherwise create it */
@@ -595,16 +595,17 @@ int RGWRadosStore::create_bucket(RGWUser& u, const rgw_bucket& b,
   ldout(ctx(), 20) << "JP: " << jp << dendl;
 
     ldpp_dout(this, 20) << "decode: entry_point_obj_ver" << dendl;
-    JSONDecoder::decode_json("entry_point_object_ver", *pep_objv, &jp);
+    JSONDecoder::decode_json("entry_point_object_ver", ep_objv, &jp);
     ldpp_dout(this, 20) << "decode: object_ver" << dendl;
-    JSONDecoder::decode_json("object_ver", *pobjv, &jp);
+    JSONDecoder::decode_json("object_ver", objv, &jp);
     ldpp_dout(this, 20) << "decode: bucket_info" << dendl;
     JSONDecoder::decode_json("bucket_info", master_info, &jp);
-    ldpp_dout(this, 20) << "parsed: objv.tag=" << pobjv->tag << " objv.ver=" << pobjv->ver << dendl;
+    ldpp_dout(this, 20) << "parsed: objv.tag=" << objv.tag << " objv.ver=" << objv.ver << dendl;
     //ldpp_dout(this, 20) << "got creation time: << " << master_info.creation_time << dendl;
     pmaster_bucket= &master_info.bucket;
     creation_time = master_info.creation_time;
     pmaster_num_shards = &master_info.layout.current_index.layout.normal.num_shards;
+    pobjv = &objv;
     if (master_info.obj_lock_enabled()) {
       info.flags = BUCKET_VERSIONED | BUCKET_OBJ_LOCK_ENABLED;
     }
@@ -635,15 +636,17 @@ int RGWRadosStore::create_bucket(RGWUser& u, const rgw_bucket& b,
     ret = getRados()->create_bucket(u.get_info(), bucket->get_bi(),
 				    zid, placement_rule, swift_ver_location,
 				    pquota_info, attrs,
-				    info, pobjv, pep_objv, creation_time,
+				    info, pobjv, &ep_objv, creation_time,
 				    pmaster_bucket, pmaster_num_shards, exclusive);
-    if (ret != 0) {
+    if (ret == -EEXIST) {
+      *existed = true;
+    } else if (ret != 0) {
       delete bucket;
       return ret;
     }
   }
 
-  bucket->set_version(*pep_objv);
+  bucket->set_version(ep_objv);
   bucket->get_info() = info;
 
   *bucket_out = bucket;

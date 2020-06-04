@@ -60,12 +60,11 @@ class RGWStore : public DoutPrefixProvider {
                             const RGWQuotaInfo * pquota_info,
 			    map<std::string, bufferlist>& attrs,
                             RGWBucketInfo& info,
-                            obj_version *pobjv,
-                            obj_version *pep_objv,
+                            obj_version& ep_objv,
 			    bool exclusive,
 			    bool obj_lock_enabled,
 			    bool *existed,
-			    req_info* req_info,
+			    req_info& req_info,
 			    RGWBucket** bucket) = 0;
     virtual RGWBucketList* list_buckets(void) = 0;
 
@@ -493,12 +492,11 @@ class RGWRadosStore : public RGWStore {
                             const RGWQuotaInfo * pquota_info,
 			    map<std::string, bufferlist>& attrs,
                             RGWBucketInfo& info,
-                            obj_version *pobjv,
-                            obj_version *pep_objv,
+                            obj_version& ep_objv,
 			    bool exclusive,
 			    bool obj_lock_enabled,
 			    bool *existed,
-			    req_info *req_info,
+			    req_info& req_info,
 			    RGWBucket** bucket);
     virtual RGWBucketList* list_buckets(void) { return new RGWBucketList(); }
 
@@ -521,7 +519,7 @@ class RGWRadosStore : public RGWStore {
 
   private:
     int forward_request_to_master(RGWUser *user, obj_version *objv,
-				  bufferlist& in_data, JSONParser *jp, req_info *info);
+				  bufferlist& in_data, JSONParser *jp, req_info& info);
 
 };
 
