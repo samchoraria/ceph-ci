@@ -66,7 +66,7 @@ protected:
 
   std::string state_str();
 
-  void handle_mgr_map(ceph::ref_t<MMgrMap> m);
+  void handle_mgr_map(ceph::ref_t<MMgrMap> m, std::unique_lock<ceph::mutex> &locker);
   void _update_log_config();
   void send_beacon();
 
@@ -83,7 +83,7 @@ public:
 
   int init();
   void shutdown();
-  void respawn();
+  void respawn(std::unique_lock<ceph::mutex> &locker);
   int main(vector<const char *> args);
   void handle_signal(int signum);
   void tick();

@@ -334,7 +334,7 @@ void MgrStandby::shutdown() {
   finisher.stop();
 }
 
-void MgrStandby::respawn()
+void MgrStandby::respawn(std::unique_lock<ceph::mutex> &locker)
 {
   // --- WARNING TO FUTURE COPY/PASTERS ---
   // You must also add a call like
@@ -344,7 +344,9 @@ void MgrStandby::respawn()
   // to main() so that /proc/$pid/stat field 2 contains "(ceph-mgr)"
   // instead of "(exe)", so that killall (and log rotation) will work.
 
+  locker.unlock();
   shutdown();
+  locker.lock();
 
   char *new_argv[orig_argc+1];
   dout(1) << " e: '" << orig_argv[0] << "'" << dendl;
@@ -410,7 +412,7 @@ void MgrStandby::_update_log_config()
   }
 }
 
-void MgrStandby::handle_mgr_map(ref_t<MMgrMap> mmap)
+void MgrStandby::handle_mgr_map(ref_t<MMgrMap> mmap, std::unique_lock<ceph::mutex> &locker)
 {
   auto &map = mmap->get_map();
   dout(4) << "received map epoch " << map.get_epoch() << dendl;
@@ -422,7 +424,7 @@ void MgrStandby::handle_mgr_map(ref_t<MMgrMap> mmap)
   // this MgrMap is changing its set of enabled modules
   bool need_respawn = py_module_registry.handle_mgr_map(map);
   if (need_respawn) {
-    respawn();
+    respawn(locker);
   }
 
   if (active_in_map) {
@@ -443,7 +445,7 @@ void MgrStandby::handle_mgr_map(ref_t<MMgrMap> mmap)
       dout(10) << "I was already active" << dendl;
       bool need_respawn = active_mgr->got_mgr_map(map);
       if (need_respawn) {
-	respawn();
+	respawn(locker);
       }
     }
 
@@ -453,7 +455,7 @@ void MgrStandby::handle_mgr_map(ref_t<MMgrMap> mmap)
     }
   } else if (active_mgr != nullptr) {
     derr << "I was active but no longer am" << dendl;
-    respawn();
+    respawn(locker);
   } else {
     if (map.active_gid != 0 && map.active_name != g_conf()->name.get_id()) {
       // I am the standby and someone else is active, start modules
@@ -483,11 +485,11 @@ bool MgrStandby::handle_beacon_reply(const ref_t<MMgrBeaconReply>& m) {
 
 bool MgrStandby::ms_dispatch2(const ref_t<Message>& m)
 {
-  std::lock_guard l(lock);
+  std::unique_lock locker(lock);
   dout(10) << state_str() << " " << *m << dendl;
 
   if (m->get_type() == MSG_MGR_MAP) {
-    handle_mgr_map(ref_cast<MMgrMap>(m));
+    handle_mgr_map(ref_cast<MMgrMap>(m), locker);
   } else if (m->get_type() == MSG_MGR_BEACON_REPLY) {
     return handle_beacon_reply(ref_cast<MMgrBeaconReply>(m));
   }

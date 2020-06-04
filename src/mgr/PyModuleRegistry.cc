@@ -127,6 +127,7 @@ bool PyModuleRegistry::handle_mgr_map(const MgrMap &mgr_map_)
   } else {
     bool modules_changed = mgr_map_.modules != mgr_map.modules ||
       mgr_map_.always_on_modules != mgr_map.always_on_modules;
+    dout(10) << "modules_changed=" << modules_changed << dendl;
     mgr_map = mgr_map_;
 
     if (standby_modules != nullptr) {
