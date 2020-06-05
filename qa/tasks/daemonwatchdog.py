@@ -71,6 +71,7 @@ class DaemonWatchdog(Greenlet):
     def watch(self):
         self.log("watchdog starting")
         daemon_timeout = int(self.config.get('watchdog_daemon_timeout', 300))
+        self.log("Setting watchdog timeout to {} seconds".format(daemon_timeout))
         daemon_failure_time = {}
         while not self.stopping.is_set():
             bark = False
