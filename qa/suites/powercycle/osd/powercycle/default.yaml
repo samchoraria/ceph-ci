@@ -1,3 +1,7 @@
+overrides:
+  ceph:
+    conf:
+      watchdog_daemon_timeout: 600
 tasks:
 - install:
     extra_system_packages:
