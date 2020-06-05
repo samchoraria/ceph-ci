@@ -601,7 +601,8 @@ int RGWRadosStore::create_bucket(RGWUser& u, const rgw_bucket& b,
     ldpp_dout(this, 20) << "decode: bucket_info" << dendl;
     JSONDecoder::decode_json("bucket_info", master_info, &jp);
     ldpp_dout(this, 20) << "parsed: objv.tag=" << objv.tag << " objv.ver=" << objv.ver << dendl;
-    //ldpp_dout(this, 20) << "got creation time: << " << master_info.creation_time << dendl;
+    std::time_t ctime = ceph::real_clock::to_time_t(master_info.creation_time);
+    ldpp_dout(this, 20) << "got creation time: << " << std::put_time(std::localtime(&ctime), "%F %T") << dendl;
     pmaster_bucket= &master_info.bucket;
     creation_time = master_info.creation_time;
     pmaster_num_shards = &master_info.layout.current_index.layout.normal.num_shards;
