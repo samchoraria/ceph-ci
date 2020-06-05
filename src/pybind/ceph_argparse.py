@@ -1348,10 +1348,12 @@ def send_command_retry(*args, **kwargs):
         try:
             return send_command(*args, **kwargs)
         except Exception as e:
+            print("send_command_retry: saw exception: {}".format(str(e)))
             # If our librados instance has not reached state 'connected'
             # yet, we'll see an exception like this and retry
-            if ('get_command_descriptions' in str(e) and
-                'object in state configuring' in str(e)):
+            if (('get_command_descriptions' in str(e) and
+                'object in state configuring' in str(e)) or
+                'mon unavailable' in str(e)):
                 continue
             else:
                 raise
